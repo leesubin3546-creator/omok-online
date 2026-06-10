@@ -11,6 +11,10 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // ── 상태 관리 ──────────────────────────────────────────────────
 const rooms = new Map();       // roomId → RoomState
 const matchQueue = [];          // 랜덤 매칭 대기열 [{socketId, nickname}]
