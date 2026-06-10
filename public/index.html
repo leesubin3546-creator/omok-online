@@ -97,19 +97,26 @@
   .stat-label { font-size: 0.75rem; color: var(--text2); margin-top: 3px; }
 
   /* 돌 디자인 선택 */
+  .stone-picker-desc { color: var(--text2); font-size: 0.8rem; margin-top: -4px; }
   .stone-picker { display: flex; gap: 10px; flex-wrap: wrap; }
   .stone-opt {
-    display: flex; flex-direction: column; align-items: center; gap: 7px;
-    cursor: pointer; padding: 12px 16px;
-    border-radius: 11px;
-    border: 1.5px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    cursor: pointer; padding: 12px 10px 10px;
+    border-radius: 12px;
+    border: 2px solid var(--border);
     background: var(--card);
-    transition: border-color 0.2s, background 0.2s;
-    min-width: 72px;
+    transition: all 0.18s;
+    user-select: none;
+    flex: 1; min-width: 80px;
   }
-  .stone-opt:hover { border-color: var(--accent2); }
-  .stone-opt.selected { border-color: var(--accent); background: rgba(200,146,42,0.08); }
-  .stone-opt span { font-size: 0.75rem; color: var(--text2); font-weight: 500; }
+  .stone-opt:hover { border-color: rgba(200,146,42,0.5); transform: translateY(-2px); }
+  .stone-opt.selected {
+    border-color: var(--accent);
+    background: rgba(200,146,42,0.1);
+    box-shadow: 0 0 18px rgba(200,146,42,0.22);
+  }
+  .stone-opt span { font-size: 0.72rem; color: var(--text2); font-weight: 600; letter-spacing: 0.5px; }
+  .stone-opt.selected span { color: var(--accent); }
 
   /* 입력/버튼 */
   input[type=text] {
@@ -163,11 +170,16 @@
     transition: border-color 0.25s;
   }
   .player-card.active-turn { border-color: var(--accent); }
-  .stone-icon { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
-  .stone-black { background: radial-gradient(circle at 35% 35%, #555, #111); }
-  .stone-white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); }
+  .stone-icon-canvas { width: 28px; height: 28px; flex-shrink: 0; }
   .player-name { font-weight: 700; flex: 1; font-size: 0.92rem; }
   .player-rec { font-size: 0.72rem; color: var(--text2); }
+
+  /* 플레이어 카드 스타일 태그 */
+  .style-badge {
+    font-size: 0.65rem; color: var(--text2); background: var(--card);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; letter-spacing: 0.5px;
+  }
 
   #status-bar {
     background: var(--surface); border-radius: 10px;
@@ -243,6 +255,8 @@
     .lobby-grid { grid-template-columns: 1fr; }
     #game-screen.active { flex-direction: column; align-items: center; }
     #side-panel { width: 100%; max-width: 420px; }
+    .stone-picker { gap: 6px; }
+    .stone-opt { min-width: 60px; padding: 10px 6px 8px; }
   }
 </style>
 </head>
@@ -278,26 +292,27 @@
     </div>
 
     <div class="card">
-      <div class="card-title">돌 디자인</div>
+      <div class="card-title">나의 돌 디자인</div>
+      <p class="stone-picker-desc">각자 선택한 디자인이 게임에서 그대로 적용됩니다</p>
       <div class="stone-picker" id="stone-picker">
         <div class="stone-opt" data-style="classic" onclick="selectStoneStyle('classic')">
-          <canvas id="sp-classic" width="48" height="26"></canvas>
+          <canvas id="sp-classic" width="80" height="44"></canvas>
           <span>클래식</span>
         </div>
         <div class="stone-opt" data-style="flat" onclick="selectStoneStyle('flat')">
-          <canvas id="sp-flat" width="48" height="26"></canvas>
+          <canvas id="sp-flat" width="80" height="44"></canvas>
           <span>플랫</span>
         </div>
         <div class="stone-opt" data-style="marble" onclick="selectStoneStyle('marble')">
-          <canvas id="sp-marble" width="48" height="26"></canvas>
+          <canvas id="sp-marble" width="80" height="44"></canvas>
           <span>마블</span>
         </div>
         <div class="stone-opt" data-style="glass" onclick="selectStoneStyle('glass')">
-          <canvas id="sp-glass" width="48" height="26"></canvas>
+          <canvas id="sp-glass" width="80" height="44"></canvas>
           <span>유리</span>
         </div>
         <div class="stone-opt" data-style="neon" onclick="selectStoneStyle('neon')">
-          <canvas id="sp-neon" width="48" height="26"></canvas>
+          <canvas id="sp-neon" width="80" height="44"></canvas>
           <span>네온</span>
         </div>
       </div>
@@ -345,18 +360,20 @@
   </div>
   <div id="side-panel">
     <div id="player1-card" class="player-card">
-      <div class="stone-icon stone-black"></div>
-      <div>
+      <canvas id="p1-stone-icon" class="stone-icon-canvas" width="28" height="28"></canvas>
+      <div style="flex:1;min-width:0;">
         <div class="player-name" id="p1-name">-</div>
         <div class="player-rec" id="p1-rec">0승 0패</div>
       </div>
+      <span class="style-badge" id="p1-style-badge">클래식</span>
     </div>
     <div id="player2-card" class="player-card">
-      <div class="stone-icon stone-white"></div>
-      <div>
+      <canvas id="p2-stone-icon" class="stone-icon-canvas" width="28" height="28"></canvas>
+      <div style="flex:1;min-width:0;">
         <div class="player-name" id="p2-name">-</div>
         <div class="player-rec" id="p2-rec">0승 0패</div>
       </div>
+      <span class="style-badge" id="p2-style-badge">클래식</span>
     </div>
     <div id="status-bar">게임 준비 중...</div>
     <button class="btn-secondary btn-sm" onclick="resignGame()" id="resign-btn">기권하기</button>
@@ -386,6 +403,7 @@
 <script>
 const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
+const STYLE_NAMES = { classic:'클래식', flat:'플랫', marble:'마블', glass:'유리', neon:'네온' };
 
 let socket = null;
 let myNickname = localStorage.getItem('omok_nickname') || '';
@@ -397,57 +415,160 @@ let currentTurn = 1;
 let isSpectating = false;
 let gameActive = false;
 let currentStoneStyle = localStorage.getItem('omok_stone_style') || 'classic';
+let p1StoneStyle = 'classic'; // 흑돌 플레이어의 스타일
+let p2StoneStyle = 'classic'; // 백돌 플레이어의 스타일
 
-// ── 돌 디자인 ─────────────────────────────────────────────────
+// ── 돌 드로잉 ─────────────────────────────────────────────────
 function drawStoneOnCtx(c, x, y, r, color, style) {
   c.save();
   switch(style) {
+
     case 'classic': {
-      const g = c.createRadialGradient(x - r*0.3, y - r*0.3, r*0.05, x, y, r);
-      if (color === 1) { g.addColorStop(0, '#666'); g.addColorStop(1, '#111'); }
-      else { g.addColorStop(0, '#fff'); g.addColorStop(1, '#ccc'); }
+      // 3D 구체 - 풍부한 그라디언트
+      const g = c.createRadialGradient(x - r*0.3, y - r*0.3, r*0.04, x, y, r);
+      if (color === 1) {
+        g.addColorStop(0, '#606060');
+        g.addColorStop(0.3, '#282828');
+        g.addColorStop(0.7, '#101010');
+        g.addColorStop(1, '#040404');
+      } else {
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.4, '#e8e8e8');
+        g.addColorStop(0.85, '#d0d0d0');
+        g.addColorStop(1, '#bababa');
+      }
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
       c.fillStyle = g; c.fill();
-      if (color === 2) { c.strokeStyle = '#aaa'; c.lineWidth = 0.5; c.stroke(); }
+      // 하이라이트 (빛 반사)
+      const hl = c.createRadialGradient(x - r*0.27, y - r*0.3, 0, x - r*0.1, y - r*0.14, r*0.65);
+      hl.addColorStop(0, color===1 ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.92)');
+      hl.addColorStop(0.4, color===1 ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.28)');
+      hl.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = hl; c.fill();
+      // 외곽 미세 테두리
+      if (color === 2) { c.strokeStyle = 'rgba(0,0,0,0.1)'; c.lineWidth = 0.5; c.stroke(); }
       break;
     }
+
     case 'flat': {
+      // 미니멀 플랫 디자인
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
-      c.fillStyle = color === 1 ? '#2a2a2a' : '#f0f0f0'; c.fill();
-      c.strokeStyle = color === 1 ? '#555' : '#bbb'; c.lineWidth = 1.5; c.stroke();
+      c.fillStyle = color === 1 ? '#1c1c1c' : '#f0f0f0';
+      c.fill();
+      // 미세 내부 빛
+      if (color === 1) {
+        c.strokeStyle = 'rgba(255,255,255,0.06)';
+        c.lineWidth = 1.5; c.stroke();
+      } else {
+        c.strokeStyle = 'rgba(0,0,0,0.1)';
+        c.lineWidth = 1.5; c.stroke();
+        // 작은 하이라이트
+        c.beginPath(); c.arc(x - r*0.28, y - r*0.28, r*0.25, 0, Math.PI*2);
+        c.fillStyle = 'rgba(255,255,255,0.45)'; c.fill();
+      }
       break;
     }
+
     case 'marble': {
-      const g = c.createRadialGradient(x - r*0.2, y - r*0.2, r*0.1, x, y, r);
-      if (color === 1) { g.addColorStop(0, '#3a3a3a'); g.addColorStop(0.6, '#1a1a1a'); g.addColorStop(1, '#080808'); }
-      else { g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#e8e8e8'); g.addColorStop(1, '#d0d0d0'); }
-      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
-      c.save(); c.clip();
-      c.strokeStyle = color === 1 ? 'rgba(110,110,110,0.35)' : 'rgba(180,180,180,0.55)';
-      c.lineWidth = 0.8;
-      c.beginPath(); c.moveTo(x - r*0.5, y - r*0.3);
-      c.bezierCurveTo(x, y - r*0.5, x + r*0.3, y + r*0.1, x + r*0.4, y + r*0.6); c.stroke();
-      c.beginPath(); c.moveTo(x - r*0.2, y + r*0.2);
-      c.bezierCurveTo(x + r*0.1, y, x + r*0.2, y - r*0.4, x - r*0.1, y - r*0.6); c.stroke();
+      // 마블 텍스처 - 베이스 + 정맥 곡선
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+      const g = c.createRadialGradient(x - r*0.2, y - r*0.28, 0, x, y, r);
+      if (color === 1) {
+        g.addColorStop(0, '#303030');
+        g.addColorStop(0.5, '#181818');
+        g.addColorStop(1, '#060606');
+      } else {
+        g.addColorStop(0, '#faf8f4');
+        g.addColorStop(0.4, '#ede8e0');
+        g.addColorStop(1, '#d4cec4');
+      }
+      c.fillStyle = g; c.fill();
+      // 마블 정맥 (circle clip 안에서)
+      c.save();
+      c.clip();
+      c.strokeStyle = color===1 ? 'rgba(95,88,80,0.55)' : 'rgba(165,152,132,0.65)';
+      c.lineWidth = color===1 ? 0.8 : 0.7;
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(x - r*0.85, y - r*0.1);
+      c.bezierCurveTo(x - r*0.3, y - r*0.58, x + r*0.38, y - r*0.08, x + r*0.78, y + r*0.58);
+      c.stroke();
+      c.beginPath();
+      c.moveTo(x - r*0.22, y + r*0.78);
+      c.bezierCurveTo(x - r*0.04, y + r*0.18, x + r*0.28, y - r*0.22, x + r*0.48, y - r*0.78);
+      c.stroke();
+      c.strokeStyle = color===1 ? 'rgba(95,88,80,0.28)' : 'rgba(165,152,132,0.38)';
+      c.lineWidth = 0.45;
+      c.beginPath();
+      c.moveTo(x - r*0.6, y + r*0.42);
+      c.bezierCurveTo(x - r*0.18, y + r*0.08, x + r*0.18, y + r*0.28, x + r*0.62, y - r*0.18);
+      c.stroke();
+      c.restore();
+      // 외곽
+      if (color === 2) { c.strokeStyle = 'rgba(0,0,0,0.07)'; c.lineWidth = 0.5; c.stroke(); }
+      break;
+    }
+
+    case 'glass': {
+      // 반투명 유리 효과
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+      const g = c.createLinearGradient(x - r*0.5, y - r, x + r*0.5, y + r);
+      if (color === 1) {
+        g.addColorStop(0, 'rgba(52,52,88,0.94)');
+        g.addColorStop(0.5, 'rgba(10,10,22,0.92)');
+        g.addColorStop(1, 'rgba(28,28,58,0.96)');
+      } else {
+        g.addColorStop(0, 'rgba(242,250,255,0.92)');
+        g.addColorStop(0.4, 'rgba(198,222,248,0.86)');
+        g.addColorStop(1, 'rgba(152,186,222,0.92)');
+      }
+      c.fillStyle = g; c.fill();
+      // 테두리 광채
+      c.strokeStyle = color===1 ? 'rgba(100,112,175,0.72)' : 'rgba(215,232,255,0.88)';
+      c.lineWidth = 1; c.stroke();
+      // 유리 반사 하이라이트
+      c.save();
+      c.clip();
+      const hl = c.createRadialGradient(x - r*0.18, y - r*0.32, 0, x - r*0.1, y - r*0.2, r*0.7);
+      hl.addColorStop(0, 'rgba(255,255,255,0.88)');
+      hl.addColorStop(0.22, 'rgba(255,255,255,0.45)');
+      hl.addColorStop(0.55, 'rgba(255,255,255,0.1)');
+      hl.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = hl;
+      c.beginPath(); c.ellipse(x - r*0.18, y - r*0.28, r*0.52, r*0.34, -0.3, 0, Math.PI*2);
+      c.fill();
+      // 하단 미세 반사
+      const bot = c.createRadialGradient(x + r*0.2, y + r*0.35, 0, x + r*0.2, y + r*0.35, r*0.4);
+      bot.addColorStop(0, color===1 ? 'rgba(80,100,180,0.3)' : 'rgba(255,255,255,0.25)');
+      bot.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = bot;
+      c.beginPath(); c.arc(x + r*0.2, y + r*0.35, r*0.4, 0, Math.PI*2);
+      c.fill();
       c.restore();
       break;
     }
-    case 'glass': {
-      const g = c.createRadialGradient(x - r*0.35, y - r*0.35, r*0.05, x + r*0.1, y + r*0.1, r);
-      if (color === 1) { g.addColorStop(0, '#4a4a6a'); g.addColorStop(0.5, '#1a1a2e'); g.addColorStop(1, '#080814'); }
-      else { g.addColorStop(0, '#fff'); g.addColorStop(0.4, '#c8d8f0'); g.addColorStop(1, '#8aaed0'); }
-      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
-      c.beginPath(); c.arc(x - r*0.25, y - r*0.28, r*0.28, 0, Math.PI*2);
-      c.fillStyle = color === 1 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.65)'; c.fill();
-      break;
-    }
+
     case 'neon': {
+      // 네온 글로우 링
+      const rc = color === 1 ? '#f59e0b' : '#818cf8'; // 흑: 앰버, 백: 인디고
+      // 베이스 (어두운 배경)
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
-      c.fillStyle = color === 1 ? '#080812' : '#f8f8ff'; c.fill();
-      c.beginPath(); c.arc(x, y, r - 1.5, 0, Math.PI*2);
-      c.strokeStyle = color === 1 ? '#c8922a' : '#e8d09a'; c.lineWidth = 2.2; c.stroke();
-      c.beginPath(); c.arc(x, y, r * 0.28, 0, Math.PI*2);
-      c.fillStyle = color === 1 ? '#c8922a' : '#e8d09a'; c.fill();
+      c.fillStyle = color === 1 ? '#06060e' : '#0c0c1a';
+      c.fill();
+      // 외곽 글로우 링
+      c.shadowColor = rc; c.shadowBlur = 12;
+      c.beginPath(); c.arc(x, y, r - 2, 0, Math.PI*2);
+      c.strokeStyle = rc; c.lineWidth = 2.2; c.stroke();
+      // 내부 가는 링
+      c.shadowBlur = 4;
+      c.beginPath(); c.arc(x, y, r * 0.6, 0, Math.PI*2);
+      c.strokeStyle = color === 1 ? 'rgba(245,158,11,0.25)' : 'rgba(129,140,248,0.25)';
+      c.lineWidth = 0.8; c.stroke();
+      // 중앙 도트
+      c.shadowBlur = 8;
+      c.beginPath(); c.arc(x, y, r * 0.22, 0, Math.PI*2);
+      c.fillStyle = rc; c.fill();
+      c.shadowBlur = 0;
       break;
     }
   }
@@ -468,10 +589,21 @@ function renderStonePreviews() {
     const canvas = document.getElementById('sp-' + style);
     if (!canvas) return;
     const c = canvas.getContext('2d');
-    c.clearRect(0, 0, 48, 26);
-    drawStoneOnCtx(c, 13, 13, 11, 1, style);
-    drawStoneOnCtx(c, 35, 13, 11, 2, style);
+    c.clearRect(0, 0, 80, 44);
+    drawStoneOnCtx(c, 20, 22, 16, 1, style);
+    drawStoneOnCtx(c, 60, 22, 16, 2, style);
   });
+}
+
+function updatePlayerStoneIcons() {
+  const c1 = document.getElementById('p1-stone-icon')?.getContext('2d');
+  if (c1) { c1.clearRect(0,0,28,28); drawStoneOnCtx(c1,14,14,12,1,p1StoneStyle); }
+  const c2 = document.getElementById('p2-stone-icon')?.getContext('2d');
+  if (c2) { c2.clearRect(0,0,28,28); drawStoneOnCtx(c2,14,14,12,2,p2StoneStyle); }
+  const b1 = document.getElementById('p1-style-badge');
+  if (b1) b1.textContent = STYLE_NAMES[p1StoneStyle] || p1StoneStyle;
+  const b2 = document.getElementById('p2-style-badge');
+  if (b2) b2.textContent = STYLE_NAMES[p2StoneStyle] || p2StoneStyle;
 }
 
 // ── 유틸 ──────────────────────────────────────────────────────
@@ -550,6 +682,7 @@ function initSocket() {
     showScreen('waiting-screen');
   });
   socket.on('room_joined', ({ roomId, color }) => { currentRoom = roomId; myColor = color; });
+
   socket.on('game_start', ({ roomId, board, players, turn, yourColor }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
@@ -570,6 +703,7 @@ function initSocket() {
     document.getElementById('resign-btn').style.display = 'none';
     addChat('관전 모드로 입장했습니다.', true);
   });
+
   socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; drawBoard(); });
   socket.on('turn_changed', ({ turn }) => { currentTurn = turn; updateStatusBar(); });
   socket.on('game_over', ({ result, winner, loser, records }) => {
@@ -595,12 +729,16 @@ function initSocket() {
 }
 
 // ── 로비 ──────────────────────────────────────────────────────
-function joinRandom() { if (socket) socket.emit('join_random', { nickname: myNickname }); }
-function createRoom() { if (socket) socket.emit('create_room', { nickname: myNickname }); }
+function joinRandom() {
+  if (socket) socket.emit('join_random', { nickname: myNickname, stoneStyle: currentStoneStyle });
+}
+function createRoom() {
+  if (socket) socket.emit('create_room', { nickname: myNickname, stoneStyle: currentStoneStyle });
+}
 function joinRoom() {
   const code = document.getElementById('room-code-input').value.trim().toUpperCase();
   if (!code) { document.getElementById('join-error').textContent = '방 코드를 입력해주세요.'; return; }
-  socket.emit('join_room', { roomId: code, nickname: myNickname });
+  socket.emit('join_room', { roomId: code, nickname: myNickname, stoneStyle: currentStoneStyle });
 }
 function cancelWaiting() { socket.emit('cancel_random'); showScreen('lobby-screen'); }
 
@@ -638,10 +776,13 @@ document.getElementById('room-code-input').addEventListener('keydown', e => { if
 function setupPlayerCards(players) {
   const black = players.find(p => p.color === 1);
   const white = players.find(p => p.color === 2);
+  p1StoneStyle = black ? (black.stoneStyle || 'classic') : 'classic';
+  p2StoneStyle = white ? (white.stoneStyle || 'classic') : 'classic';
   document.getElementById('p1-name').textContent = black ? black.nickname : '?';
   document.getElementById('p1-rec').textContent = black ? `${black.record.win}승 ${black.record.lose}패` : '';
   document.getElementById('p2-name').textContent = white ? white.nickname : '?';
   document.getElementById('p2-rec').textContent = white ? `${white.record.win}승 ${white.record.lose}패` : '';
+  updatePlayerStoneIcons();
 }
 function getPlayerCard(nickname) {
   if (document.getElementById('p1-name').textContent === nickname) return document.getElementById('player1-card');
@@ -728,24 +869,30 @@ function getCell(e) {
 function drawBoard() {
   if (!ctx) return;
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  // 보드 배경
   ctx.fillStyle = '#d4a96a';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  // 격자
   ctx.strokeStyle = '#8b6328'; ctx.lineWidth = 1;
   for (let i = 0; i < SIZE; i++) {
     ctx.beginPath(); ctx.moveTo(PADDING + i*CELL, PADDING); ctx.lineTo(PADDING + i*CELL, PADDING + (SIZE-1)*CELL); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(PADDING, PADDING + i*CELL); ctx.lineTo(PADDING + (SIZE-1)*CELL, PADDING + i*CELL); ctx.stroke();
   }
+  // 화점
   ctx.fillStyle = '#8b6328';
   [[3,3],[3,11],[7,7],[11,3],[11,11]].forEach(([r,c]) => {
     ctx.beginPath(); ctx.arc(PADDING + c*CELL, PADDING + r*CELL, 4, 0, Math.PI*2); ctx.fill();
   });
+  // 돌 렌더링 (각자 스타일 적용)
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++)
       if (gameBoard[r] && gameBoard[r][c]) drawStone(r, c, gameBoard[r][c], 1.0);
+  // 호버
   if (hoverPos) {
     if (hoverForbidden) drawForbiddenMark(hoverPos.row, hoverPos.col, false);
     else drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
   }
+  // 금수 플래시
   if (forbiddenFlash && Date.now() < forbiddenFlash.until) {
     drawForbiddenMark(forbiddenFlash.row, forbiddenFlash.col, true);
     requestAnimationFrame(drawBoard);
@@ -756,8 +903,10 @@ function drawBoard() {
 
 function drawStone(row, col, color, alpha) {
   const x = PADDING + col * CELL, y = PADDING + row * CELL, r = CELL * 0.44;
-  ctx.save(); ctx.globalAlpha = alpha;
-  drawStoneOnCtx(ctx, x, y, r, color, currentStoneStyle);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // 각 플레이어의 개인 스타일로 그리기
+  drawStoneOnCtx(ctx, x, y, r, color, color === 1 ? p1StoneStyle : p2StoneStyle);
   ctx.restore();
 }
 
