@@ -7,19 +7,18 @@
 <script src="/socket.io/socket.io.js"></script>
 <style>
   :root {
-    --bg: #050d14;
-    --surface: #0c1e2e;
-    --card: #112840;
-    --accent: #38bdf8;
-    --accent2: #7dd3fc;
-    --text: #e0f2fe;
-    --text2: #7dd3fc;
-    --board-bg: #c8a96e;
-    --board-line: #7a5c2e;
-    --black-stone: #1a1a1a;
-    --white-stone: #f8f8f8;
-    --radius: 12px;
-    --shadow: 0 4px 24px rgba(0,0,0,0.6);
+    --bg: #13100c;
+    --surface: #1e1a14;
+    --card: #28231c;
+    --border: rgba(210,170,100,0.18);
+    --accent: #c8922a;
+    --accent2: #e8d09a;
+    --text: #f2e8d8;
+    --text2: #a89070;
+    --board-bg: #d4a96a;
+    --board-line: #8b6328;
+    --radius: 14px;
+    --shadow: 0 8px 36px rgba(0,0,0,0.6);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -32,304 +31,314 @@
     align-items: center;
   }
 
-  /* ── 헤더 ── */
   header {
     width: 100%;
-    padding: 16px 32px;
+    padding: 14px 32px;
     background: var(--surface);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    border-bottom: 1px solid var(--border);
   }
-  header h1 { font-size: 1.5rem; color: var(--accent); letter-spacing: 2px; }
-  #player-info { font-size: 0.9rem; color: var(--text2); }
-  #player-info span { color: var(--accent2); font-weight: bold; }
+  header h1 { font-size: 1.25rem; color: var(--accent2); letter-spacing: 3px; font-weight: 600; }
+  #player-info { font-size: 0.88rem; color: var(--text2); }
+  #player-info span { color: var(--accent); font-weight: 700; }
 
-  /* ── 화면 전환 ── */
-  .screen { display: none; width: 100%; max-width: 1100px; padding: 24px 16px; }
-  .screen.active { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  .screen { display: none; width: 100%; max-width: 1160px; padding: 28px 16px; }
+  .screen.active { display: flex; flex-direction: column; align-items: center; gap: 18px; }
 
-  /* ── 로비 ── */
-  .lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 700px; }
   .card {
     background: var(--surface);
     border-radius: var(--radius);
-    padding: 24px;
-    box-shadow: var(--shadow);
+    padding: 20px 22px;
+    border: 1px solid var(--border);
     display: flex; flex-direction: column; gap: 12px;
   }
-  .card h2 { font-size: 1.1rem; color: var(--accent2); margin-bottom: 4px; }
+  .card-title {
+    font-size: 0.85rem;
+    color: var(--accent2);
+    letter-spacing: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  /* 닉네임 */
+  #nick-screen.active { justify-content: center; min-height: 80vh; }
+  #nickname-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 44px 48px;
+    width: 100%; max-width: 400px;
+    display: flex; flex-direction: column; gap: 14px;
+    text-align: center;
+  }
+  #nickname-area .logo { font-size: 2.2rem; color: var(--accent2); letter-spacing: 5px; font-weight: 700; }
+  #nickname-area .sub { color: var(--text2); font-size: 0.88rem; line-height: 1.6; }
+
+  /* 로비 */
+  .lobby-wrap { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 14px; }
+  .lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .lobby-wide { grid-column: 1 / -1; }
+
+  /* 기록 */
+  .record-stats { display: flex; gap: 12px; }
+  .stat {
+    flex: 1; text-align: center;
+    background: var(--card);
+    border-radius: 10px;
+    padding: 12px 8px;
+    border: 1px solid var(--border);
+  }
+  .stat-num { font-size: 1.8rem; font-weight: 700; }
+  .stat-num.win { color: #7ecb7e; }
+  .stat-num.lose { color: #d07070; }
+  .stat-num.draw { color: var(--accent2); }
+  .stat-label { font-size: 0.75rem; color: var(--text2); margin-top: 3px; }
+
+  /* 돌 디자인 선택 */
+  .stone-picker { display: flex; gap: 10px; flex-wrap: wrap; }
+  .stone-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    cursor: pointer; padding: 12px 16px;
+    border-radius: 11px;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+    transition: border-color 0.2s, background 0.2s;
+    min-width: 72px;
+  }
+  .stone-opt:hover { border-color: var(--accent2); }
+  .stone-opt.selected { border-color: var(--accent); background: rgba(200,146,42,0.08); }
+  .stone-opt span { font-size: 0.75rem; color: var(--text2); font-weight: 500; }
+
+  /* 입력/버튼 */
   input[type=text] {
     width: 100%;
     padding: 10px 14px;
-    background: var(--bg);
-    border: 1px solid #1a3a55;
-    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 9px;
     color: var(--text);
-    font-size: 1rem;
+    font-size: 0.95rem;
     outline: none;
     transition: border-color 0.2s;
   }
-  input[type=text] { border: 1px solid #1a3a52; }
   input[type=text]:focus { border-color: var(--accent); }
   button {
     padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-weight: 600;
+    border: none; border-radius: 9px;
+    font-size: 0.9rem; cursor: pointer;
+    transition: all 0.18s; font-weight: 600;
   }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: #0ea5e9; transform: translateY(-1px); }
-  .btn-secondary { background: var(--card); color: var(--text); }
-  .btn-secondary:hover { background: #1a3a52; }
-  .btn-sm { padding: 6px 14px; font-size: 0.85rem; }
+  .btn-primary { background: var(--accent); color: #1a1000; }
+  .btn-primary:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: #352d22; }
+  .btn-sm { padding: 7px 14px; font-size: 0.82rem; }
+  .muted { color: var(--text2); font-size: 0.88rem; line-height: 1.5; }
 
-  /* 닉네임 설정 */
-  #nickname-area {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 28px 32px;
-    width: 100%;
-    max-width: 400px;
-    display: flex; flex-direction: column; gap: 12px;
-    box-shadow: var(--shadow);
-    text-align: center;
-  }
-  #nickname-area h2 { font-size: 1.4rem; color: var(--accent); }
-  #nickname-area p { color: var(--text2); font-size: 0.9rem; }
-
-  /* 승패 기록 */
-  #record-card { width: 100%; max-width: 700px; }
-  .record-stats { display: flex; gap: 20px; }
-  .stat { text-align: center; flex: 1; }
-  .stat-num { font-size: 2rem; font-weight: bold; }
-  .stat-num.win { color: #4caf50; }
-  .stat-num.lose { color: var(--accent); }
-  .stat-num.draw { color: var(--accent2); }
-  .stat-label { font-size: 0.8rem; color: var(--text2); }
-
-  /* ── 게임 화면 ── */
+  /* 게임 화면 */
   #game-screen.active {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 20px;
+    flex-direction: row; align-items: flex-start;
+    justify-content: center; flex-wrap: wrap; gap: 20px;
   }
-
-  /* 오목판 */
   #board-wrap {
     position: relative;
     background: var(--board-bg);
     border-radius: var(--radius);
-    padding: 24px;
+    padding: 20px;
     box-shadow: var(--shadow);
     user-select: none;
+    border: 3px solid #a07030;
   }
-  #board-canvas {
-    display: block;
-    cursor: crosshair;
-  }
+  #board-canvas { display: block; cursor: crosshair; }
 
-  /* 사이드 패널 */
-  #side-panel {
-    width: 280px;
-    display: flex; flex-direction: column; gap: 14px;
-    min-width: 240px;
-  }
+  #side-panel { width: 272px; display: flex; flex-direction: column; gap: 11px; min-width: 240px; }
 
-  /* 플레이어 카드 */
   .player-card {
     background: var(--surface);
-    border-radius: var(--radius);
-    padding: 14px 18px;
-    display: flex; align-items: center; gap: 12px;
-    border: 2px solid transparent;
-    transition: border-color 0.3s;
+    border-radius: 11px; padding: 12px 15px;
+    display: flex; align-items: center; gap: 11px;
+    border: 1.5px solid var(--border);
+    transition: border-color 0.25s;
   }
-  .player-card.active-turn { border-color: var(--accent2); }
-  .stone-icon {
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 1px 1px 4px rgba(255,255,255,0.2);
-  }
+  .player-card.active-turn { border-color: var(--accent); }
+  .stone-icon { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
   .stone-black { background: radial-gradient(circle at 35% 35%, #555, #111); }
   .stone-white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); }
-  .player-name { font-weight: bold; flex: 1; }
-  .player-rec { font-size: 0.75rem; color: var(--text2); }
+  .player-name { font-weight: 700; flex: 1; font-size: 0.92rem; }
+  .player-rec { font-size: 0.72rem; color: var(--text2); }
 
-  /* 상태 표시 */
   #status-bar {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 12px 16px;
-    text-align: center;
-    font-size: 0.95rem;
-    color: var(--accent2);
-    font-weight: bold;
+    background: var(--surface); border-radius: 10px;
+    padding: 11px 14px; text-align: center;
+    font-size: 0.9rem; color: var(--accent2);
+    font-weight: 700; border: 1px solid var(--border);
+    letter-spacing: 1px;
   }
-
-  /* 채팅 */
   #chat-box {
-    background: var(--surface);
-    border-radius: var(--radius);
-    display: flex; flex-direction: column;
-    height: 220px;
-    overflow: hidden;
+    background: var(--surface); border-radius: 11px;
+    border: 1px solid var(--border);
+    display: flex; flex-direction: column; height: 210px; overflow: hidden;
   }
   #chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 12px;
-    font-size: 0.85rem;
-    display: flex; flex-direction: column; gap: 4px;
+    flex: 1; overflow-y: auto; padding: 10px 12px;
+    font-size: 0.83rem; display: flex; flex-direction: column; gap: 3px;
   }
   #chat-messages::-webkit-scrollbar { width: 4px; }
-  #chat-messages::-webkit-scrollbar-thumb { background: #334; border-radius: 4px; }
-  .chat-msg { line-height: 1.4; }
-  .chat-msg .cn { color: var(--accent2); font-weight: bold; }
+  #chat-messages::-webkit-scrollbar-thumb { background: #3a2e22; border-radius: 4px; }
+  .chat-msg { line-height: 1.5; }
+  .chat-msg .cn { color: var(--accent); font-weight: 700; }
   .chat-msg .sys { color: var(--text2); font-style: italic; }
   #chat-input-row {
-    display: flex; gap: 6px;
-    padding: 8px 10px;
-    border-top: 1px solid #223;
+    display: flex; gap: 6px; padding: 7px 10px;
+    border-top: 1px solid var(--border);
   }
-  #chat-input { flex: 1; padding: 6px 10px; font-size: 0.85rem; }
+  #chat-input { flex: 1; padding: 6px 10px; font-size: 0.83rem; }
 
-  /* 게임 오버 오버레이 */
+  /* 오버레이 */
   #overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 100;
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78); z-index: 100;
     align-items: center; justify-content: center;
   }
   #overlay.show { display: flex; }
   #overlay-box {
     background: var(--surface);
-    border-radius: var(--radius);
-    padding: 40px 48px;
-    text-align: center;
-    box-shadow: var(--shadow);
-    display: flex; flex-direction: column; gap: 16px;
-    min-width: 300px;
+    border-radius: var(--radius); padding: 40px 48px;
+    text-align: center; border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 16px; min-width: 300px;
   }
-  #overlay-title { font-size: 2rem; font-weight: bold; }
-  #overlay-sub { color: var(--text2); font-size: 1rem; }
+  #overlay-title { font-size: 2rem; font-weight: 700; }
+  #overlay-sub { color: var(--text2); }
   #overlay-records { display: flex; gap: 24px; justify-content: center; }
   .ov-rec { text-align: center; }
-  .ov-rec-name { font-size: 0.8rem; color: var(--text2); }
-  .ov-rec-val { font-size: 0.95rem; }
+  .ov-rec-name { font-size: 0.78rem; color: var(--text2); }
+  .ov-rec-val { font-size: 0.92rem; }
   #overlay-btns { display: flex; gap: 10px; justify-content: center; }
 
-  /* 매칭 대기 */
-  #waiting-screen.active {
-    justify-content: center;
-    min-height: 60vh;
-  }
+  /* 대기 */
+  #waiting-screen.active { justify-content: center; min-height: 60vh; }
   .waiting-box {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 48px 60px;
-    text-align: center;
-    box-shadow: var(--shadow);
-    display: flex; flex-direction: column; gap: 16px; align-items: center;
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); padding: 48px 60px;
+    text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center;
   }
   .spinner {
-    width: 48px; height: 48px;
-    border: 4px solid #334;
+    width: 46px; height: 46px;
+    border: 3px solid var(--card);
     border-top-color: var(--accent);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  .error-msg { color: var(--accent); font-size: 0.85rem; min-height: 18px; }
   .room-id-display {
-    background: var(--bg);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 1.4rem;
-    letter-spacing: 6px;
-    font-weight: bold;
-    color: var(--accent2);
-    text-align: center;
+    background: var(--card); border-radius: 9px; padding: 12px 20px;
+    font-size: 1.6rem; letter-spacing: 8px; font-weight: 700;
+    color: var(--accent2); text-align: center; border: 1px solid var(--border);
   }
+  .error-msg { color: #d07070; font-size: 0.83rem; min-height: 18px; }
 
   @media (max-width: 700px) {
     .lobby-grid { grid-template-columns: 1fr; }
     #game-screen.active { flex-direction: column; align-items: center; }
-    #side-panel { width: 100%; max-width: 400px; }
+    #side-panel { width: 100%; max-width: 420px; }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>⚫ 오목 온라인</h1>
+  <h1>◉ 오목 온라인</h1>
   <div id="player-info">접속자: <span id="header-nick">-</span></div>
 </header>
 
-<!-- 닉네임 설정 화면 -->
+<!-- 닉네임 -->
 <div id="nick-screen" class="screen active">
   <div id="nickname-area">
-    <h2>⚫ 오목 온라인</h2>
-    <p>플레이할 닉네임을 입력하세요</p>
+    <div class="logo">◉ 오목</div>
+    <p class="sub">온라인 대전을 시작하려면<br>닉네임을 입력하세요</p>
     <input id="nick-input" type="text" placeholder="닉네임 (2~12자)" maxlength="12">
     <div id="nick-error" class="error-msg"></div>
     <button class="btn-primary" onclick="setNickname()">시작하기</button>
   </div>
 </div>
 
-<!-- 로비 화면 -->
+<!-- 로비 -->
 <div id="lobby-screen" class="screen">
-  <div id="record-card" class="card">
-    <h2>📊 나의 기록</h2>
-    <div class="record-stats">
-      <div class="stat"><div class="stat-num win" id="rec-win">0</div><div class="stat-label">승</div></div>
-      <div class="stat"><div class="stat-num lose" id="rec-lose">0</div><div class="stat-label">패</div></div>
-      <div class="stat"><div class="stat-num draw" id="rec-draw">0</div><div class="stat-label">무</div></div>
-    </div>
-  </div>
-  <div class="lobby-grid">
+  <div class="lobby-wrap">
+
     <div class="card">
-      <h2>🎲 랜덤 매칭</h2>
-      <p style="color:var(--text2);font-size:0.9rem">대기 중인 상대를 자동으로 찾아드립니다</p>
-      <button class="btn-primary" onclick="joinRandom()">빠른 대전 시작</button>
-    </div>
-    <div class="card">
-      <h2>🏠 방 만들기</h2>
-      <p style="color:var(--text2);font-size:0.9rem">방 코드를 친구에게 공유하세요</p>
-      <button class="btn-secondary" onclick="createRoom()">방 만들기</button>
-    </div>
-    <div class="card" style="grid-column: 1 / -1;">
-      <h2>🔑 방 참가</h2>
-      <div style="display:flex;gap:8px;">
-        <input id="room-code-input" type="text" placeholder="방 코드 입력" maxlength="6" style="text-transform:uppercase">
-        <button class="btn-secondary" onclick="joinRoom()">입장</button>
+      <div class="card-title">나의 기록</div>
+      <div class="record-stats">
+        <div class="stat"><div class="stat-num win" id="rec-win">0</div><div class="stat-label">승</div></div>
+        <div class="stat"><div class="stat-num lose" id="rec-lose">0</div><div class="stat-label">패</div></div>
+        <div class="stat"><div class="stat-num draw" id="rec-draw">0</div><div class="stat-label">무</div></div>
       </div>
-      <div id="join-error" class="error-msg"></div>
     </div>
+
+    <div class="card">
+      <div class="card-title">돌 디자인</div>
+      <div class="stone-picker" id="stone-picker">
+        <div class="stone-opt" data-style="classic" onclick="selectStoneStyle('classic')">
+          <canvas id="sp-classic" width="48" height="26"></canvas>
+          <span>클래식</span>
+        </div>
+        <div class="stone-opt" data-style="flat" onclick="selectStoneStyle('flat')">
+          <canvas id="sp-flat" width="48" height="26"></canvas>
+          <span>플랫</span>
+        </div>
+        <div class="stone-opt" data-style="marble" onclick="selectStoneStyle('marble')">
+          <canvas id="sp-marble" width="48" height="26"></canvas>
+          <span>마블</span>
+        </div>
+        <div class="stone-opt" data-style="glass" onclick="selectStoneStyle('glass')">
+          <canvas id="sp-glass" width="48" height="26"></canvas>
+          <span>유리</span>
+        </div>
+        <div class="stone-opt" data-style="neon" onclick="selectStoneStyle('neon')">
+          <canvas id="sp-neon" width="48" height="26"></canvas>
+          <span>네온</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="lobby-grid">
+      <div class="card">
+        <div class="card-title">랜덤 매칭</div>
+        <p class="muted">대기 중인 상대를 자동으로 찾아드립니다</p>
+        <button class="btn-primary" onclick="joinRandom()">빠른 대전 시작</button>
+      </div>
+      <div class="card">
+        <div class="card-title">방 만들기</div>
+        <p class="muted">방 코드를 친구에게 공유하세요</p>
+        <button class="btn-secondary" onclick="createRoom()">방 만들기</button>
+      </div>
+      <div class="card lobby-wide">
+        <div class="card-title">방 참가</div>
+        <div style="display:flex;gap:8px;">
+          <input id="room-code-input" type="text" placeholder="방 코드 입력" maxlength="6" style="text-transform:uppercase">
+          <button class="btn-secondary" onclick="joinRoom()">입장</button>
+        </div>
+        <div id="join-error" class="error-msg"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- 방 대기 화면 -->
+<!-- 대기 -->
 <div id="waiting-screen" class="screen">
   <div class="waiting-box">
     <div class="spinner"></div>
-    <div id="waiting-title" style="font-size:1.2rem;font-weight:bold;">상대방을 기다리는 중...</div>
-    <div id="waiting-sub" style="color:var(--text2);">방 코드를 친구에게 알려주세요</div>
+    <div id="waiting-title" style="font-size:1.15rem;font-weight:700;">상대방을 기다리는 중...</div>
+    <div id="waiting-sub" class="muted">방 코드를 친구에게 알려주세요</div>
     <div id="waiting-room-code" class="room-id-display" style="display:none;"></div>
     <button class="btn-secondary btn-sm" onclick="cancelWaiting()">취소</button>
   </div>
 </div>
 
-<!-- 게임 화면 -->
+<!-- 게임 -->
 <div id="game-screen" class="screen">
   <div id="board-wrap">
     <canvas id="board-canvas"></canvas>
@@ -361,7 +370,7 @@
   </div>
 </div>
 
-<!-- 게임 오버 오버레이 -->
+<!-- 오버레이 -->
 <div id="overlay">
   <div id="overlay-box">
     <div id="overlay-title">게임 종료</div>
@@ -375,30 +384,104 @@
 </div>
 
 <script>
-// ── 상태 ──────────────────────────────────────────────────────
-const CELL = 36, PADDING = 24, SIZE = 15;
+const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 
 let socket = null;
 let myNickname = localStorage.getItem('omok_nickname') || '';
 let currentRoom = null;
-let myColor = 0; // 1=흑, 2=백
+let myColor = 0;
 let myRecord = { win: 0, lose: 0, draw: 0 };
 let gameBoard = [];
 let currentTurn = 1;
 let isSpectating = false;
 let gameActive = false;
+let currentStoneStyle = localStorage.getItem('omok_stone_style') || 'classic';
+
+// ── 돌 디자인 ─────────────────────────────────────────────────
+function drawStoneOnCtx(c, x, y, r, color, style) {
+  c.save();
+  switch(style) {
+    case 'classic': {
+      const g = c.createRadialGradient(x - r*0.3, y - r*0.3, r*0.05, x, y, r);
+      if (color === 1) { g.addColorStop(0, '#666'); g.addColorStop(1, '#111'); }
+      else { g.addColorStop(0, '#fff'); g.addColorStop(1, '#ccc'); }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+      c.fillStyle = g; c.fill();
+      if (color === 2) { c.strokeStyle = '#aaa'; c.lineWidth = 0.5; c.stroke(); }
+      break;
+    }
+    case 'flat': {
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+      c.fillStyle = color === 1 ? '#2a2a2a' : '#f0f0f0'; c.fill();
+      c.strokeStyle = color === 1 ? '#555' : '#bbb'; c.lineWidth = 1.5; c.stroke();
+      break;
+    }
+    case 'marble': {
+      const g = c.createRadialGradient(x - r*0.2, y - r*0.2, r*0.1, x, y, r);
+      if (color === 1) { g.addColorStop(0, '#3a3a3a'); g.addColorStop(0.6, '#1a1a1a'); g.addColorStop(1, '#080808'); }
+      else { g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#e8e8e8'); g.addColorStop(1, '#d0d0d0'); }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      c.save(); c.clip();
+      c.strokeStyle = color === 1 ? 'rgba(110,110,110,0.35)' : 'rgba(180,180,180,0.55)';
+      c.lineWidth = 0.8;
+      c.beginPath(); c.moveTo(x - r*0.5, y - r*0.3);
+      c.bezierCurveTo(x, y - r*0.5, x + r*0.3, y + r*0.1, x + r*0.4, y + r*0.6); c.stroke();
+      c.beginPath(); c.moveTo(x - r*0.2, y + r*0.2);
+      c.bezierCurveTo(x + r*0.1, y, x + r*0.2, y - r*0.4, x - r*0.1, y - r*0.6); c.stroke();
+      c.restore();
+      break;
+    }
+    case 'glass': {
+      const g = c.createRadialGradient(x - r*0.35, y - r*0.35, r*0.05, x + r*0.1, y + r*0.1, r);
+      if (color === 1) { g.addColorStop(0, '#4a4a6a'); g.addColorStop(0.5, '#1a1a2e'); g.addColorStop(1, '#080814'); }
+      else { g.addColorStop(0, '#fff'); g.addColorStop(0.4, '#c8d8f0'); g.addColorStop(1, '#8aaed0'); }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      c.beginPath(); c.arc(x - r*0.25, y - r*0.28, r*0.28, 0, Math.PI*2);
+      c.fillStyle = color === 1 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.65)'; c.fill();
+      break;
+    }
+    case 'neon': {
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+      c.fillStyle = color === 1 ? '#080812' : '#f8f8ff'; c.fill();
+      c.beginPath(); c.arc(x, y, r - 1.5, 0, Math.PI*2);
+      c.strokeStyle = color === 1 ? '#c8922a' : '#e8d09a'; c.lineWidth = 2.2; c.stroke();
+      c.beginPath(); c.arc(x, y, r * 0.28, 0, Math.PI*2);
+      c.fillStyle = color === 1 ? '#c8922a' : '#e8d09a'; c.fill();
+      break;
+    }
+  }
+  c.restore();
+}
+
+function selectStoneStyle(style) {
+  currentStoneStyle = style;
+  localStorage.setItem('omok_stone_style', style);
+  document.querySelectorAll('.stone-opt').forEach(el =>
+    el.classList.toggle('selected', el.dataset.style === style));
+  renderStonePreviews();
+  if (ctx) drawBoard();
+}
+
+function renderStonePreviews() {
+  ['classic','flat','marble','glass','neon'].forEach(style => {
+    const canvas = document.getElementById('sp-' + style);
+    if (!canvas) return;
+    const c = canvas.getContext('2d');
+    c.clearRect(0, 0, 48, 26);
+    drawStoneOnCtx(c, 13, 13, 11, 1, style);
+    drawStoneOnCtx(c, 35, 13, 11, 2, style);
+  });
+}
 
 // ── 유틸 ──────────────────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
-
 function updateHeaderNick() {
   document.getElementById('header-nick').textContent = myNickname || '-';
 }
-
 function updateRecordUI(rec) {
   if (!rec) return;
   myRecord = rec;
@@ -406,14 +489,11 @@ function updateRecordUI(rec) {
   document.getElementById('rec-lose').textContent = rec.lose;
   document.getElementById('rec-draw').textContent = rec.draw;
 }
-
 function addChat(text, isSystem = false) {
   const msgs = document.getElementById('chat-messages');
   const div = document.createElement('div');
   div.className = 'chat-msg';
-  div.innerHTML = isSystem
-    ? `<span class="sys">${text}</span>`
-    : text;
+  div.innerHTML = isSystem ? `<span class="sys">${text}</span>` : text;
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -430,197 +510,117 @@ function setNickname() {
   updateHeaderNick();
   initSocket();
 }
+if (myNickname) document.getElementById('nick-input').value = myNickname;
+document.getElementById('nick-input').addEventListener('keydown', e => { if (e.key === 'Enter') setNickname(); });
 
-if (myNickname) {
-  document.getElementById('nick-input').value = myNickname;
-}
-
-document.getElementById('nick-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') setNickname();
-});
-
-// ── Socket 초기화 ─────────────────────────────────────────────
+// ── Socket ────────────────────────────────────────────────────
 function initSocket() {
   socket = io();
 
   socket.on('connect', () => {
-    console.log('서버 연결됨');
     showScreen('lobby-screen');
     updateHeaderNick();
+    renderStonePreviews();
+    selectStoneStyle(currentStoneStyle);
   });
-
-  socket.on('disconnect', () => {
-    addChat('서버와 연결이 끊어졌습니다.', true);
-  });
-
+  socket.on('disconnect', () => { addChat('서버와 연결이 끊어졌습니다.', true); });
   socket.on('error', ({ msg }) => {
     document.getElementById('join-error').textContent = msg;
     setTimeout(() => document.getElementById('join-error').textContent = '', 3000);
   });
-
-  socket.on('forbidden', ({ type, msg }) => {
+  socket.on('forbidden', () => {
     if (hoverPos) {
       forbiddenFlash = { row: hoverPos.row, col: hoverPos.col, until: Date.now() + 700 };
       drawBoard();
     }
   });
-
-  // 매칭 대기열
   socket.on('queue_joined', ({ position }) => {
     document.getElementById('waiting-title').textContent = `매칭 중... (대기 ${position}명)`;
     document.getElementById('waiting-sub').textContent = '상대방을 찾고 있습니다';
     document.getElementById('waiting-room-code').style.display = 'none';
     showScreen('waiting-screen');
   });
-
-  socket.on('queue_cancelled', () => {
-    showScreen('lobby-screen');
-  });
-
-  // 방 생성
+  socket.on('queue_cancelled', () => { showScreen('lobby-screen'); });
   socket.on('room_created', ({ roomId, color }) => {
-    currentRoom = roomId;
-    myColor = color;
+    currentRoom = roomId; myColor = color;
     document.getElementById('waiting-title').textContent = '상대방을 기다리는 중...';
     document.getElementById('waiting-sub').textContent = '방 코드를 친구에게 알려주세요';
-    const codeEl = document.getElementById('waiting-room-code');
-    codeEl.textContent = roomId;
-    codeEl.style.display = 'block';
+    const el = document.getElementById('waiting-room-code');
+    el.textContent = roomId; el.style.display = 'block';
     showScreen('waiting-screen');
   });
-
-  socket.on('room_joined', ({ roomId, color }) => {
-    currentRoom = roomId;
-    myColor = color;
-  });
-
-  // 게임 시작
+  socket.on('room_joined', ({ roomId, color }) => { currentRoom = roomId; myColor = color; });
   socket.on('game_start', ({ roomId, board, players, turn, yourColor }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
-    currentTurn = turn;
-    gameActive = true;
-    isSpectating = false;
-
+    currentTurn = turn; gameActive = true; isSpectating = false;
     myColor = yourColor;
-
-    setupPlayerCards(players);
-    updateStatusBar();
-    initCanvas();
-    drawBoard();
+    setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     document.getElementById('overlay').classList.remove('show');
     document.getElementById('resign-btn').style.display = '';
     addChat('게임 시작!', true);
   });
-
   socket.on('spectate_start', ({ roomId, board, players, turn }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
-    currentTurn = turn;
-    isSpectating = true;
-    gameActive = true;
-
-    setupPlayerCards(players);
-    updateStatusBar();
-    initCanvas();
-    drawBoard();
+    currentTurn = turn; isSpectating = true; gameActive = true;
+    setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     document.getElementById('resign-btn').style.display = 'none';
     addChat('관전 모드로 입장했습니다.', true);
   });
-
-  // 돌 놓기
-  socket.on('stone_placed', ({ row, col, color }) => {
-    gameBoard[row][col] = color;
-    drawBoard();
-  });
-
-  socket.on('turn_changed', ({ turn }) => {
-    currentTurn = turn;
-    updateStatusBar();
-  });
-
-  // 게임 오버
+  socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; drawBoard(); });
+  socket.on('turn_changed', ({ turn }) => { currentTurn = turn; updateStatusBar(); });
   socket.on('game_over', ({ result, winner, loser, records }) => {
-    gameActive = false;
-    drawBoard();
-
-    // 내 기록 업데이트
+    gameActive = false; drawBoard();
     if (records) {
       const me = records.find(r => r.nickname === myNickname);
       if (me) updateRecordUI(me.record);
     }
-
     showOverlay(result, winner, loser, records);
-
-    if (records) {
-      records.forEach(r => {
-        const card = getPlayerCard(r.nickname);
-        if (card) {
-          card.querySelector('.player-rec').textContent =
-            `${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무`;
-        }
-      });
-    }
+    if (records) records.forEach(r => {
+      const card = getPlayerCard(r.nickname);
+      if (card) card.querySelector('.player-rec').textContent =
+        `${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무`;
+    });
   });
-
   socket.on('rematch_requested', ({ from }) => {
     addChat(`${from}님이 재대결을 요청했습니다.`, true);
     document.getElementById('rematch-btn').textContent = '재대결 수락';
   });
-
-  // 채팅
   socket.on('chat', ({ nickname, message }) => {
     addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
   });
 }
 
-// ── 로비 액션 ─────────────────────────────────────────────────
-function joinRandom() {
-  if (!socket) return;
-  socket.emit('join_random', { nickname: myNickname });
-}
-
-function createRoom() {
-  if (!socket) return;
-  socket.emit('create_room', { nickname: myNickname });
-}
-
+// ── 로비 ──────────────────────────────────────────────────────
+function joinRandom() { if (socket) socket.emit('join_random', { nickname: myNickname }); }
+function createRoom() { if (socket) socket.emit('create_room', { nickname: myNickname }); }
 function joinRoom() {
   const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-  if (!code) {
-    document.getElementById('join-error').textContent = '방 코드를 입력해주세요.';
-    return;
-  }
+  if (!code) { document.getElementById('join-error').textContent = '방 코드를 입력해주세요.'; return; }
   socket.emit('join_room', { roomId: code, nickname: myNickname });
 }
+function cancelWaiting() { socket.emit('cancel_random'); showScreen('lobby-screen'); }
 
-function cancelWaiting() {
-  socket.emit('cancel_random');
-  showScreen('lobby-screen');
-}
-
-// ── 게임 액션 ─────────────────────────────────────────────────
+// ── 게임 ──────────────────────────────────────────────────────
 function resignGame() {
   if (!confirm('기권하시겠습니까?')) return;
   socket.emit('resign', { roomId: currentRoom });
 }
-
 function requestRematch() {
   socket.emit('rematch_request', { roomId: currentRoom });
   document.getElementById('rematch-btn').textContent = '수락 대기 중...';
   document.getElementById('rematch-btn').disabled = true;
 }
-
 function goLobby() {
-  currentRoom = null;
-  myColor = 0;
-  gameBoard = [];
-  gameActive = false;
+  currentRoom = null; myColor = 0; gameBoard = []; gameActive = false;
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('chat-messages').innerHTML = '';
   showScreen('lobby-screen');
+  renderStonePreviews();
+  selectStoneStyle(currentStoneStyle);
 }
 
 // ── 채팅 ──────────────────────────────────────────────────────
@@ -631,121 +631,69 @@ function sendChat() {
   socket.emit('chat', { roomId: currentRoom, nickname: myNickname, message: msg });
   input.value = '';
 }
+document.getElementById('chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+document.getElementById('room-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
 
-document.getElementById('chat-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') sendChat();
-});
-
-document.getElementById('room-code-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') joinRoom();
-});
-
-// ── UI 헬퍼 ───────────────────────────────────────────────────
+// ── UI ────────────────────────────────────────────────────────
 function setupPlayerCards(players) {
   const black = players.find(p => p.color === 1);
   const white = players.find(p => p.color === 2);
-
   document.getElementById('p1-name').textContent = black ? black.nickname : '?';
-  document.getElementById('p1-rec').textContent = black
-    ? `${black.record.win}승 ${black.record.lose}패` : '';
-
+  document.getElementById('p1-rec').textContent = black ? `${black.record.win}승 ${black.record.lose}패` : '';
   document.getElementById('p2-name').textContent = white ? white.nickname : '?';
-  document.getElementById('p2-rec').textContent = white
-    ? `${white.record.win}승 ${white.record.lose}패` : '';
+  document.getElementById('p2-rec').textContent = white ? `${white.record.win}승 ${white.record.lose}패` : '';
 }
-
 function getPlayerCard(nickname) {
-  if (document.getElementById('p1-name').textContent === nickname)
-    return document.getElementById('player1-card');
-  if (document.getElementById('p2-name').textContent === nickname)
-    return document.getElementById('player2-card');
+  if (document.getElementById('p1-name').textContent === nickname) return document.getElementById('player1-card');
+  if (document.getElementById('p2-name').textContent === nickname) return document.getElementById('player2-card');
   return null;
 }
-
 function updateStatusBar() {
   const bar = document.getElementById('status-bar');
-  const c1 = document.getElementById('player1-card');
-  const c2 = document.getElementById('player2-card');
-  c1.classList.toggle('active-turn', currentTurn === 1);
-  c2.classList.toggle('active-turn', currentTurn === 2);
-
-  if (isSpectating) {
-    bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례';
-    return;
-  }
-  if (myColor === currentTurn) {
-    bar.textContent = '✨ 당신의 차례!';
-    bar.style.color = 'var(--accent2)';
-  } else {
-    bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례';
-    bar.style.color = 'var(--text2)';
-  }
+  document.getElementById('player1-card').classList.toggle('active-turn', currentTurn === 1);
+  document.getElementById('player2-card').classList.toggle('active-turn', currentTurn === 2);
+  if (isSpectating) { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; return; }
+  if (myColor === currentTurn) { bar.textContent = '✨ 당신의 차례!'; bar.style.color = 'var(--accent2)'; }
+  else { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; bar.style.color = 'var(--text2)'; }
 }
-
 function showOverlay(result, winner, loser, records) {
-  const overlay = document.getElementById('overlay');
   const title = document.getElementById('overlay-title');
   const sub = document.getElementById('overlay-sub');
   const recsEl = document.getElementById('overlay-records');
-  const rematchBtn = document.getElementById('rematch-btn');
-
-  rematchBtn.textContent = '재대결';
-  rematchBtn.disabled = false;
-  rematchBtn.style.display = isSpectating ? 'none' : '';
-
+  const btn = document.getElementById('rematch-btn');
+  btn.textContent = '재대결'; btn.disabled = false;
+  btn.style.display = isSpectating ? 'none' : '';
   if (result === 'win') {
-    if (winner === myNickname) {
-      title.textContent = '🎉 승리!';
-      title.style.color = '#4caf50';
-    } else {
-      title.textContent = '😢 패배';
-      title.style.color = 'var(--accent)';
-    }
+    if (winner === myNickname) { title.textContent = '🎉 승리!'; title.style.color = '#7ecb7e'; }
+    else { title.textContent = '😢 패배'; title.style.color = 'var(--accent)'; }
     sub.textContent = `${winner}님이 승리했습니다`;
   } else if (result === 'draw') {
-    title.textContent = '🤝 무승부';
-    title.style.color = 'var(--accent2)';
-    sub.textContent = '비겼습니다!';
+    title.textContent = '🤝 무승부'; title.style.color = 'var(--accent2)'; sub.textContent = '비겼습니다!';
   } else if (result === 'resign') {
-    if (loser === myNickname) {
-      title.textContent = '🏳️ 기권';
-      title.style.color = 'var(--accent)';
-    } else {
-      title.textContent = '🎉 승리!';
-      title.style.color = '#4caf50';
-    }
+    if (loser === myNickname) { title.textContent = '🏳️ 기권'; title.style.color = 'var(--accent)'; }
+    else { title.textContent = '🎉 승리!'; title.style.color = '#7ecb7e'; }
     sub.textContent = `${loser}님이 기권했습니다`;
   } else if (result === 'disconnect') {
     title.textContent = loser === myNickname ? '💨 연결 끊김' : '🎉 승리!';
-    title.style.color = loser === myNickname ? 'var(--text2)' : '#4caf50';
+    title.style.color = loser === myNickname ? 'var(--text2)' : '#7ecb7e';
     sub.textContent = `${loser}님의 연결이 끊어졌습니다`;
   }
-
-  if (records) {
-    recsEl.innerHTML = records.map(r =>
-      `<div class="ov-rec">
-        <div class="ov-rec-name">${escapeHtml(r.nickname)}</div>
-        <div class="ov-rec-val">${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무</div>
-      </div>`
-    ).join('');
-  }
-
-  overlay.classList.add('show');
+  if (records) recsEl.innerHTML = records.map(r =>
+    `<div class="ov-rec"><div class="ov-rec-name">${escapeHtml(r.nickname)}</div><div class="ov-rec-val">${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무</div></div>`
+  ).join('');
+  document.getElementById('overlay').classList.add('show');
 }
-
 function escapeHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── Canvas 오목판 ──────────────────────────────────────────────
+// ── 캔버스 ────────────────────────────────────────────────────
 let canvas, ctx, hoverPos = null, hoverForbidden = false, forbiddenFlash = null;
 
 function initCanvas() {
   canvas = document.getElementById('board-canvas');
-  canvas.width = CANVAS_SIZE;
-  canvas.height = CANVAS_SIZE;
+  canvas.width = CANVAS_SIZE; canvas.height = CANVAS_SIZE;
   ctx = canvas.getContext('2d');
-
   canvas.onmousemove = (e) => {
     if (!gameActive || isSpectating || myColor !== currentTurn) {
       hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; drawBoard(); return;
@@ -755,16 +703,10 @@ function initCanvas() {
       hoverPos = { row, col };
       hoverForbidden = isClientForbidden(row, col);
       canvas.style.cursor = hoverForbidden ? 'not-allowed' : 'crosshair';
-    } else {
-      hoverPos = null;
-      hoverForbidden = false;
-      canvas.style.cursor = 'crosshair';
-    }
+    } else { hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; }
     drawBoard();
   };
-
   canvas.onmouseleave = () => { hoverPos = null; drawBoard(); };
-
   canvas.onclick = (e) => {
     if (!gameActive || isSpectating || myColor !== currentTurn) return;
     const { row, col } = getCell(e);
@@ -777,59 +719,33 @@ function initCanvas() {
 
 function getCell(e) {
   const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left - PADDING;
-  const y = e.clientY - rect.top - PADDING;
-  const col = Math.round(x / CELL);
-  const row = Math.round(y / CELL);
-  return { row, col };
+  return {
+    col: Math.round((e.clientX - rect.left - PADDING) / CELL),
+    row: Math.round((e.clientY - rect.top - PADDING) / CELL)
+  };
 }
 
 function drawBoard() {
   if (!ctx) return;
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  // 배경
-  ctx.fillStyle = '#dcb56a';
+  ctx.fillStyle = '#d4a96a';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-  // 격자
-  ctx.strokeStyle = '#8b6914';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#8b6328'; ctx.lineWidth = 1;
   for (let i = 0; i < SIZE; i++) {
-    const x = PADDING + i * CELL;
-    const y = PADDING + i * CELL;
-    ctx.beginPath(); ctx.moveTo(x, PADDING); ctx.lineTo(x, PADDING + (SIZE-1)*CELL); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(PADDING, y); ctx.lineTo(PADDING + (SIZE-1)*CELL, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PADDING + i*CELL, PADDING); ctx.lineTo(PADDING + i*CELL, PADDING + (SIZE-1)*CELL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PADDING, PADDING + i*CELL); ctx.lineTo(PADDING + (SIZE-1)*CELL, PADDING + i*CELL); ctx.stroke();
   }
-
-  // 화점 (5개)
-  const dots = [[3,3],[3,11],[7,7],[11,3],[11,11]];
-  ctx.fillStyle = '#8b6914';
-  dots.forEach(([r,c]) => {
-    ctx.beginPath();
-    ctx.arc(PADDING + c*CELL, PADDING + r*CELL, 4, 0, Math.PI*2);
-    ctx.fill();
+  ctx.fillStyle = '#8b6328';
+  [[3,3],[3,11],[7,7],[11,3],[11,11]].forEach(([r,c]) => {
+    ctx.beginPath(); ctx.arc(PADDING + c*CELL, PADDING + r*CELL, 4, 0, Math.PI*2); ctx.fill();
   });
-
-  // 돌
-  for (let r = 0; r < SIZE; r++) {
-    for (let c = 0; c < SIZE; c++) {
-      if (gameBoard[r] && gameBoard[r][c]) {
-        drawStone(r, c, gameBoard[r][c], 1.0);
-      }
-    }
-  }
-
-  // 호버
+  for (let r = 0; r < SIZE; r++)
+    for (let c = 0; c < SIZE; c++)
+      if (gameBoard[r] && gameBoard[r][c]) drawStone(r, c, gameBoard[r][c], 1.0);
   if (hoverPos) {
-    if (hoverForbidden) {
-      drawForbiddenMark(hoverPos.row, hoverPos.col, false);
-    } else {
-      drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
-    }
+    if (hoverForbidden) drawForbiddenMark(hoverPos.row, hoverPos.col, false);
+    else drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
   }
-
-  // 금수 클릭 플래시
   if (forbiddenFlash && Date.now() < forbiddenFlash.until) {
     drawForbiddenMark(forbiddenFlash.row, forbiddenFlash.col, true);
     requestAnimationFrame(drawBoard);
@@ -839,98 +755,57 @@ function drawBoard() {
 }
 
 function drawStone(row, col, color, alpha) {
-  const x = PADDING + col * CELL;
-  const y = PADDING + row * CELL;
-  const r = CELL * 0.44;
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-
-  const grad = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.05, x, y, r);
-  if (color === 1) {
-    grad.addColorStop(0, '#666');
-    grad.addColorStop(1, '#111');
-  } else {
-    grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(1, '#cccccc');
-  }
-
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI*2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  if (color === 2) {
-    ctx.strokeStyle = '#aaa';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
-  }
-
+  const x = PADDING + col * CELL, y = PADDING + row * CELL, r = CELL * 0.44;
+  ctx.save(); ctx.globalAlpha = alpha;
+  drawStoneOnCtx(ctx, x, y, r, color, currentStoneStyle);
   ctx.restore();
 }
 
 function drawForbiddenMark(row, col, flash) {
-  const x = PADDING + col * CELL;
-  const y = PADDING + row * CELL;
-  const r = CELL * 0.4;
+  const x = PADDING + col * CELL, y = PADDING + row * CELL, r = CELL * 0.4;
   ctx.save();
-  // 반투명 빨간 원
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = flash ? 'rgba(239,68,68,0.38)' : 'rgba(239,68,68,0.18)';
-  ctx.fill();
-  ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth = flash ? 2.5 : 2;
-  ctx.stroke();
-  // X 표시
-  ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth = flash ? 3 : 2.5;
-  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = flash ? 'rgba(239,68,68,0.38)' : 'rgba(239,68,68,0.18)'; ctx.fill();
+  ctx.strokeStyle = '#ef4444'; ctx.lineWidth = flash ? 2.5 : 2; ctx.stroke();
+  ctx.lineWidth = flash ? 3 : 2.5; ctx.lineCap = 'round';
   const s = r * 0.52;
-  ctx.beginPath(); ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-s, y-s); ctx.lineTo(x+s, y+s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+s, y-s); ctx.lineTo(x-s, y+s); ctx.stroke();
   ctx.restore();
 }
 
-// ── 클라이언트 금수 체크 (호버 미리보기용) ────────────────────
+// ── 금수 체크 ─────────────────────────────────────────────────
 function isClientForbidden(row, col) {
   if (myColor !== 1) return false;
   const b = gameBoard.map(r => [...r]);
   b[row][col] = 1;
-  // 정확히 5연이면 금수 아님
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
-  for (const [dr, dc] of dirs) {
+  for (const [dr,dc] of dirs) {
     let cnt = 1;
-    for (let d = 1; d < 5; d++) { const r = row+dr*d, c = col+dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
-    for (let d = 1; d < 5; d++) { const r = row-dr*d, c = col-dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
+    for (let d=1;d<5;d++){const r=row+dr*d,c=col+dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
+    for (let d=1;d<5;d++){const r=row-dr*d,c=col-dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
     if (cnt === 5) return false;
   }
-  // 육목 체크
-  for (const [dr, dc] of dirs) {
-    let cnt = 1;
-    for (let d = 1; d <= 5; d++) { const r = row+dr*d, c = col+dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
-    for (let d = 1; d <= 5; d++) { const r = row-dr*d, c = col-dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
+  for (const [dr,dc] of dirs) {
+    let cnt=1;
+    for (let d=1;d<=5;d++){const r=row+dr*d,c=col+dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
+    for (let d=1;d<=5;d++){const r=row-dr*d,c=col-dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
     if (cnt >= 6) return true;
   }
-  // 쌍삼 체크
   let threes = 0;
-  for (const [dr, dc] of dirs) {
-    const get = (i) => { const r = row+dr*i, c = col+dc*i; if (r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
-    let fwd = 0, bwd = 0;
-    for (let d = 1; d <= 4; d++) { if (get(d) === 1) fwd++; else break; }
-    for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
-    if (fwd + bwd + 1 === 3 && get(fwd+1) === 0 && get(-bwd-1) === 0) threes++;
+  for (const [dr,dc] of dirs) {
+    const get = i => { const r=row+dr*i,c=col+dc*i; if(r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
+    let fwd=0,bwd=0;
+    for (let d=1;d<=4;d++){if(get(d)===1)fwd++;else break;}
+    for (let d=1;d<=4;d++){if(get(-d)===1)bwd++;else break;}
+    if (fwd+bwd+1===3 && get(fwd+1)===0 && get(-bwd-1)===0) threes++;
   }
   return threes >= 2;
 }
 
 // ── 시작 ──────────────────────────────────────────────────────
-if (myNickname.length >= 2) {
-  initSocket();
-  updateHeaderNick();
-} else {
-  showScreen('nick-screen');
-}
+if (myNickname.length >= 2) { initSocket(); updateHeaderNick(); }
+else showScreen('nick-screen');
 </script>
 </body>
 </html>
