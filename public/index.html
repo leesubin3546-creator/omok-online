@@ -7,13 +7,13 @@
 <script src="/socket.io/socket.io.js"></script>
 <style>
   :root {
-    --bg: #080f1a;
-    --surface: #0d1f33;
-    --card: #122d4a;
-    --accent: #10b981;
-    --accent2: #f59e0b;
-    --text: #e8f5f0;
-    --text2: #7db8a0;
+    --bg: #110d1e;
+    --surface: #1c1535;
+    --card: #251d47;
+    --accent: #8b5cf6;
+    --accent2: #fbbf24;
+    --text: #ede9fe;
+    --text2: #a78bfa;
     --board-bg: #c8a96e;
     --board-line: #7a5c2e;
     --black-stone: #1a1a1a;
@@ -71,6 +71,7 @@
     outline: none;
     transition: border-color 0.2s;
   }
+  input[type=text] { border: 1px solid #2d2060; }
   input[type=text]:focus { border-color: var(--accent); }
   button {
     padding: 10px 20px;
@@ -82,9 +83,9 @@
     font-weight: 600;
   }
   .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: #0da374; transform: translateY(-1px); }
+  .btn-primary:hover { background: #7c3aed; transform: translateY(-1px); }
   .btn-secondary { background: var(--card); color: var(--text); }
-  .btn-secondary:hover { background: #1a3f60; }
+  .btn-secondary:hover { background: #2d2560; }
   .btn-sm { padding: 6px 14px; font-size: 0.85rem; }
 
   /* 닉네임 설정 */
@@ -457,28 +458,12 @@ function initSocket() {
     setTimeout(() => document.getElementById('join-error').textContent = '', 3000);
   });
 
-  socket.on('forbidden', ({ msg }) => {
-    showForbiddenMsg(msg);
-  });
-
-  function showForbiddenMsg(msg) {
-    let el = document.getElementById('forbidden-msg');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'forbidden-msg';
-      el.style.cssText = `
-        position:fixed; top:80px; left:50%; transform:translateX(-50%);
-        background:#b91c1c; color:#fff; padding:10px 22px; border-radius:10px;
-        font-size:15px; font-weight:600; z-index:9999;
-        box-shadow:0 4px 16px rgba(0,0,0,0.5); pointer-events:none;
-      `;
-      document.body.appendChild(el);
+  socket.on('forbidden', ({ type, msg }) => {
+    if (hoverPos) {
+      forbiddenFlash = { row: hoverPos.row, col: hoverPos.col, until: Date.now() + 700 };
+      drawBoard();
     }
-    el.textContent = '🚫 ' + msg;
-    el.style.opacity = '1';
-    clearTimeout(el._timer);
-    el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2500);
-  }
+  });
 
   // 매칭 대기열
   socket.on('queue_joined', ({ position }) => {
@@ -753,7 +738,7 @@ function escapeHtml(str) {
 }
 
 // ── Canvas 오목판 ──────────────────────────────────────────────
-let canvas, ctx, hoverPos = null;
+let canvas, ctx, hoverPos = null, hoverForbidden = false, forbiddenFlash = null;
 
 function initCanvas() {
   canvas = document.getElementById('board-canvas');
@@ -762,12 +747,18 @@ function initCanvas() {
   ctx = canvas.getContext('2d');
 
   canvas.onmousemove = (e) => {
-    if (!gameActive || isSpectating || myColor !== currentTurn) { hoverPos = null; drawBoard(); return; }
+    if (!gameActive || isSpectating || myColor !== currentTurn) {
+      hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; drawBoard(); return;
+    }
     const { row, col } = getCell(e);
     if (row >= 0 && row < SIZE && col >= 0 && col < SIZE && gameBoard[row][col] === 0) {
       hoverPos = { row, col };
+      hoverForbidden = isClientForbidden(row, col);
+      canvas.style.cursor = hoverForbidden ? 'not-allowed' : 'crosshair';
     } else {
       hoverPos = null;
+      hoverForbidden = false;
+      canvas.style.cursor = 'crosshair';
     }
     drawBoard();
   };
@@ -831,7 +822,19 @@ function drawBoard() {
 
   // 호버
   if (hoverPos) {
-    drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
+    if (hoverForbidden) {
+      drawForbiddenMark(hoverPos.row, hoverPos.col, false);
+    } else {
+      drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
+    }
+  }
+
+  // 금수 클릭 플래시
+  if (forbiddenFlash && Date.now() < forbiddenFlash.until) {
+    drawForbiddenMark(forbiddenFlash.row, forbiddenFlash.col, true);
+    requestAnimationFrame(drawBoard);
+  } else if (forbiddenFlash && Date.now() >= forbiddenFlash.until) {
+    forbiddenFlash = null;
   }
 }
 
@@ -864,6 +867,61 @@ function drawStone(row, col, color, alpha) {
   }
 
   ctx.restore();
+}
+
+function drawForbiddenMark(row, col, flash) {
+  const x = PADDING + col * CELL;
+  const y = PADDING + row * CELL;
+  const r = CELL * 0.4;
+  ctx.save();
+  // 반투명 빨간 원
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = flash ? 'rgba(239,68,68,0.38)' : 'rgba(239,68,68,0.18)';
+  ctx.fill();
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = flash ? 2.5 : 2;
+  ctx.stroke();
+  // X 표시
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = flash ? 3 : 2.5;
+  ctx.lineCap = 'round';
+  const s = r * 0.52;
+  ctx.beginPath(); ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s); ctx.stroke();
+  ctx.restore();
+}
+
+// ── 클라이언트 금수 체크 (호버 미리보기용) ────────────────────
+function isClientForbidden(row, col) {
+  if (myColor !== 1) return false;
+  const b = gameBoard.map(r => [...r]);
+  b[row][col] = 1;
+  // 정확히 5연이면 금수 아님
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    let cnt = 1;
+    for (let d = 1; d < 5; d++) { const r = row+dr*d, c = col+dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
+    for (let d = 1; d < 5; d++) { const r = row-dr*d, c = col-dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
+    if (cnt === 5) return false;
+  }
+  // 육목 체크
+  for (const [dr, dc] of dirs) {
+    let cnt = 1;
+    for (let d = 1; d <= 5; d++) { const r = row+dr*d, c = col+dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
+    for (let d = 1; d <= 5; d++) { const r = row-dr*d, c = col-dc*d; if (r<0||r>=15||c<0||c>=15||b[r][c]!==1) break; cnt++; }
+    if (cnt >= 6) return true;
+  }
+  // 쌍삼 체크
+  let threes = 0;
+  for (const [dr, dc] of dirs) {
+    const get = (i) => { const r = row+dr*i, c = col+dc*i; if (r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
+    let fwd = 0, bwd = 0;
+    for (let d = 1; d <= 4; d++) { if (get(d) === 1) fwd++; else break; }
+    for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
+    if (fwd + bwd + 1 === 3 && get(fwd+1) === 0 && get(-bwd-1) === 0) threes++;
+  }
+  return threes >= 2;
 }
 
 // ── 시작 ──────────────────────────────────────────────────────
