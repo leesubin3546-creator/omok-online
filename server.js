@@ -126,7 +126,8 @@ function emitGameStart(room) {
   const playerData = room.players.map(p => ({
     nickname: p.nickname,
     color: p.color,
-    record: getRecord(p.nickname)
+    record: getRecord(p.nickname),
+    stoneStyle: p.stoneStyle || 'classic'
   }));
   room.players.forEach(p => {
     io.to(p.socketId).emit('game_start', {
@@ -186,8 +187,8 @@ function tryMatch() {
     }
     const roomId = generateRoomId();
     const room = createRoom(roomId);
-    room.players.push({ socketId: p1.socketId, nickname: p1.nickname, color: 1 });
-    room.players.push({ socketId: p2.socketId, nickname: p2.nickname, color: 2 });
+    room.players.push({ socketId: p1.socketId, nickname: p1.nickname, color: 1, stoneStyle: p1.stoneStyle || 'classic' });
+    room.players.push({ socketId: p2.socketId, nickname: p2.nickname, color: 2, stoneStyle: p2.stoneStyle || 'classic' });
     room.status = 'playing';
 
     s1.join(roomId);
@@ -203,11 +204,11 @@ io.on('connection', (socket) => {
   console.log('접속:', socket.id);
 
   // 랜덤 매칭 신청
-  socket.on('join_random', ({ nickname }) => {
+  socket.on('join_random', ({ nickname, stoneStyle }) => {
     // 이미 대기 중이면 중복 방지
     const idx = matchQueue.findIndex(p => p.socketId === socket.id);
     if (idx !== -1) return;
-    matchQueue.push({ socketId: socket.id, nickname });
+    matchQueue.push({ socketId: socket.id, nickname, stoneStyle: stoneStyle || 'classic' });
     socket.emit('queue_joined', { position: matchQueue.length });
     console.log(`매칭 대기: ${nickname} (대기열: ${matchQueue.length}명)`);
     tryMatch();
@@ -221,16 +222,16 @@ io.on('connection', (socket) => {
   });
 
   // 방 만들기
-  socket.on('create_room', ({ nickname }) => {
+  socket.on('create_room', ({ nickname, stoneStyle }) => {
     const roomId = generateRoomId();
     const room = createRoom(roomId, false);
-    room.players.push({ socketId: socket.id, nickname, color: 1 });
+    room.players.push({ socketId: socket.id, nickname, color: 1, stoneStyle: stoneStyle || 'classic' });
     socket.join(roomId);
     socket.emit('room_created', { roomId, color: 1 });
   });
 
   // 방 참가
-  socket.on('join_room', ({ roomId, nickname }) => {
+  socket.on('join_room', ({ roomId, nickname, stoneStyle }) => {
     const room = rooms.get(roomId.toUpperCase());
     if (!room) {
       socket.emit('error', { msg: '존재하지 않는 방입니다.' });
@@ -246,7 +247,8 @@ io.on('connection', (socket) => {
         players: room.players.map(p => ({
           nickname: p.nickname,
           color: p.color,
-          record: getRecord(p.nickname)
+          record: getRecord(p.nickname),
+          stoneStyle: p.stoneStyle || 'classic'
         })),
         turn: room.turn,
       });
@@ -256,7 +258,7 @@ io.on('connection', (socket) => {
       socket.emit('error', { msg: '방이 꽉 찼습니다.' });
       return;
     }
-    room.players.push({ socketId: socket.id, nickname, color: 2 });
+    room.players.push({ socketId: socket.id, nickname, color: 2, stoneStyle: stoneStyle || 'classic' });
     socket.join(roomId);
 
     if (room.players.length === 2) {
