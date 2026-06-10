@@ -54,6 +54,73 @@ function generateRoomId() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// ── 흑돌 금수 규칙 ─────────────────────────────────────────────
+
+// 정확히 5개 연속 체크 (5연은 금수 면제)
+function checkExactFive(board, row, col, player) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    let count = 1;
+    for (let d = 1; d < 5; d++) {
+      const r = row + dr*d, c = col + dc*d;
+      if (r<0||r>=15||c<0||c>=15||board[r][c]!==player) break;
+      count++;
+    }
+    for (let d = 1; d < 5; d++) {
+      const r = row - dr*d, c = col - dc*d;
+      if (r<0||r>=15||c<0||c>=15||board[r][c]!==player) break;
+      count++;
+    }
+    if (count === 5) return true;
+  }
+  return false;
+}
+
+// 육목 체크 (6개 이상 연속 → 금수)
+function isOverline(board, row, col) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    let count = 1;
+    for (let d = 1; d <= 5; d++) {
+      const r = row + dr*d, c = col + dc*d;
+      if (r<0||r>=15||c<0||c>=15||board[r][c]!==1) break;
+      count++;
+    }
+    for (let d = 1; d <= 5; d++) {
+      const r = row - dr*d, c = col - dc*d;
+      if (r<0||r>=15||c<0||c>=15||board[r][c]!==1) break;
+      count++;
+    }
+    if (count >= 6) return true;
+  }
+  return false;
+}
+
+// 열린 3 개수 카운트 (쌍삼 판정용)
+// 열린 3: 정확히 3개 연속, 양쪽 끝이 빈 칸 (_XXX_)
+function countOpenThrees(board, row, col) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  let count = 0;
+  for (const [dr, dc] of dirs) {
+    const get = (i) => {
+      const r = row + dr*i, c = col + dc*i;
+      if (r<0||r>=15||c<0||c>=15) return -1;
+      return board[r][c];
+    };
+    let fwd = 0, bwd = 0;
+    for (let d = 1; d <= 4; d++) { if (get(d) === 1) fwd++; else break; }
+    for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
+    const total = fwd + bwd + 1;
+    if (total === 3 && get(fwd + 1) === 0 && get(-bwd - 1) === 0) count++;
+  }
+  return count;
+}
+
+// 쌍삼 체크 (열린 3이 2개 이상 동시 생성)
+function isDoublethree(board, row, col) {
+  return countOpenThrees(board, row, col) >= 2;
+}
+
 // 각 플레이어에게 game_start를 개별 발송 (yourColor 포함)
 function emitGameStart(room) {
   const playerData = room.players.map(p => ({
@@ -214,6 +281,25 @@ io.on('connection', (socket) => {
     if (room.board[row][col] !== 0) {
       socket.emit('error', { msg: '이미 돌이 놓인 자리입니다.' });
       return;
+    }
+
+    // 흑돌(color=1) 금수 체크
+    if (player.color === 1) {
+      room.board[row][col] = 1;
+      const exactFive = checkExactFive(room.board, row, col, 1);
+      if (!exactFive) {
+        if (isOverline(room.board, row, col)) {
+          room.board[row][col] = 0;
+          socket.emit('forbidden', { type: 'overline', msg: '육목 금수! (흑은 6개 이상 연속 불가)' });
+          return;
+        }
+        if (isDoublethree(room.board, row, col)) {
+          room.board[row][col] = 0;
+          socket.emit('forbidden', { type: 'doublethree', msg: '쌍삼 금수! (흑은 열린 3을 동시에 두 개 만들 수 없음)' });
+          return;
+        }
+      }
+      room.board[row][col] = 0;
     }
 
     room.board[row][col] = player.color;
