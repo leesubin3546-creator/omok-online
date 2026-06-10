@@ -457,6 +457,29 @@ function initSocket() {
     setTimeout(() => document.getElementById('join-error').textContent = '', 3000);
   });
 
+  socket.on('forbidden', ({ msg }) => {
+    showForbiddenMsg(msg);
+  });
+
+  function showForbiddenMsg(msg) {
+    let el = document.getElementById('forbidden-msg');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'forbidden-msg';
+      el.style.cssText = `
+        position:fixed; top:80px; left:50%; transform:translateX(-50%);
+        background:#b91c1c; color:#fff; padding:10px 22px; border-radius:10px;
+        font-size:15px; font-weight:600; z-index:9999;
+        box-shadow:0 4px 16px rgba(0,0,0,0.5); pointer-events:none;
+      `;
+      document.body.appendChild(el);
+    }
+    el.textContent = '🚫 ' + msg;
+    el.style.opacity = '1';
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2500);
+  }
+
   // 매칭 대기열
   socket.on('queue_joined', ({ position }) => {
     document.getElementById('waiting-title').textContent = `매칭 중... (대기 ${position}명)`;
