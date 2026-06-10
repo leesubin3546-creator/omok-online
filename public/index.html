@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오목 온라인</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root {
+    --bg: #080f1a;
+    --surface: #0d1f33;
+    --card: #122d4a;
+    --accent: #10b981;
+    --accent2: #f59e0b;
+    --text: #e8f5f0;
+    --text2: #7db8a0;
+    --board-bg: #c8a96e;
+    --board-line: #7a5c2e;
+    --black-stone: #1a1a1a;
+    --white-stone: #f8f8f8;
+    --radius: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.6);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── 헤더 ── */
+  header {
+    width: 100%;
+    padding: 16px 32px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+  header h1 { font-size: 1.5rem; color: var(--accent); letter-spacing: 2px; }
+  #player-info { font-size: 0.9rem; color: var(--text2); }
+  #player-info span { color: var(--accent2); font-weight: bold; }
+
+  /* ── 화면 전환 ── */
+  .screen { display: none; width: 100%; max-width: 1100px; padding: 24px 16px; }
+  .screen.active { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+  /* ── 로비 ── */
+  .lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 700px; }
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .card h2 { font-size: 1.1rem; color: var(--accent2); margin-bottom: 4px; }
+  input[type=text] {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid #1a3a55;
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 600;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #0da374; transform: translateY(-1px); }
+  .btn-secondary { background: var(--card); color: var(--text); }
+  .btn-secondary:hover { background: #1a3f60; }
+  .btn-sm { padding: 6px 14px; font-size: 0.85rem; }
+
+  /* 닉네임 설정 */
+  #nickname-area {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 400px;
+    display: flex; flex-direction: column; gap: 12px;
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  #nickname-area h2 { font-size: 1.4rem; color: var(--accent); }
+  #nickname-area p { color: var(--text2); font-size: 0.9rem; }
+
+  /* 승패 기록 */
+  #record-card { width: 100%; max-width: 700px; }
+  .record-stats { display: flex; gap: 20px; }
+  .stat { text-align: center; flex: 1; }
+  .stat-num { font-size: 2rem; font-weight: bold; }
+  .stat-num.win { color: #4caf50; }
+  .stat-num.lose { color: var(--accent); }
+  .stat-num.draw { color: var(--accent2); }
+  .stat-label { font-size: 0.8rem; color: var(--text2); }
+
+  /* ── 게임 화면 ── */
+  #game-screen.active {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  /* 오목판 */
+  #board-wrap {
+    position: relative;
+    background: var(--board-bg);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    user-select: none;
+  }
+  #board-canvas {
+    display: block;
+    cursor: crosshair;
+  }
+
+  /* 사이드 패널 */
+  #side-panel {
+    width: 280px;
+    display: flex; flex-direction: column; gap: 14px;
+    min-width: 240px;
+  }
+
+  /* 플레이어 카드 */
+  .player-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px;
+    border: 2px solid transparent;
+    transition: border-color 0.3s;
+  }
+  .player-card.active-turn { border-color: var(--accent2); }
+  .stone-icon {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4), inset 1px 1px 4px rgba(255,255,255,0.2);
+  }
+  .stone-black { background: radial-gradient(circle at 35% 35%, #555, #111); }
+  .stone-white { background: radial-gradient(circle at 35% 35%, #fff, #ccc); }
+  .player-name { font-weight: bold; flex: 1; }
+  .player-rec { font-size: 0.75rem; color: var(--text2); }
+
+  /* 상태 표시 */
+  #status-bar {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 0.95rem;
+    color: var(--accent2);
+    font-weight: bold;
+  }
+
+  /* 채팅 */
+  #chat-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column;
+    height: 220px;
+    overflow: hidden;
+  }
+  #chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #chat-messages::-webkit-scrollbar { width: 4px; }
+  #chat-messages::-webkit-scrollbar-thumb { background: #334; border-radius: 4px; }
+  .chat-msg { line-height: 1.4; }
+  .chat-msg .cn { color: var(--accent2); font-weight: bold; }
+  .chat-msg .sys { color: var(--text2); font-style: italic; }
+  #chat-input-row {
+    display: flex; gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid #223;
+  }
+  #chat-input { flex: 1; padding: 6px 10px; font-size: 0.85rem; }
+
+  /* 게임 오버 오버레이 */
+  #overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  #overlay.show { display: flex; }
+  #overlay-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 40px 48px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
+    min-width: 300px;
+  }
+  #overlay-title { font-size: 2rem; font-weight: bold; }
+  #overlay-sub { color: var(--text2); font-size: 1rem; }
+  #overlay-records { display: flex; gap: 24px; justify-content: center; }
+  .ov-rec { text-align: center; }
+  .ov-rec-name { font-size: 0.8rem; color: var(--text2); }
+  .ov-rec-val { font-size: 0.95rem; }
+  #overlay-btns { display: flex; gap: 10px; justify-content: center; }
+
+  /* 매칭 대기 */
+  #waiting-screen.active {
+    justify-content: center;
+    min-height: 60vh;
+  }
+  .waiting-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 48px 60px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px; align-items: center;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid #334;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg { color: var(--accent); font-size: 0.85rem; min-height: 18px; }
+  .room-id-display {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 1.4rem;
+    letter-spacing: 6px;
+    font-weight: bold;
+    color: var(--accent2);
+    text-align: center;
+  }
+
+  @media (max-width: 700px) {
+    .lobby-grid { grid-template-columns: 1fr; }
+    #game-screen.active { flex-direction: column; align-items: center; }
+    #side-panel { width: 100%; max-width: 400px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚫ 오목 온라인</h1>
+  <div id="player-info">접속자: <span id="header-nick">-</span></div>
+</header>
+
+<!-- 닉네임 설정 화면 -->
+<div id="nick-screen" class="screen active">
+  <div id="nickname-area">
+    <h2>⚫ 오목 온라인</h2>
+    <p>플레이할 닉네임을 입력하세요</p>
+    <input id="nick-input" type="text" placeholder="닉네임 (2~12자)" maxlength="12">
+    <div id="nick-error" class="error-msg"></div>
+    <button class="btn-primary" onclick="setNickname()">시작하기</button>
+  </div>
+</div>
+
+<!-- 로비 화면 -->
+<div id="lobby-screen" class="screen">
+  <div id="record-card" class="card">
+    <h2>📊 나의 기록</h2>
+    <div class="record-stats">
+      <div class="stat"><div class="stat-num win" id="rec-win">0</div><div class="stat-label">승</div></div>
+      <div class="stat"><div class="stat-num lose" id="rec-lose">0</div><div class="stat-label">패</div></div>
+      <div class="stat"><div class="stat-num draw" id="rec-draw">0</div><div class="stat-label">무</div></div>
+    </div>
+  </div>
+  <div class="lobby-grid">
+    <div class="card">
+      <h2>🎲 랜덤 매칭</h2>
+      <p style="color:var(--text2);font-size:0.9rem">대기 중인 상대를 자동으로 찾아드립니다</p>
+      <button class="btn-primary" onclick="joinRandom()">빠른 대전 시작</button>
+    </div>
+    <div class="card">
+      <h2>🏠 방 만들기</h2>
+      <p style="color:var(--text2);font-size:0.9rem">방 코드를 친구에게 공유하세요</p>
+      <button class="btn-secondary" onclick="createRoom()">방 만들기</button>
+    </div>
+    <div class="card" style="grid-column: 1 / -1;">
+      <h2>🔑 방 참가</h2>
+      <div style="display:flex;gap:8px;">
+        <input id="room-code-input" type="text" placeholder="방 코드 입력" maxlength="6" style="text-transform:uppercase">
+        <button class="btn-secondary" onclick="joinRoom()">입장</button>
+      </div>
+      <div id="join-error" class="error-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 방 대기 화면 -->
+<div id="waiting-screen" class="screen">
+  <div class="waiting-box">
+    <div class="spinner"></div>
+    <div id="waiting-title" style="font-size:1.2rem;font-weight:bold;">상대방을 기다리는 중...</div>
+    <div id="waiting-sub" style="color:var(--text2);">방 코드를 친구에게 알려주세요</div>
+    <div id="waiting-room-code" class="room-id-display" style="display:none;"></div>
+    <button class="btn-secondary btn-sm" onclick="cancelWaiting()">취소</button>
+  </div>
+</div>
+
+<!-- 게임 화면 -->
+<div id="game-screen" class="screen">
+  <div id="board-wrap">
+    <canvas id="board-canvas"></canvas>
+  </div>
+  <div id="side-panel">
+    <div id="player1-card" class="player-card">
+      <div class="stone-icon stone-black"></div>
+      <div>
+        <div class="player-name" id="p1-name">-</div>
+        <div class="player-rec" id="p1-rec">0승 0패</div>
+      </div>
+    </div>
+    <div id="player2-card" class="player-card">
+      <div class="stone-icon stone-white"></div>
+      <div>
+        <div class="player-name" id="p2-name">-</div>
+        <div class="player-rec" id="p2-rec">0승 0패</div>
+      </div>
+    </div>
+    <div id="status-bar">게임 준비 중...</div>
+    <button class="btn-secondary btn-sm" onclick="resignGame()" id="resign-btn">기권하기</button>
+    <div id="chat-box">
+      <div id="chat-messages"></div>
+      <div id="chat-input-row">
+        <input id="chat-input" type="text" placeholder="메시지 입력..." maxlength="200">
+        <button class="btn-secondary btn-sm" onclick="sendChat()">전송</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 게임 오버 오버레이 -->
+<div id="overlay">
+  <div id="overlay-box">
+    <div id="overlay-title">게임 종료</div>
+    <div id="overlay-sub"></div>
+    <div id="overlay-records"></div>
+    <div id="overlay-btns">
+      <button class="btn-primary" onclick="requestRematch()" id="rematch-btn">재대결</button>
+      <button class="btn-secondary" onclick="goLobby()">로비로</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 상태 ──────────────────────────────────────────────────────
+const CELL = 36, PADDING = 24, SIZE = 15;
+const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
+
+let socket = null;
+let myNickname = localStorage.getItem('omok_nickname') || '';
+let currentRoom = null;
+let myColor = 0; // 1=흑, 2=백
+let myRecord = { win: 0, lose: 0, draw: 0 };
+let gameBoard = [];
+let currentTurn = 1;
+let isSpectating = false;
+let gameActive = false;
+
+// ── 유틸 ──────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function updateHeaderNick() {
+  document.getElementById('header-nick').textContent = myNickname || '-';
+}
+
+function updateRecordUI(rec) {
+  if (!rec) return;
+  myRecord = rec;
+  document.getElementById('rec-win').textContent = rec.win;
+  document.getElementById('rec-lose').textContent = rec.lose;
+  document.getElementById('rec-draw').textContent = rec.draw;
+}
+
+function addChat(text, isSystem = false) {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  div.innerHTML = isSystem
+    ? `<span class="sys">${text}</span>`
+    : text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ── 닉네임 ────────────────────────────────────────────────────
+function setNickname() {
+  const val = document.getElementById('nick-input').value.trim();
+  if (val.length < 2 || val.length > 12) {
+    document.getElementById('nick-error').textContent = '2~12자로 입력해주세요.';
+    return;
+  }
+  myNickname = val;
+  localStorage.setItem('omok_nickname', val);
+  updateHeaderNick();
+  initSocket();
+}
+
+if (myNickname) {
+  document.getElementById('nick-input').value = myNickname;
+}
+
+document.getElementById('nick-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') setNickname();
+});
+
+// ── Socket 초기화 ─────────────────────────────────────────────
+function initSocket() {
+  socket = io();
+
+  socket.on('connect', () => {
+    console.log('서버 연결됨');
+    showScreen('lobby-screen');
+    updateHeaderNick();
+  });
+
+  socket.on('disconnect', () => {
+    addChat('서버와 연결이 끊어졌습니다.', true);
+  });
+
+  socket.on('error', ({ msg }) => {
+    document.getElementById('join-error').textContent = msg;
+    setTimeout(() => document.getElementById('join-error').textContent = '', 3000);
+  });
+
+  // 매칭 대기열
+  socket.on('queue_joined', ({ position }) => {
+    document.getElementById('waiting-title').textContent = `매칭 중... (대기 ${position}명)`;
+    document.getElementById('waiting-sub').textContent = '상대방을 찾고 있습니다';
+    document.getElementById('waiting-room-code').style.display = 'none';
+    showScreen('waiting-screen');
+  });
+
+  socket.on('queue_cancelled', () => {
+    showScreen('lobby-screen');
+  });
+
+  // 방 생성
+  socket.on('room_created', ({ roomId, color }) => {
+    currentRoom = roomId;
+    myColor = color;
+    document.getElementById('waiting-title').textContent = '상대방을 기다리는 중...';
+    document.getElementById('waiting-sub').textContent = '방 코드를 친구에게 알려주세요';
+    const codeEl = document.getElementById('waiting-room-code');
+    codeEl.textContent = roomId;
+    codeEl.style.display = 'block';
+    showScreen('waiting-screen');
+  });
+
+  socket.on('room_joined', ({ roomId, color }) => {
+    currentRoom = roomId;
+    myColor = color;
+  });
+
+  // 게임 시작
+  socket.on('game_start', ({ roomId, board, players, turn, yourColor }) => {
+    currentRoom = roomId;
+    gameBoard = board.map(r => [...r]);
+    currentTurn = turn;
+    gameActive = true;
+    isSpectating = false;
+
+    myColor = yourColor;
+
+    setupPlayerCards(players);
+    updateStatusBar();
+    initCanvas();
+    drawBoard();
+    showScreen('game-screen');
+    document.getElementById('overlay').classList.remove('show');
+    document.getElementById('resign-btn').style.display = '';
+    addChat('게임 시작!', true);
+  });
+
+  socket.on('spectate_start', ({ roomId, board, players, turn }) => {
+    currentRoom = roomId;
+    gameBoard = board.map(r => [...r]);
+    currentTurn = turn;
+    isSpectating = true;
+    gameActive = true;
+
+    setupPlayerCards(players);
+    updateStatusBar();
+    initCanvas();
+    drawBoard();
+    showScreen('game-screen');
+    document.getElementById('resign-btn').style.display = 'none';
+    addChat('관전 모드로 입장했습니다.', true);
+  });
+
+  // 돌 놓기
+  socket.on('stone_placed', ({ row, col, color }) => {
+    gameBoard[row][col] = color;
+    drawBoard();
+  });
+
+  socket.on('turn_changed', ({ turn }) => {
+    currentTurn = turn;
+    updateStatusBar();
+  });
+
+  // 게임 오버
+  socket.on('game_over', ({ result, winner, loser, records }) => {
+    gameActive = false;
+    drawBoard();
+
+    // 내 기록 업데이트
+    if (records) {
+      const me = records.find(r => r.nickname === myNickname);
+      if (me) updateRecordUI(me.record);
+    }
+
+    showOverlay(result, winner, loser, records);
+
+    if (records) {
+      records.forEach(r => {
+        const card = getPlayerCard(r.nickname);
+        if (card) {
+          card.querySelector('.player-rec').textContent =
+            `${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무`;
+        }
+      });
+    }
+  });
+
+  socket.on('rematch_requested', ({ from }) => {
+    addChat(`${from}님이 재대결을 요청했습니다.`, true);
+    document.getElementById('rematch-btn').textContent = '재대결 수락';
+  });
+
+  // 채팅
+  socket.on('chat', ({ nickname, message }) => {
+    addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
+  });
+}
+
+// ── 로비 액션 ─────────────────────────────────────────────────
+function joinRandom() {
+  if (!socket) return;
+  socket.emit('join_random', { nickname: myNickname });
+}
+
+function createRoom() {
+  if (!socket) return;
+  socket.emit('create_room', { nickname: myNickname });
+}
+
+function joinRoom() {
+  const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+  if (!code) {
+    document.getElementById('join-error').textContent = '방 코드를 입력해주세요.';
+    return;
+  }
+  socket.emit('join_room', { roomId: code, nickname: myNickname });
+}
+
+function cancelWaiting() {
+  socket.emit('cancel_random');
+  showScreen('lobby-screen');
+}
+
+// ── 게임 액션 ─────────────────────────────────────────────────
+function resignGame() {
+  if (!confirm('기권하시겠습니까?')) return;
+  socket.emit('resign', { roomId: currentRoom });
+}
+
+function requestRematch() {
+  socket.emit('rematch_request', { roomId: currentRoom });
+  document.getElementById('rematch-btn').textContent = '수락 대기 중...';
+  document.getElementById('rematch-btn').disabled = true;
+}
+
+function goLobby() {
+  currentRoom = null;
+  myColor = 0;
+  gameBoard = [];
+  gameActive = false;
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('chat-messages').innerHTML = '';
+  showScreen('lobby-screen');
+}
+
+// ── 채팅 ──────────────────────────────────────────────────────
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !currentRoom) return;
+  socket.emit('chat', { roomId: currentRoom, nickname: myNickname, message: msg });
+  input.value = '';
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendChat();
+});
+
+document.getElementById('room-code-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') joinRoom();
+});
+
+// ── UI 헬퍼 ───────────────────────────────────────────────────
+function setupPlayerCards(players) {
+  const black = players.find(p => p.color === 1);
+  const white = players.find(p => p.color === 2);
+
+  document.getElementById('p1-name').textContent = black ? black.nickname : '?';
+  document.getElementById('p1-rec').textContent = black
+    ? `${black.record.win}승 ${black.record.lose}패` : '';
+
+  document.getElementById('p2-name').textContent = white ? white.nickname : '?';
+  document.getElementById('p2-rec').textContent = white
+    ? `${white.record.win}승 ${white.record.lose}패` : '';
+}
+
+function getPlayerCard(nickname) {
+  if (document.getElementById('p1-name').textContent === nickname)
+    return document.getElementById('player1-card');
+  if (document.getElementById('p2-name').textContent === nickname)
+    return document.getElementById('player2-card');
+  return null;
+}
+
+function updateStatusBar() {
+  const bar = document.getElementById('status-bar');
+  const c1 = document.getElementById('player1-card');
+  const c2 = document.getElementById('player2-card');
+  c1.classList.toggle('active-turn', currentTurn === 1);
+  c2.classList.toggle('active-turn', currentTurn === 2);
+
+  if (isSpectating) {
+    bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례';
+    return;
+  }
+  if (myColor === currentTurn) {
+    bar.textContent = '✨ 당신의 차례!';
+    bar.style.color = 'var(--accent2)';
+  } else {
+    bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례';
+    bar.style.color = 'var(--text2)';
+  }
+}
+
+function showOverlay(result, winner, loser, records) {
+  const overlay = document.getElementById('overlay');
+  const title = document.getElementById('overlay-title');
+  const sub = document.getElementById('overlay-sub');
+  const recsEl = document.getElementById('overlay-records');
+  const rematchBtn = document.getElementById('rematch-btn');
+
+  rematchBtn.textContent = '재대결';
+  rematchBtn.disabled = false;
+  rematchBtn.style.display = isSpectating ? 'none' : '';
+
+  if (result === 'win') {
+    if (winner === myNickname) {
+      title.textContent = '🎉 승리!';
+      title.style.color = '#4caf50';
+    } else {
+      title.textContent = '😢 패배';
+      title.style.color = 'var(--accent)';
+    }
+    sub.textContent = `${winner}님이 승리했습니다`;
+  } else if (result === 'draw') {
+    title.textContent = '🤝 무승부';
+    title.style.color = 'var(--accent2)';
+    sub.textContent = '비겼습니다!';
+  } else if (result === 'resign') {
+    if (loser === myNickname) {
+      title.textContent = '🏳️ 기권';
+      title.style.color = 'var(--accent)';
+    } else {
+      title.textContent = '🎉 승리!';
+      title.style.color = '#4caf50';
+    }
+    sub.textContent = `${loser}님이 기권했습니다`;
+  } else if (result === 'disconnect') {
+    title.textContent = loser === myNickname ? '💨 연결 끊김' : '🎉 승리!';
+    title.style.color = loser === myNickname ? 'var(--text2)' : '#4caf50';
+    sub.textContent = `${loser}님의 연결이 끊어졌습니다`;
+  }
+
+  if (records) {
+    recsEl.innerHTML = records.map(r =>
+      `<div class="ov-rec">
+        <div class="ov-rec-name">${escapeHtml(r.nickname)}</div>
+        <div class="ov-rec-val">${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무</div>
+      </div>`
+    ).join('');
+  }
+
+  overlay.classList.add('show');
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Canvas 오목판 ──────────────────────────────────────────────
+let canvas, ctx, hoverPos = null;
+
+function initCanvas() {
+  canvas = document.getElementById('board-canvas');
+  canvas.width = CANVAS_SIZE;
+  canvas.height = CANVAS_SIZE;
+  ctx = canvas.getContext('2d');
+
+  canvas.onmousemove = (e) => {
+    if (!gameActive || isSpectating || myColor !== currentTurn) { hoverPos = null; drawBoard(); return; }
+    const { row, col } = getCell(e);
+    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE && gameBoard[row][col] === 0) {
+      hoverPos = { row, col };
+    } else {
+      hoverPos = null;
+    }
+    drawBoard();
+  };
+
+  canvas.onmouseleave = () => { hoverPos = null; drawBoard(); };
+
+  canvas.onclick = (e) => {
+    if (!gameActive || isSpectating || myColor !== currentTurn) return;
+    const { row, col } = getCell(e);
+    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;
+    if (gameBoard[row][col] !== 0) return;
+    socket.emit('place_stone', { roomId: currentRoom, row, col });
+    hoverPos = null;
+  };
+}
+
+function getCell(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left - PADDING;
+  const y = e.clientY - rect.top - PADDING;
+  const col = Math.round(x / CELL);
+  const row = Math.round(y / CELL);
+  return { row, col };
+}
+
+function drawBoard() {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  // 배경
+  ctx.fillStyle = '#dcb56a';
+  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  // 격자
+  ctx.strokeStyle = '#8b6914';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < SIZE; i++) {
+    const x = PADDING + i * CELL;
+    const y = PADDING + i * CELL;
+    ctx.beginPath(); ctx.moveTo(x, PADDING); ctx.lineTo(x, PADDING + (SIZE-1)*CELL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PADDING, y); ctx.lineTo(PADDING + (SIZE-1)*CELL, y); ctx.stroke();
+  }
+
+  // 화점 (5개)
+  const dots = [[3,3],[3,11],[7,7],[11,3],[11,11]];
+  ctx.fillStyle = '#8b6914';
+  dots.forEach(([r,c]) => {
+    ctx.beginPath();
+    ctx.arc(PADDING + c*CELL, PADDING + r*CELL, 4, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // 돌
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (gameBoard[r] && gameBoard[r][c]) {
+        drawStone(r, c, gameBoard[r][c], 1.0);
+      }
+    }
+  }
+
+  // 호버
+  if (hoverPos) {
+    drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
+  }
+}
+
+function drawStone(row, col, color, alpha) {
+  const x = PADDING + col * CELL;
+  const y = PADDING + row * CELL;
+  const r = CELL * 0.44;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const grad = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.05, x, y, r);
+  if (color === 1) {
+    grad.addColorStop(0, '#666');
+    grad.addColorStop(1, '#111');
+  } else {
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, '#cccccc');
+  }
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  if (color === 2) {
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// ── 시작 ──────────────────────────────────────────────────────
+if (myNickname.length >= 2) {
+  initSocket();
+  updateHeaderNick();
+} else {
+  showScreen('nick-screen');
+}
+</script>
+</body>
+</html>
