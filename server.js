@@ -2,6 +2,20 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const mongoose = require('mongoose');
+
+// ── MongoDB 연결 ───────────────────────────────────────────────
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/omok')
+  .then(() => console.log('MongoDB 연결 성공'))
+  .catch(err => console.error('MongoDB 연결 실패:', err));
+
+const recordSchema = new mongoose.Schema({
+  nickname: { type: String, required: true, unique: true },
+  win:  { type: Number, default: 0 },
+  lose: { type: Number, default: 0 },
+  draw: { type: Number, default: 0 },
+});
+const Record = mongoose.model('Record', recordSchema);
 
 const app = express();
 const server = http.createServer(app);
@@ -18,17 +32,25 @@ app.get('*', (req, res) => {
 // ── 상태 관리 ──────────────────────────────────────────────────
 const rooms = new Map();       // roomId → RoomState
 const matchQueue = [];          // 랜덤 매칭 대기열 [{socketId, nickname}]
-const playerRecords = new Map(); // nickname → {win, lose, draw}
 
 function createBoard() {
   return Array.from({ length: 15 }, () => new Array(15).fill(0));
 }
 
-function getRecord(nickname) {
-  if (!playerRecords.has(nickname)) {
-    playerRecords.set(nickname, { win: 0, lose: 0, draw: 0 });
-  }
-  return playerRecords.get(nickname);
+async function getRecord(nickname) {
+  let rec = await Record.findOne({ nickname });
+  if (!rec) rec = await Record.create({ nickname, win: 0, lose: 0, draw: 0 });
+  return { win: rec.win, lose: rec.lose, draw: rec.draw };
+}
+
+async function addWin(nickname) {
+  await Record.findOneAndUpdate({ nickname }, { $inc: { win: 1 } }, { upsert: true });
+}
+async function addLose(nickname) {
+  await Record.findOneAndUpdate({ nickname }, { $inc: { lose: 1 } }, { upsert: true });
+}
+async function addDraw(nickname) {
+  await Record.findOneAndUpdate({ nickname }, { $inc: { draw: 1 } }, { upsert: true });
 }
 
 function checkWin(board, row, col, player) {
@@ -122,13 +144,13 @@ function isDoublethree(board, row, col) {
 }
 
 // 각 플레이어에게 game_start를 개별 발송 (yourColor 포함)
-function emitGameStart(room) {
-  const playerData = room.players.map(p => ({
+async function emitGameStart(room) {
+  const playerData = await Promise.all(room.players.map(async p => ({
     nickname: p.nickname,
     color: p.color,
-    record: getRecord(p.nickname),
+    record: await getRecord(p.nickname),
     stoneStyle: p.stoneStyle || 'classic'
-  }));
+  })));
   room.players.forEach(p => {
     io.to(p.socketId).emit('game_start', {
       roomId: room.id,
@@ -156,14 +178,15 @@ function createRoom(roomId, isPublic = false) {
   return room;
 }
 
-function roomInfo(room) {
+async function roomInfo(room) {
+  const players = await Promise.all(room.players.map(async p => ({
+    nickname: p.nickname,
+    color: p.color,
+    record: await getRecord(p.nickname)
+  })));
   return {
     id: room.id,
-    players: room.players.map(p => ({
-      nickname: p.nickname,
-      color: p.color,
-      record: getRecord(p.nickname)
-    })),
+    players,
     status: room.status,
     turn: room.turn,
     moveCount: room.moveCount,
@@ -231,7 +254,7 @@ io.on('connection', (socket) => {
   });
 
   // 방 참가
-  socket.on('join_room', ({ roomId, nickname, stoneStyle }) => {
+  socket.on('join_room', async ({ roomId, nickname, stoneStyle }) => {
     const room = rooms.get(roomId.toUpperCase());
     if (!room) {
       socket.emit('error', { msg: '존재하지 않는 방입니다.' });
@@ -241,17 +264,13 @@ io.on('connection', (socket) => {
       // 관전
       room.spectators.push(socket.id);
       socket.join(roomId);
-      socket.emit('spectate_start', {
-        roomId,
-        board: room.board,
-        players: room.players.map(p => ({
-          nickname: p.nickname,
-          color: p.color,
-          record: getRecord(p.nickname),
-          stoneStyle: p.stoneStyle || 'classic'
-        })),
-        turn: room.turn,
-      });
+      const players = await Promise.all(room.players.map(async p => ({
+        nickname: p.nickname,
+        color: p.color,
+        record: await getRecord(p.nickname),
+        stoneStyle: p.stoneStyle || 'classic'
+      })));
+      socket.emit('spectate_start', { roomId, board: room.board, players, turn: room.turn });
       return;
     }
     if (room.players.length >= 2) {
@@ -270,7 +289,7 @@ io.on('connection', (socket) => {
   });
 
   // 돌 놓기
-  socket.on('place_stone', ({ roomId, row, col }) => {
+  socket.on('place_stone', async ({ roomId, row, col }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
 
@@ -319,26 +338,19 @@ io.on('connection', (socket) => {
       room.status = 'finished';
       const winner = player;
       const loser = room.players.find(p => p.socketId !== socket.id);
-      getRecord(winner.nickname).win++;
-      if (loser) getRecord(loser.nickname).lose++;
-      io.to(roomId).emit('game_over', {
-        result: 'win',
-        winner: winner.nickname,
-        records: room.players.map(p => ({
-          nickname: p.nickname,
-          record: getRecord(p.nickname)
-        }))
-      });
+      await addWin(winner.nickname);
+      if (loser) await addLose(loser.nickname);
+      const records = await Promise.all(room.players.map(async p => ({
+        nickname: p.nickname, record: await getRecord(p.nickname)
+      })));
+      io.to(roomId).emit('game_over', { result: 'win', winner: winner.nickname, records });
     } else if (isDraw) {
       room.status = 'finished';
-      room.players.forEach(p => getRecord(p.nickname).draw++);
-      io.to(roomId).emit('game_over', {
-        result: 'draw',
-        records: room.players.map(p => ({
-          nickname: p.nickname,
-          record: getRecord(p.nickname)
-        }))
-      });
+      await Promise.all(room.players.map(p => addDraw(p.nickname)));
+      const records = await Promise.all(room.players.map(async p => ({
+        nickname: p.nickname, record: await getRecord(p.nickname)
+      })));
+      io.to(roomId).emit('game_over', { result: 'draw', records });
     } else {
       room.turn = room.turn === 1 ? 2 : 1;
       io.to(roomId).emit('turn_changed', { turn: room.turn });
@@ -373,23 +385,23 @@ io.on('connection', (socket) => {
   });
 
   // 기권
-  socket.on('resign', ({ roomId }) => {
+  socket.on('resign', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
     const loser = room.players.find(p => p.socketId === socket.id);
     const winner = room.players.find(p => p.socketId !== socket.id);
     if (!loser) return;
     room.status = 'finished';
-    if (loser) getRecord(loser.nickname).lose++;
-    if (winner) getRecord(winner.nickname).win++;
+    await addLose(loser.nickname);
+    if (winner) await addWin(winner.nickname);
+    const records = await Promise.all(room.players.map(async p => ({
+      nickname: p.nickname, record: await getRecord(p.nickname)
+    })));
     io.to(roomId).emit('game_over', {
       result: 'resign',
       winner: winner ? winner.nickname : null,
       loser: loser.nickname,
-      records: room.players.map(p => ({
-        nickname: p.nickname,
-        record: getRecord(p.nickname)
-      }))
+      records,
     });
   });
 
@@ -414,17 +426,19 @@ io.on('connection', (socket) => {
         const loser = room.players[playerIdx];
         const winner = room.players.find(p => p.socketId !== socket.id);
         room.status = 'finished';
-        getRecord(loser.nickname).lose++;
-        if (winner) getRecord(winner.nickname).win++;
-        io.to(roomId).emit('game_over', {
-          result: 'disconnect',
-          winner: winner ? winner.nickname : null,
-          loser: loser.nickname,
-          records: room.players.map(p => ({
-            nickname: p.nickname,
-            record: getRecord(p.nickname)
-          }))
-        });
+        (async () => {
+          await addLose(loser.nickname);
+          if (winner) await addWin(winner.nickname);
+          const records = await Promise.all(room.players.map(async p => ({
+            nickname: p.nickname, record: await getRecord(p.nickname)
+          })));
+          io.to(roomId).emit('game_over', {
+            result: 'disconnect',
+            winner: winner ? winner.nickname : null,
+            loser: loser.nickname,
+            records,
+          });
+        })();
         // 빈 방 정리
         setTimeout(() => {
           if (rooms.has(roomId)) rooms.delete(roomId);
