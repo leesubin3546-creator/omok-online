@@ -300,11 +300,46 @@
   }
   .error-msg { color: #8a2020; font-size: 0.83rem; min-height: 18px; }
 
+  /* 타이머 */
+  #turn-timer-wrap {
+    background: var(--surface); border-radius: 10px;
+    padding: 8px 14px; border: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .timer-bar-bg {
+    flex: 1; height: 6px; background: var(--card);
+    border-radius: 3px; overflow: hidden;
+  }
+  .timer-bar-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(to right, #4bb84a, #8ccc20);
+    border-radius: 3px; transition: width 1s linear;
+  }
+  .timer-bar-fill.urgent { background: linear-gradient(to right, #e84848, #f89020); }
+  #turn-timer-text { font-size: 0.88rem; font-weight: 700; color: var(--accent); min-width: 22px; text-align: right; }
+  #turn-timer-text.urgent { color: #c82020; }
+
+  /* 동의 배너 */
+  #consent-banner {
+    background: var(--surface); border-radius: 10px;
+    padding: 11px 14px; border: 2px solid var(--accent2);
+    text-align: center; display: none;
+  }
+  #consent-banner.show { display: block; }
+  .consent-text { font-size: 0.82rem; color: var(--text); line-height: 1.5; margin-bottom: 7px; }
+  .consent-btns { display: flex; gap: 6px; justify-content: center; }
+
+  /* 게임 액션 버튼 */
+  #game-actions { display: flex; gap: 6px; }
+  #game-actions button { flex: 1; }
+
+  .stone-opt { min-width: 54px; }
+
   @media (max-width: 700px) {
     .lobby-grid { grid-template-columns: 1fr; }
     #game-screen.active { flex-direction: column; align-items: center; }
     #side-panel { width: 100%; max-width: 420px; }
-    .stone-opt { min-width: 60px; padding: 8px 5px 7px; }
+    .stone-opt { min-width: 52px; padding: 8px 4px 7px; }
   }
 </style>
 </head>
@@ -354,42 +389,15 @@
       <div class="card-title">나의 돌 디자인</div>
       <p class="stone-picker-desc">각자 선택한 디자인이 게임에서 그대로 적용됩니다</p>
       <div class="stone-picker" id="stone-picker">
-        <div class="stone-opt" data-style="classic" onclick="selectStoneStyle('classic')">
-          <canvas id="sp-classic" width="72" height="40"></canvas>
-          <span>클래식</span>
-        </div>
-        <div class="stone-opt" data-style="flat" onclick="selectStoneStyle('flat')">
-          <canvas id="sp-flat" width="72" height="40"></canvas>
-          <span>플랫</span>
-        </div>
-        <div class="stone-opt" data-style="marble" onclick="selectStoneStyle('marble')">
-          <canvas id="sp-marble" width="72" height="40"></canvas>
-          <span>마블</span>
-        </div>
-        <div class="stone-opt" data-style="glass" onclick="selectStoneStyle('glass')">
-          <canvas id="sp-glass" width="72" height="40"></canvas>
-          <span>유리</span>
-        </div>
-        <div class="stone-opt" data-style="neon" onclick="selectStoneStyle('neon')">
-          <canvas id="sp-neon" width="72" height="40"></canvas>
-          <span>네온</span>
-        </div>
-        <div class="stone-opt" data-style="leaf" onclick="selectStoneStyle('leaf')">
-          <canvas id="sp-leaf" width="72" height="40"></canvas>
-          <span>나뭇잎</span>
-        </div>
-        <div class="stone-opt" data-style="gem" onclick="selectStoneStyle('gem')">
-          <canvas id="sp-gem" width="72" height="40"></canvas>
-          <span>보석</span>
-        </div>
-        <div class="stone-opt" data-style="star" onclick="selectStoneStyle('star')">
-          <canvas id="sp-star" width="72" height="40"></canvas>
-          <span>별빛</span>
-        </div>
-        <div class="stone-opt" data-style="wood" onclick="selectStoneStyle('wood')">
-          <canvas id="sp-wood" width="72" height="40"></canvas>
-          <span>나무결</span>
-        </div>
+        <div class="stone-opt" data-style="classic" onclick="selectStoneStyle('classic')"><canvas id="sp-classic" width="72" height="40"></canvas><span>클래식</span></div>
+        <div class="stone-opt" data-style="leaf" onclick="selectStoneStyle('leaf')"><canvas id="sp-leaf" width="72" height="40"></canvas><span>나뭇잎</span></div>
+        <div class="stone-opt" data-style="sakura" onclick="selectStoneStyle('sakura')"><canvas id="sp-sakura" width="72" height="40"></canvas><span>벚꽃</span></div>
+        <div class="stone-opt" data-style="star" onclick="selectStoneStyle('star')"><canvas id="sp-star" width="72" height="40"></canvas><span>별</span></div>
+        <div class="stone-opt" data-style="moon" onclick="selectStoneStyle('moon')"><canvas id="sp-moon" width="72" height="40"></canvas><span>초승달</span></div>
+        <div class="stone-opt" data-style="heart" onclick="selectStoneStyle('heart')"><canvas id="sp-heart" width="72" height="40"></canvas><span>하트</span></div>
+        <div class="stone-opt" data-style="drop" onclick="selectStoneStyle('drop')"><canvas id="sp-drop" width="72" height="40"></canvas><span>물방울</span></div>
+        <div class="stone-opt" data-style="cloud" onclick="selectStoneStyle('cloud')"><canvas id="sp-cloud" width="72" height="40"></canvas><span>구름</span></div>
+        <div class="stone-opt" data-style="butterfly" onclick="selectStoneStyle('butterfly')"><canvas id="sp-butterfly" width="72" height="40"></canvas><span>나비</span></div>
       </div>
     </div>
 
@@ -451,7 +459,22 @@
       <span class="style-badge" id="p2-style-badge">클래식</span>
     </div>
     <div id="status-bar">게임 준비 중...</div>
-    <button class="btn-secondary btn-sm" onclick="resignGame()" id="resign-btn">기권하기</button>
+    <div id="turn-timer-wrap" style="display:none">
+      <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar-fill"></div></div>
+      <span id="turn-timer-text">30</span>
+    </div>
+    <div id="consent-banner">
+      <div class="consent-text" id="consent-text"></div>
+      <div class="consent-btns">
+        <button class="btn-primary btn-sm" onclick="respondConsent(true)">수락</button>
+        <button class="btn-secondary btn-sm" onclick="respondConsent(false)">거절</button>
+      </div>
+    </div>
+    <div id="game-actions">
+      <button class="btn-secondary btn-sm" onclick="requestUndo()" id="undo-btn">무르기</button>
+      <button class="btn-secondary btn-sm" onclick="requestSurrender()" id="surrender-btn">항복</button>
+      <button class="btn-secondary btn-sm" onclick="resignGame()" id="resign-btn">기권</button>
+    </div>
     <div id="chat-box">
       <div id="chat-messages"></div>
       <div id="chat-input-row">
@@ -479,11 +502,8 @@
 <script>
 const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
-const ALL_STYLES = ['classic','flat','marble','glass','neon','leaf','gem','star','wood'];
-const STYLE_NAMES = {
-  classic:'클래식', flat:'플랫', marble:'마블', glass:'유리', neon:'네온',
-  leaf:'나뭇잎', gem:'보석', star:'별빛', wood:'나무결'
-};
+const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly'];
+const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비' };
 
 // ── 급수 시스템 ───────────────────────────────────────────────
 const RANK_THRESHOLDS = [
@@ -567,12 +587,156 @@ let gameActive = false;
 let currentStoneStyle = localStorage.getItem('omok_stone_style') || 'classic';
 let p1StoneStyle = 'classic';
 let p2StoneStyle = 'classic';
+// 타이머
+let turnTimerInterval = null;
+let turnTimerSeconds = 30;
+let turnTimerMax = 30;
+// 동의 요청
+let pendingConsentType = null; // 'undo' | 'surrender'
 
 // ── 돌 드로잉 ─────────────────────────────────────────────────
-function drawStoneOnCtx(c, x, y, r, color, style) {
-  c.save();
-  switch(style) {
+const STONE_COLORS = {
+  classic:   { c1:['#606060','#282828','#080808'], c2:['#f8f8f8','#e4e4e4','#c0c0c0'] },
+  leaf:      { c1:['#5cd44a','#2a9620','#0e5c08'], c2:['#d4f070','#aadd30','#72b000'] },
+  sakura:    { c1:['#f04888','#c01858','#780030'], c2:['#ffc0dc','#ff88b8','#ee4888'] },
+  star:      { c1:['#ffe060','#f0a800','#b87000'], c2:['#60a0f8','#2060e0','#0830a0'] },
+  moon:      { c1:['#7060e8','#3828c0','#180880'], c2:['#ffd860','#f0a420','#c07000'] },
+  heart:     { c1:['#e82020','#a80808','#600404'], c2:['#ff9060','#f85828','#c02800'] },
+  drop:      { c1:['#10c0d8','#0880a0','#024060'], c2:['#90e8ff','#40c0f8','#0090d0'] },
+  cloud:     { c1:['#4060d0','#1830a0','#080c60'], c2:['#c8b0f8','#a080f0','#6840c8'] },
+  butterfly: { c1:['#c040f8','#8010d0','#480080'], c2:['#f870e8','#e030c8','#a00090'] },
+};
 
+function stonePath(c, x, y, r, style) {
+  c.beginPath();
+  switch(style) {
+    case 'classic':
+      c.arc(x, y, r, 0, Math.PI*2); break;
+    case 'leaf': {
+      const h=r*1.08, w=r*0.66;
+      c.moveTo(x, y-h);
+      c.bezierCurveTo(x+w, y-h*0.38, x+w, y+h*0.38, x, y+h);
+      c.bezierCurveTo(x-w, y+h*0.38, x-w, y-h*0.38, x, y-h);
+      break;
+    }
+    case 'sakura': {
+      for(let i=0;i<5;i++){
+        const a=(i/5)*Math.PI*2-Math.PI/2;
+        const px=x+Math.cos(a)*r*0.52, py=y+Math.sin(a)*r*0.52;
+        c.moveTo(px+r*0.55, py);
+        c.arc(px, py, r*0.55, 0, Math.PI*2);
+      }
+      break;
+    }
+    case 'star': {
+      for(let i=0;i<10;i++){
+        const a=(i/10)*Math.PI*2-Math.PI/2;
+        const rad=i%2===0?r:r*0.42;
+        const sx=x+Math.cos(a)*rad, sy=y+Math.sin(a)*rad;
+        if(i===0) c.moveTo(sx,sy); else c.lineTo(sx,sy);
+      }
+      c.closePath(); break;
+    }
+    case 'moon':
+      c.arc(x, y, r, 0, Math.PI*2); break;
+    case 'heart': {
+      const s=r*0.92;
+      c.moveTo(x, y+s*0.86);
+      c.bezierCurveTo(x-s*1.08, y+s*0.26, x-s*1.08, y-s*0.52, x, y-s*0.08);
+      c.bezierCurveTo(x+s*1.08, y-s*0.52, x+s*1.08, y+s*0.26, x, y+s*0.86);
+      break;
+    }
+    case 'drop': {
+      c.moveTo(x, y-r*1.02);
+      c.bezierCurveTo(x+r*0.76, y-r*0.2, x+r*0.76, y+r*0.44, x, y+r*0.86);
+      c.bezierCurveTo(x-r*0.76, y+r*0.44, x-r*0.76, y-r*0.2, x, y-r*1.02);
+      break;
+    }
+    case 'cloud': {
+      [[-.42,.1,.5],[0,-.15,.62],[.42,.1,.5],[0,.44,.38]].forEach(([ox,oy,br])=>{
+        c.moveTo(x+(ox+br)*r, y+oy*r);
+        c.arc(x+ox*r, y+oy*r, br*r, 0, Math.PI*2);
+      });
+      break;
+    }
+    case 'butterfly': {
+      c.moveTo(x,y);
+      c.bezierCurveTo(x-r*.22,y-r*.5,x-r*1.06,y-r*.86,x-r*.96,y-r*.2);
+      c.bezierCurveTo(x-r*.86,y+r*.12,x-r*.1,y+r*.05,x,y);
+      c.moveTo(x,y);
+      c.bezierCurveTo(x+r*.22,y-r*.5,x+r*1.06,y-r*.86,x+r*.96,y-r*.2);
+      c.bezierCurveTo(x+r*.86,y+r*.12,x+r*.1,y+r*.05,x,y);
+      c.moveTo(x,y);
+      c.bezierCurveTo(x-r*.14,y+r*.28,x-r*.8,y+r*.7,x-r*.66,y+r*.24);
+      c.bezierCurveTo(x-r*.5,y-r*.05,x-r*.05,y+r*.04,x,y);
+      c.moveTo(x,y);
+      c.bezierCurveTo(x+r*.14,y+r*.28,x+r*.8,y+r*.7,x+r*.66,y+r*.24);
+      c.bezierCurveTo(x+r*.5,y-r*.05,x+r*.05,y+r*.04,x,y);
+      break;
+    }
+    default:
+      c.arc(x, y, r, 0, Math.PI*2); break;
+  }
+}
+
+function drawStoneOnCtx(c, x, y, r, color, style) {
+  const sc = STONE_COLORS[style] || STONE_COLORS.classic;
+  const stops = color === 1 ? sc.c1 : sc.c2;
+  c.save();
+
+  if (style === 'moon') {
+    const g = c.createRadialGradient(x-r*0.32, y-r*0.34, r*0.04, x+r*0.1, y+r*0.12, r*1.08);
+    g.addColorStop(0, stops[0]); g.addColorStop(0.5, stops[1]); g.addColorStop(1, stops[2]);
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
+    c.fillStyle = g; c.fill();
+    // 초승달 컷아웃
+    c.beginPath(); c.arc(x+r*0.42, y-r*0.22, r*0.72, 0, Math.PI*2);
+    c.fillStyle = '#c88c42'; c.fill();
+    c.restore(); return;
+  }
+
+  const g = c.createRadialGradient(x-r*0.32, y-r*0.34, r*0.04, x+r*0.1, y+r*0.12, r*1.08);
+  g.addColorStop(0, stops[0]); g.addColorStop(0.5, stops[1]); g.addColorStop(1, stops[2]);
+  stonePath(c, x, y, r, style);
+  c.fillStyle = g; c.fill();
+
+  // 하이라이트 (클리핑)
+  c.save();
+  stonePath(c, x, y, r, style);
+  c.clip();
+  const hl = c.createRadialGradient(x-r*0.28, y-r*0.32, 0, x-r*0.08, y-r*0.12, r*0.72);
+  hl.addColorStop(0, 'rgba(255,255,255,0.55)');
+  hl.addColorStop(0.42, 'rgba(255,255,255,0.18)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = hl;
+  c.fillRect(x-r*1.6, y-r*1.6, r*3.2, r*3.2);
+  c.restore();
+
+  // 테두리
+  stonePath(c, x, y, r, style);
+  c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = 0.7; c.stroke();
+
+  // 나뭇잎 잎맥
+  if (style === 'leaf') {
+    c.save();
+    stonePath(c, x, y, r, 'leaf');
+    c.clip();
+    c.strokeStyle = 'rgba(255,255,255,0.32)'; c.lineWidth = 0.65; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x, y-r*1.0); c.lineTo(x, y+r*1.0); c.stroke();
+    [[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]].forEach(([side,row]) => {
+      c.beginPath(); c.moveTo(x, y+row*r*0.36);
+      c.quadraticCurveTo(x+side*r*0.42, y+row*r*0.36-r*0.1, x+side*r*0.64, y+row*r*0.26);
+      c.stroke();
+    });
+    c.restore();
+  }
+
+  c.restore();
+}
+
+function _deadCode_neverCalled(c, x, y, r, color, style) {
+  // removed
+  switch(style) {
     case 'classic': {
       const g = c.createRadialGradient(x - r*0.3, y - r*0.3, r*0.04, x, y, r);
       if (color === 1) {
@@ -664,6 +828,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
     }
 
     case 'leaf': {
+      // 녹색 베이스
       const g = c.createRadialGradient(x - r*0.25, y - r*0.28, r*0.04, x, y, r);
       if (color === 1) {
         g.addColorStop(0, '#2d5a1b'); g.addColorStop(0.45, '#1a3a0e'); g.addColorStop(1, '#0d2208');
@@ -671,11 +836,14 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         g.addColorStop(0, '#eef7d8'); g.addColorStop(0.4, '#d5ecb0'); g.addColorStop(1, '#a8d078');
       }
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      // 잎맥 (clip 안에서)
       c.save(); c.clip();
       c.strokeStyle = color === 1 ? 'rgba(90,185,55,0.65)' : 'rgba(55,130,20,0.48)';
       c.lineCap = 'round';
+      // 주맥 (세로)
       c.lineWidth = color === 1 ? 0.9 : 0.75;
       c.beginPath(); c.moveTo(x, y - r*0.7); c.lineTo(x, y + r*0.7); c.stroke();
+      // 측맥 6개
       c.lineWidth = color === 1 ? 0.55 : 0.48;
       const veins = [
         [x, y - r*0.38,  x - r*0.38, y - r*0.44,  x - r*0.74, y - r*0.3],
@@ -694,6 +862,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
     }
 
     case 'gem': {
+      // 보석 베이스
       const g = c.createLinearGradient(x - r, y - r*0.8, x + r*0.6, y + r);
       if (color === 1) {
         g.addColorStop(0, '#2d0a50'); g.addColorStop(0.5, '#180628'); g.addColorStop(1, '#0a0215');
@@ -701,6 +870,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         g.addColorStop(0, '#f4f0ff'); g.addColorStop(0.4, '#ddd8ff'); g.addColorStop(1, '#b8b0f0');
       }
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      // 패싯 라인
       c.save(); c.clip();
       const fc = color === 1 ? 'rgba(160,90,255,0.5)' : 'rgba(100,80,255,0.45)';
       c.strokeStyle = fc; c.lineWidth = 0.65; c.lineCap = 'round';
@@ -710,6 +880,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         c.beginPath(); c.moveTo(cp.x, cp.y);
         c.lineTo(x + r*0.96*Math.cos(a), y + r*0.96*Math.sin(a)); c.stroke();
       }
+      // 테이블 육각형
       c.beginPath();
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI*2 - Math.PI/6;
@@ -719,6 +890,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
       c.closePath();
       c.strokeStyle = color===1 ? 'rgba(180,120,255,0.42)' : 'rgba(140,120,255,0.5)';
       c.lineWidth = 0.7; c.stroke();
+      // 백돌 컬러 플래시
       if (color === 2) {
         [['rgba(255,100,100,0.3)', 0.28, -0.3], ['rgba(80,80,255,0.28)', -0.3, 0.1],
          ['rgba(60,220,120,0.22)', 0.1, 0.36]].forEach(([clr, fx, fy]) => {
@@ -727,6 +899,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         });
       }
       c.restore();
+      // 상단 하이라이트
       const hl = c.createRadialGradient(x - r*0.18, y - r*0.32, 0, x, y, r*0.75);
       hl.addColorStop(0, color===1 ? 'rgba(200,150,255,0.6)' : 'rgba(255,255,255,0.9)');
       hl.addColorStop(1, 'rgba(255,255,255,0)');
@@ -736,6 +909,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
     }
 
     case 'star': {
+      // 어두운 베이스
       const g = c.createRadialGradient(x, y, 0, x, y, r);
       if (color === 1) {
         g.addColorStop(0, '#1a1a3e'); g.addColorStop(0.6, '#0c0c22'); g.addColorStop(1, '#050510');
@@ -744,6 +918,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
       }
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
       c.save(); c.clip();
+      // 5각별
       const starClr = color === 1 ? 'rgba(255,220,80,0.92)' : 'rgba(140,165,220,0.88)';
       c.fillStyle = starClr;
       c.beginPath();
@@ -754,6 +929,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         if (i===0) c.moveTo(sx, sy); else c.lineTo(sx, sy);
       }
       c.closePath(); c.fill();
+      // 별 하이라이트
       const shl = c.createRadialGradient(x, y - r*0.06, 0, x, y, r*0.42);
       shl.addColorStop(0, color===1 ? 'rgba(255,252,200,0.65)' : 'rgba(255,255,255,0.55)');
       shl.addColorStop(1, 'rgba(255,255,255,0)');
@@ -766,6 +942,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         if (i===0) c.moveTo(sx, sy); else c.lineTo(sx, sy);
       }
       c.closePath(); c.fill();
+      // 반짝이 점
       const dotClr = color === 1 ? 'rgba(255,240,150,0.72)' : 'rgba(200,215,245,0.82)';
       [[0.62, -0.45], [-0.65, -0.28], [0.38, 0.62], [-0.48, 0.58], [0.7, 0.28]].forEach(([dx, dy]) => {
         c.fillStyle = dotClr;
@@ -776,6 +953,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
     }
 
     case 'wood': {
+      // 나무결 베이스
       const g = c.createRadialGradient(x - r*0.15, y - r*0.15, 0, x, y, r);
       if (color === 1) {
         g.addColorStop(0, '#3a2010'); g.addColorStop(0.4, '#221208'); g.addColorStop(1, '#100802');
@@ -784,6 +962,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
       }
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
       c.save(); c.clip();
+      // 나이테 (살짝 오프셋)
       const rcx = x + r*0.08, rcy = y - r*0.05;
       c.strokeStyle = color === 1 ? 'rgba(70,35,10,0.55)' : 'rgba(165,120,55,0.42)';
       c.lineWidth = 0.65;
@@ -791,6 +970,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         const rr = r * (i / 4.8);
         c.beginPath(); c.ellipse(rcx, rcy, rr, rr*0.88, 0.12, 0, Math.PI*2); c.stroke();
       }
+      // 결 라인
       c.strokeStyle = color === 1 ? 'rgba(55,28,8,0.28)' : 'rgba(185,145,80,0.25)';
       c.lineWidth = 0.38;
       for (let i = -1; i <= 1; i++) {
@@ -800,6 +980,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
         c.stroke();
       }
       c.restore();
+      // 표면 하이라이트
       const hl = c.createRadialGradient(x - r*0.3, y - r*0.3, 0, x, y, r);
       hl.addColorStop(0, color===1 ? 'rgba(180,100,40,0.2)' : 'rgba(255,245,215,0.58)');
       hl.addColorStop(0.5, 'rgba(255,255,255,0)');
@@ -813,6 +994,7 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
   c.restore();
 }
 
+// ─────────────────────────────────────────────────────────────
 function selectStoneStyle(style) {
   currentStoneStyle = style;
   localStorage.setItem('omok_stone_style', style);
@@ -894,6 +1076,7 @@ function initSocket() {
     updateHeaderNick();
     renderStonePreviews();
     selectStoneStyle(currentStoneStyle);
+    // 기록 즉시 로드
     socket.emit('request_record', { nickname: myNickname });
   });
   socket.on('your_record', (rec) => { updateRecordUI(rec); });
@@ -932,25 +1115,84 @@ function initSocket() {
     myColor = yourColor;
     const myData = players.find(p => p.color === yourColor);
     myPointsBefore = myData ? (myData.record.points || 0) : (myRecord.points || 0);
+    clearClientTimer();
+    pendingConsentType = null;
+    document.getElementById('turn-timer-wrap').style.display = 'none';
+    document.getElementById('consent-banner').classList.remove('show');
+    document.getElementById('game-actions').style.display = '';
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     document.getElementById('overlay').classList.remove('show');
-    document.getElementById('resign-btn').style.display = '';
     addChat('게임 시작!', true);
   });
   socket.on('spectate_start', ({ roomId, board, players, turn }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; isSpectating = true; gameActive = true;
+    clearClientTimer();
+    pendingConsentType = null;
+    document.getElementById('turn-timer-wrap').style.display = 'none';
+    document.getElementById('consent-banner').classList.remove('show');
+    document.getElementById('game-actions').style.display = 'none';
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
-    document.getElementById('resign-btn').style.display = 'none';
     addChat('관전 모드로 입장했습니다.', true);
   });
 
   socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; drawBoard(); });
   socket.on('turn_changed', ({ turn }) => { currentTurn = turn; updateStatusBar(); });
+
+  // 타이머
+  socket.on('timer_start', ({ seconds }) => {
+    turnTimerMax = seconds;
+    startClientTimer(seconds);
+    document.getElementById('turn-timer-wrap').style.display = '';
+  });
+
+  // 무르기
+  socket.on('undo_requested', ({ from }) => {
+    pendingConsentType = 'undo';
+    document.getElementById('consent-text').textContent = `${escapeHtml(from)}님이 무르기를 요청했습니다.`;
+    document.getElementById('consent-banner').classList.add('show');
+    addChat(`${escapeHtml(from)}님이 무르기를 요청했습니다.`, true);
+  });
+  socket.on('undo_accepted', ({ board, turn, moveCount }) => {
+    gameBoard = board.map(r => [...r]);
+    currentTurn = turn;
+    drawBoard(); updateStatusBar();
+    pendingConsentType = null;
+    document.getElementById('consent-banner').classList.remove('show');
+    addChat('✅ 무르기가 수락되었습니다.', true);
+  });
+  socket.on('undo_result', ({ ok, reason }) => {
+    if (!ok) addChat(`무르기 거절: ${reason || ''}`, true);
+  });
+  socket.on('consent_notify', ({ type, accepted }) => {
+    if (!accepted) {
+      addChat(type === 'undo' ? '무르기 요청이 거절되었습니다.' : '항복 요청이 거절되었습니다.', true);
+    }
+    pendingConsentType = null;
+    document.getElementById('consent-banner').classList.remove('show');
+  });
+
+  // 항복
+  socket.on('surrender_requested', ({ from }) => {
+    pendingConsentType = 'surrender';
+    document.getElementById('consent-text').textContent = `${escapeHtml(from)}님이 항복을 요청했습니다.`;
+    document.getElementById('consent-banner').classList.add('show');
+    addChat(`${escapeHtml(from)}님이 항복을 요청했습니다.`, true);
+  });
+  socket.on('surrender_result', ({ ok, reason }) => {
+    if (!ok) addChat(`항복 거절: ${reason || ''}`, true);
+    pendingConsentType = null;
+    document.getElementById('consent-banner').classList.remove('show');
+  });
+
   socket.on('game_over', ({ result, winner, loser, records }) => {
+    clearClientTimer();
+    document.getElementById('turn-timer-wrap').style.display = 'none';
+    document.getElementById('consent-banner').classList.remove('show');
+    pendingConsentType = null;
     gameActive = false; drawBoard();
     let rankChangeText = '';
     if (records) {
@@ -1002,6 +1244,58 @@ function joinRoom() {
 }
 function cancelWaiting() { socket.emit('cancel_random'); showScreen('lobby-screen'); }
 
+// ── 타이머 ────────────────────────────────────────────────────
+function startClientTimer(seconds) {
+  clearClientTimer();
+  turnTimerSeconds = seconds || turnTimerMax;
+  updateTimerDisplay();
+  turnTimerInterval = setInterval(() => {
+    turnTimerSeconds = Math.max(0, turnTimerSeconds - 1);
+    updateTimerDisplay();
+    if (turnTimerSeconds <= 0) clearClientTimer();
+  }, 1000);
+}
+function clearClientTimer() {
+  if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
+}
+function updateTimerDisplay() {
+  const textEl = document.getElementById('turn-timer-text');
+  const barEl  = document.getElementById('timer-bar-fill');
+  if (!textEl || !barEl) return;
+  const urgent = turnTimerSeconds <= 10;
+  textEl.textContent = turnTimerSeconds;
+  textEl.className = urgent ? 'urgent' : '';
+  barEl.style.width = (turnTimerSeconds / turnTimerMax * 100) + '%';
+  barEl.className = 'timer-bar-fill' + (urgent ? ' urgent' : '');
+}
+
+// ── 무르기 / 항복 ─────────────────────────────────────────────
+function requestUndo() {
+  if (!gameActive || isSpectating || !socket) return;
+  if (!confirm('상대방에게 무르기를 요청하시겠습니까?')) return;
+  socket.emit('undo_request', { roomId: currentRoom });
+  addChat('무르기를 요청했습니다. (상대 응답 대기 중)', true);
+}
+function requestSurrender() {
+  if (!gameActive || isSpectating || !socket) return;
+  if (!confirm('항복을 요청하시겠습니까? 상대방이 수락해야 합니다.')) return;
+  socket.emit('surrender_request', { roomId: currentRoom });
+  addChat('항복을 요청했습니다. (상대 응답 대기 중)', true);
+}
+function respondConsent(accept) {
+  if (!pendingConsentType || !socket) return;
+  const type = pendingConsentType;
+  pendingConsentType = null;
+  document.getElementById('consent-banner').classList.remove('show');
+  if (type === 'undo') {
+    socket.emit('undo_response', { roomId: currentRoom, accept });
+    addChat(accept ? '✅ 무르기를 수락했습니다.' : '❌ 무르기를 거절했습니다.', true);
+  } else if (type === 'surrender') {
+    socket.emit('surrender_response', { roomId: currentRoom, accept });
+    addChat(accept ? '✅ 항복을 수락했습니다.' : '❌ 항복을 거절했습니다.', true);
+  }
+}
+
 // ── 게임 ──────────────────────────────────────────────────────
 function resignGame() {
   if (!confirm('기권하시겠습니까?')) return;
@@ -1013,6 +1307,10 @@ function requestRematch() {
   document.getElementById('rematch-btn').disabled = true;
 }
 function goLobby() {
+  clearClientTimer();
+  pendingConsentType = null;
+  document.getElementById('turn-timer-wrap').style.display = 'none';
+  document.getElementById('consent-banner').classList.remove('show');
   currentRoom = null; myColor = 0; gameBoard = []; gameActive = false;
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('chat-messages').innerHTML = '';
@@ -1087,6 +1385,10 @@ function showOverlay(result, winner, loser, records, rankChangeText) {
     title.textContent = loser === myNickname ? '💨 연결 끊김' : '🎉 승리!';
     title.style.color = loser === myNickname ? 'var(--text2)' : '#2a6e2a';
     sub.textContent = `${loser}님의 연결이 끊어졌습니다`;
+  } else if (result === 'timeout') {
+    title.textContent = loser === myNickname ? '⏰ 시간 초과' : '🎉 승리!';
+    title.style.color = loser === myNickname ? '#8a2020' : '#2a6e2a';
+    sub.textContent = `${loser}님이 시간 내에 착수하지 않았습니다`;
   }
 
   if (records) recsEl.innerHTML = records.map(r => {
@@ -1145,24 +1447,30 @@ function getCell(e) {
 function drawBoard() {
   if (!ctx) return;
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  // 보드 배경
   ctx.fillStyle = '#c88c42';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  // 격자
   ctx.strokeStyle = '#7a4a18'; ctx.lineWidth = 1;
   for (let i = 0; i < SIZE; i++) {
     ctx.beginPath(); ctx.moveTo(PADDING + i*CELL, PADDING); ctx.lineTo(PADDING + i*CELL, PADDING + (SIZE-1)*CELL); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(PADDING, PADDING + i*CELL); ctx.lineTo(PADDING + (SIZE-1)*CELL, PADDING + i*CELL); ctx.stroke();
   }
+  // 화점
   ctx.fillStyle = '#7a4a18';
   [[3,3],[3,11],[7,7],[11,3],[11,11]].forEach(([r,c]) => {
     ctx.beginPath(); ctx.arc(PADDING + c*CELL, PADDING + r*CELL, 4, 0, Math.PI*2); ctx.fill();
   });
+  // 돌
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++)
       if (gameBoard[r] && gameBoard[r][c]) drawStone(r, c, gameBoard[r][c], 1.0);
+  // 호버
   if (hoverPos) {
     if (hoverForbidden) drawForbiddenMark(hoverPos.row, hoverPos.col, false);
     else drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
   }
+  // 금수 플래시
   if (forbiddenFlash && Date.now() < forbiddenFlash.until) {
     drawForbiddenMark(forbiddenFlash.row, forbiddenFlash.col, true);
     requestAnimationFrame(drawBoard);
