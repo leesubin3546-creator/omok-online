@@ -31,7 +31,7 @@ app.get('*', (req, res) => {
 
 // ── 상태 관리 ──────────────────────────────────────────────────
 const rooms = new Map();
-const matchQueue = [];
+const matchQueues = { timer: [], noTimer: [] };
 
 function createBoard() {
   return Array.from({ length: 15 }, () => new Array(15).fill(0));
@@ -154,6 +154,7 @@ function isDoublethree(board, row, col) {
 
 // ── 타이머 ────────────────────────────────────────────────────
 function startTurnTimer(room) {
+  if (!room.useTimer) return;
   clearTurnTimer(room);
   room.turnTimer = setTimeout(async () => {
     if (room.status !== 'playing') return;
@@ -191,12 +192,13 @@ async function emitGameStart(room) {
     io.to(p.socketId).emit('game_start', {
       roomId: room.id, board: room.board,
       players: playerData, turn: room.turn, yourColor: p.color,
+      useTimer: room.useTimer !== false,
     });
   });
   startTurnTimer(room);
 }
 
-function createRoom(roomId, isPublic = false) {
+function createRoom(roomId, isPublic = false, useTimer = true) {
   const room = {
     id: roomId,
     players: [],
@@ -205,6 +207,7 @@ function createRoom(roomId, isPublic = false) {
     status: 'waiting',
     moveCount: 0,
     isPublic,
+    useTimer,
     chat: [],
     spectators: [],
     moveHistory: [],
@@ -218,25 +221,26 @@ function createRoom(roomId, isPublic = false) {
 }
 
 // ── 매칭 큐 처리 ──────────────────────────────────────────────
-function tryMatch() {
-  while (matchQueue.length >= 2) {
-    const p1 = matchQueue.shift();
-    const p2 = matchQueue.shift();
+function tryMatch(queueKey) {
+  const q = matchQueues[queueKey];
+  while (q.length >= 2) {
+    const p1 = q.shift();
+    const p2 = q.shift();
     const s1 = io.sockets.sockets.get(p1.socketId);
     const s2 = io.sockets.sockets.get(p2.socketId);
     if (!s1 || !s2) {
-      if (s1) matchQueue.unshift(p1);
-      if (s2) matchQueue.unshift(p2);
+      if (s1) q.unshift(p1);
+      if (s2) q.unshift(p2);
       continue;
     }
     const roomId = generateRoomId();
-    const room = createRoom(roomId);
+    const room = createRoom(roomId, false, queueKey === 'timer');
     room.players.push({ socketId: p1.socketId, nickname: p1.nickname, color: 1, stoneStyle: p1.stoneStyle || 'classic' });
     room.players.push({ socketId: p2.socketId, nickname: p2.nickname, color: 2, stoneStyle: p2.stoneStyle || 'classic' });
     room.status = 'playing';
     s1.join(roomId); s2.join(roomId);
     emitGameStart(room);
-    console.log(`매칭 완료: ${p1.nickname} vs ${p2.nickname} [${roomId}]`);
+    console.log(`매칭 완료: ${p1.nickname} vs ${p2.nickname} [${roomId}] [타이머:${queueKey}]`);
   }
 }
 
@@ -250,24 +254,28 @@ io.on('connection', (socket) => {
     socket.emit('your_record', rec);
   });
 
-  socket.on('join_random', ({ nickname, stoneStyle }) => {
-    const idx = matchQueue.findIndex(p => p.socketId === socket.id);
-    if (idx !== -1) return;
-    matchQueue.push({ socketId: socket.id, nickname, stoneStyle: stoneStyle || 'classic' });
-    socket.emit('queue_joined', { position: matchQueue.length });
-    console.log(`매칭 대기: ${nickname} (대기열: ${matchQueue.length}명)`);
-    tryMatch();
+  socket.on('join_random', ({ nickname, stoneStyle, useTimer }) => {
+    for (const q of Object.values(matchQueues)) {
+      if (q.findIndex(p => p.socketId === socket.id) !== -1) return;
+    }
+    const qKey = useTimer === false ? 'noTimer' : 'timer';
+    matchQueues[qKey].push({ socketId: socket.id, nickname, stoneStyle: stoneStyle || 'classic' });
+    socket.emit('queue_joined', { position: matchQueues[qKey].length });
+    console.log(`매칭 대기: ${nickname} (대기열: ${matchQueues[qKey].length}명) [타이머:${qKey}]`);
+    tryMatch(qKey);
   });
 
   socket.on('cancel_random', () => {
-    const idx = matchQueue.findIndex(p => p.socketId === socket.id);
-    if (idx !== -1) matchQueue.splice(idx, 1);
+    for (const q of Object.values(matchQueues)) {
+      const idx = q.findIndex(p => p.socketId === socket.id);
+      if (idx !== -1) { q.splice(idx, 1); break; }
+    }
     socket.emit('queue_cancelled');
   });
 
-  socket.on('create_room', ({ nickname, stoneStyle }) => {
+  socket.on('create_room', ({ nickname, stoneStyle, useTimer }) => {
     const roomId = generateRoomId();
-    const room = createRoom(roomId, false);
+    const room = createRoom(roomId, false, useTimer !== false);
     room.players.push({ socketId: socket.id, nickname, color: 1, stoneStyle: stoneStyle || 'classic' });
     socket.join(roomId);
     socket.emit('room_created', { roomId, color: 1 });
@@ -283,7 +291,7 @@ io.on('connection', (socket) => {
         nickname: p.nickname, color: p.color,
         record: await getRecord(p.nickname), stoneStyle: p.stoneStyle || 'classic'
       })));
-      socket.emit('spectate_start', { roomId, board: room.board, players, turn: room.turn });
+      socket.emit('spectate_start', { roomId, board: room.board, players, turn: room.turn, useTimer: room.useTimer !== false });
       return;
     }
     if (room.players.length >= 2) { socket.emit('error', { msg: '방이 꽉 찼습니다.' }); return; }
@@ -506,8 +514,10 @@ io.on('connection', (socket) => {
   // ── 연결 해제 ─────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log('해제:', socket.id);
-    const qi = matchQueue.findIndex(p => p.socketId === socket.id);
-    if (qi !== -1) matchQueue.splice(qi, 1);
+    for (const q of Object.values(matchQueues)) {
+      const qi = q.findIndex(p => p.socketId === socket.id);
+      if (qi !== -1) { q.splice(qi, 1); break; }
+    }
 
     for (const [roomId, room] of rooms.entries()) {
       const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
