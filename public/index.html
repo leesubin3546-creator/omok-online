@@ -285,6 +285,22 @@
     text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center;
     box-shadow: var(--shadow);
   }
+  /* 타이머 토글 */
+  .timer-toggle { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
+  .timer-toggle input { opacity:0; width:0; height:0; }
+  .timer-slider {
+    position:absolute; cursor:pointer; inset:0;
+    background:var(--card); border-radius:24px;
+    transition:0.25s; border:1px solid var(--border);
+  }
+  .timer-slider:before {
+    content:''; position:absolute; height:18px; width:18px;
+    left:2px; top:2px; background:var(--text2);
+    border-radius:50%; transition:0.25s;
+  }
+  .timer-toggle input:checked + .timer-slider { background:var(--accent2); }
+  .timer-toggle input:checked + .timer-slider:before { transform:translateX(20px); background:#fff; }
+
   .spinner {
     width: 46px; height: 46px;
     border: 3px solid var(--card);
@@ -401,6 +417,13 @@
       </div>
     </div>
 
+    <div class="card lobby-wide" style="flex-direction:row;align-items:center;justify-content:space-between;padding:12px 18px;">
+      <span style="font-size:0.88rem;color:var(--text2);font-weight:600;">⏱ 턴 타이머 (30초)</span>
+      <label class="timer-toggle">
+        <input type="checkbox" id="timer-toggle-cb" checked onchange="useTimer=this.checked">
+        <span class="timer-slider"></span>
+      </label>
+    </div>
     <div class="lobby-grid">
       <div class="card">
         <div class="card-title">랜덤 매칭</div>
@@ -591,6 +614,10 @@ let p2StoneStyle = 'classic';
 let turnTimerInterval = null;
 let turnTimerSeconds = 30;
 let turnTimerMax = 30;
+let useTimer = true;        // 로비 타이머 설정
+let roomUseTimer = true;    // 현재 방 타이머 여부
+// 마지막 돌 위치
+let lastMove = null;
 // 동의 요청
 let pendingConsentType = null; // 'undo' | 'surrender'
 
@@ -1108,11 +1135,13 @@ function initSocket() {
   });
   socket.on('room_joined', ({ roomId, color }) => { currentRoom = roomId; myColor = color; });
 
-  socket.on('game_start', ({ roomId, board, players, turn, yourColor }) => {
+  socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; gameActive = true; isSpectating = false;
     myColor = yourColor;
+    roomUseTimer = ut !== false;
+    lastMove = null;
     const myData = players.find(p => p.color === yourColor);
     myPointsBefore = myData ? (myData.record.points || 0) : (myRecord.points || 0);
     clearClientTimer();
@@ -1125,10 +1154,12 @@ function initSocket() {
     document.getElementById('overlay').classList.remove('show');
     addChat('게임 시작!', true);
   });
-  socket.on('spectate_start', ({ roomId, board, players, turn }) => {
+  socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; isSpectating = true; gameActive = true;
+    roomUseTimer = ut !== false;
+    lastMove = null;
     clearClientTimer();
     pendingConsentType = null;
     document.getElementById('turn-timer-wrap').style.display = 'none';
@@ -1139,11 +1170,12 @@ function initSocket() {
     addChat('관전 모드로 입장했습니다.', true);
   });
 
-  socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; drawBoard(); });
+  socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; lastMove = { row, col }; drawBoard(); });
   socket.on('turn_changed', ({ turn }) => { currentTurn = turn; updateStatusBar(); });
 
   // 타이머
   socket.on('timer_start', ({ seconds }) => {
+    if (!roomUseTimer) return;
     turnTimerMax = seconds;
     startClientTimer(seconds);
     document.getElementById('turn-timer-wrap').style.display = '';
@@ -1159,6 +1191,7 @@ function initSocket() {
   socket.on('undo_accepted', ({ board, turn, moveCount }) => {
     gameBoard = board.map(r => [...r]);
     currentTurn = turn;
+    lastMove = null;
     drawBoard(); updateStatusBar();
     pendingConsentType = null;
     document.getElementById('consent-banner').classList.remove('show');
@@ -1232,10 +1265,10 @@ function initSocket() {
 
 // ── 로비 ──────────────────────────────────────────────────────
 function joinRandom() {
-  if (socket) socket.emit('join_random', { nickname: myNickname, stoneStyle: currentStoneStyle });
+  if (socket) socket.emit('join_random', { nickname: myNickname, stoneStyle: currentStoneStyle, useTimer });
 }
 function createRoom() {
-  if (socket) socket.emit('create_room', { nickname: myNickname, stoneStyle: currentStoneStyle });
+  if (socket) socket.emit('create_room', { nickname: myNickname, stoneStyle: currentStoneStyle, useTimer });
 }
 function joinRoom() {
   const code = document.getElementById('room-code-input').value.trim().toUpperCase();
@@ -1465,6 +1498,17 @@ function drawBoard() {
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++)
       if (gameBoard[r] && gameBoard[r][c]) drawStone(r, c, gameBoard[r][c], 1.0);
+  // 마지막 돌 마커
+  if (lastMove && gameBoard[lastMove.row] && gameBoard[lastMove.row][lastMove.col]) {
+    const lx = PADDING + lastMove.col * CELL;
+    const ly = PADDING + lastMove.row * CELL;
+    const lc = gameBoard[lastMove.row][lastMove.col];
+    ctx.save();
+    ctx.fillStyle = lc === 1 ? 'rgba(255,255,255,0.9)' : 'rgba(30,10,0,0.7)';
+    const s = CELL * 0.115;
+    ctx.fillRect(lx - s, ly - s, s * 2, s * 2);
+    ctx.restore();
+  }
   // 호버
   if (hoverPos) {
     if (hoverForbidden) drawForbiddenMark(hoverPos.row, hoverPos.col, false);
