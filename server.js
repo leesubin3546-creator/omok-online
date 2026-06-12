@@ -172,6 +172,7 @@ function startTurnTimer(room) {
       result: 'timeout', winner: winner ? winner.nickname : null,
       loser: loser.nickname, records,
     });
+    broadcastRoomList();
   }, TURN_TIMEOUT);
   io.to(room.id).emit('timer_start', { seconds: TURN_TIMEOUT / 1000, turn: room.turn });
 }
@@ -196,6 +197,22 @@ async function emitGameStart(room) {
     });
   });
   startTurnTimer(room);
+  broadcastRoomList();
+}
+
+function broadcastRoomList() {
+  const list = [];
+  for (const room of rooms.values()) {
+    if (room.status === 'playing') {
+      list.push({
+        roomId: room.id,
+        players: room.players.map(p => p.nickname),
+        spectatorCount: room.spectators.length,
+        useTimer: room.useTimer !== false,
+      });
+    }
+  }
+  io.emit('room_list', list);
 }
 
 function createRoom(roomId, isPublic = false, useTimer = true) {
@@ -255,6 +272,21 @@ io.on('connection', (socket) => {
     socket.emit('your_record', rec);
   });
 
+  socket.on('get_room_list', () => {
+    const list = [];
+    for (const room of rooms.values()) {
+      if (room.status === 'playing') {
+        list.push({
+          roomId: room.id,
+          players: room.players.map(p => p.nickname),
+          spectatorCount: room.spectators.length,
+          useTimer: room.useTimer !== false,
+        });
+      }
+    }
+    socket.emit('room_list', list);
+  });
+
   socket.on('join_random', ({ nickname, stoneStyle, useTimer }) => {
     for (const q of Object.values(matchQueues)) {
       if (q.findIndex(p => p.socketId === socket.id) !== -1) return;
@@ -292,7 +324,14 @@ io.on('connection', (socket) => {
         nickname: p.nickname, color: p.color,
         record: await getRecord(p.nickname), stoneStyle: p.stoneStyle || 'classic'
       })));
-      socket.emit('spectate_start', { roomId, board: room.board, players, turn: room.turn, useTimer: room.useTimer !== false });
+      socket.emit('spectate_start', {
+        roomId, board: room.board, players, turn: room.turn,
+        useTimer: room.useTimer !== false,
+        isPaused: room.isPaused,
+        spectatorCount: room.spectators.length,
+      });
+      io.to(roomId).emit('spectator_update', { count: room.spectators.length });
+      broadcastRoomList();
       return;
     }
     if (room.players.length >= 2) { socket.emit('error', { msg: '방이 꽉 찼습니다.' }); return; }
@@ -357,6 +396,7 @@ io.on('connection', (socket) => {
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
       io.to(roomId).emit('game_over', { result: 'win', winner: winner.nickname, records });
+      broadcastRoomList();
     } else if (isDraw) {
       room.status = 'finished';
       await Promise.all(room.players.map(p => addDraw(p.nickname)));
@@ -364,6 +404,7 @@ io.on('connection', (socket) => {
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
       io.to(roomId).emit('game_over', { result: 'draw', records });
+      broadcastRoomList();
     } else {
       room.turn = room.turn === 1 ? 2 : 1;
       io.to(roomId).emit('turn_changed', { turn: room.turn });
@@ -386,7 +427,6 @@ io.on('connection', (socket) => {
     room.pendingUndo = { requesterSocketId: socket.id };
     const opponent = room.players.find(p => p.socketId !== socket.id);
     if (opponent) io.to(opponent.socketId).emit('undo_requested', { from: requester.nickname });
-    // 15초 후 자동 거절
     setTimeout(() => {
       if (room.pendingUndo && room.pendingUndo.requesterSocketId === socket.id) {
         room.pendingUndo = null;
@@ -458,6 +498,7 @@ io.on('connection', (socket) => {
         result: 'resign', winner: winner ? winner.nickname : null,
         loser: loser.nickname, records,
       });
+      broadcastRoomList();
     } else {
       if (loser) io.to(loser.socketId).emit('surrender_result', { ok: false, reason: '상대방이 거절했습니다.' });
       io.to(roomId).emit('consent_notify', { type: 'surrender', accepted: false });
@@ -529,6 +570,7 @@ io.on('connection', (socket) => {
       result: 'resign', winner: winner ? winner.nickname : null,
       loser: loser.nickname, records,
     });
+    broadcastRoomList();
   });
 
   // ── 채팅 ─────────────────────────────────────────────────────
@@ -543,6 +585,16 @@ io.on('connection', (socket) => {
     for (const q of Object.values(matchQueues)) {
       const qi = q.findIndex(p => p.socketId === socket.id);
       if (qi !== -1) { q.splice(qi, 1); break; }
+    }
+
+    for (const [roomId, room] of rooms.entries()) {
+      const specIdx = room.spectators.indexOf(socket.id);
+      if (specIdx !== -1) {
+        room.spectators.splice(specIdx, 1);
+        io.to(roomId).emit('spectator_update', { count: room.spectators.length });
+        broadcastRoomList();
+        break;
+      }
     }
 
     for (const [roomId, room] of rooms.entries()) {
@@ -562,6 +614,7 @@ io.on('connection', (socket) => {
             result: 'disconnect', winner: winner ? winner.nickname : null,
             loser: loser.nickname, records,
           });
+          broadcastRoomList();
         })();
         setTimeout(() => { if (rooms.has(roomId)) rooms.delete(roomId); }, 30000);
       }
