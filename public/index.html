@@ -285,6 +285,32 @@
     text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center;
     box-shadow: var(--shadow);
   }
+  /* 일시정지 오버레이 */
+  #pause-overlay {
+    display: none;
+    position: absolute; inset: 0;
+    background: rgba(42,24,5,0.62);
+    border-radius: 10px;
+    z-index: 20;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    backdrop-filter: blur(2px);
+  }
+  #pause-overlay.show { display: flex; }
+  #pause-overlay .pause-icon { font-size: 3.2rem; line-height: 1; }
+  #pause-overlay .pause-label { color: #f5ede0; font-size: 1.2rem; font-weight: 700; letter-spacing: 2px; }
+  #pause-overlay .pause-by { color: rgba(245,237,224,0.7); font-size: 0.82rem; }
+  #pause-resume-btn {
+    background: var(--accent2); color: #fff;
+    border: none; border-radius: 8px;
+    padding: 9px 28px; font-size: 0.95rem; font-weight: 700;
+    cursor: pointer; letter-spacing: 1px;
+    transition: opacity 0.15s;
+  }
+  #pause-resume-btn:hover { opacity: 0.85; }
+
   /* 타이머 토글 */
   .timer-toggle { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
   .timer-toggle input { opacity:0; width:0; height:0; }
@@ -463,6 +489,12 @@
 <div id="game-screen" class="screen">
   <div id="board-wrap">
     <canvas id="board-canvas"></canvas>
+    <div id="pause-overlay">
+      <div class="pause-icon">⏸</div>
+      <div class="pause-label">일시정지</div>
+      <div class="pause-by" id="pause-by-text"></div>
+      <button id="pause-resume-btn" onclick="resumeGame()">▶ 재개</button>
+    </div>
   </div>
   <div id="side-panel">
     <div id="player1-card" class="player-card">
@@ -494,6 +526,7 @@
       </div>
     </div>
     <div id="game-actions">
+      <button class="btn-secondary btn-sm" onclick="togglePause()" id="pause-btn">⏸ 일시정지</button>
       <button class="btn-secondary btn-sm" onclick="requestUndo()" id="undo-btn">무르기</button>
       <button class="btn-secondary btn-sm" onclick="requestSurrender()" id="surrender-btn">항복</button>
       <button class="btn-secondary btn-sm" onclick="resignGame()" id="resign-btn">기권</button>
@@ -618,6 +651,8 @@ let useTimer = true;        // 로비 타이머 설정
 let roomUseTimer = true;    // 현재 방 타이머 여부
 // 마지막 돌 위치
 let lastMove = null;
+// 일시정지
+let gamePaused = false;
 // 동의 요청
 let pendingConsentType = null; // 'undo' | 'surrender'
 
@@ -1142,6 +1177,8 @@ function initSocket() {
     myColor = yourColor;
     roomUseTimer = ut !== false;
     lastMove = null;
+    gamePaused = false;
+    document.getElementById('pause-overlay').classList.remove('show');
     const myData = players.find(p => p.color === yourColor);
     myPointsBefore = myData ? (myData.record.points || 0) : (myRecord.points || 0);
     clearClientTimer();
@@ -1160,6 +1197,8 @@ function initSocket() {
     currentTurn = turn; isSpectating = true; gameActive = true;
     roomUseTimer = ut !== false;
     lastMove = null;
+    gamePaused = false;
+    document.getElementById('pause-overlay').classList.remove('show');
     clearClientTimer();
     pendingConsentType = null;
     document.getElementById('turn-timer-wrap').style.display = 'none';
@@ -1258,6 +1297,23 @@ function initSocket() {
     addChat(`${from}님이 재대결을 요청했습니다.`, true);
     document.getElementById('rematch-btn').textContent = '재대결 수락';
   });
+  // 일시정지
+  socket.on('game_paused', ({ by }) => {
+    gamePaused = true;
+    clearClientTimer();
+    document.getElementById('turn-timer-wrap').style.display = 'none';
+    document.getElementById('pause-by-text').textContent = `${escapeHtml(by)}님이 일시정지했습니다`;
+    document.getElementById('pause-overlay').classList.add('show');
+    document.getElementById('pause-btn').textContent = '▶ 재개';
+    addChat(`⏸ ${escapeHtml(by)}님이 게임을 일시정지했습니다.`, true);
+  });
+  socket.on('game_resumed', ({ by }) => {
+    gamePaused = false;
+    document.getElementById('pause-overlay').classList.remove('show');
+    document.getElementById('pause-btn').textContent = '⏸ 일시정지';
+    addChat(`▶ ${escapeHtml(by)}님이 게임을 재개했습니다.`, true);
+  });
+
   socket.on('chat', ({ nickname, message }) => {
     addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
   });
@@ -1276,6 +1332,20 @@ function joinRoom() {
   socket.emit('join_room', { roomId: code, nickname: myNickname, stoneStyle: currentStoneStyle });
 }
 function cancelWaiting() { socket.emit('cancel_random'); showScreen('lobby-screen'); }
+
+// ── 일시정지 ──────────────────────────────────────────────────
+function togglePause() {
+  if (!socket || !currentRoom || isSpectating) return;
+  if (gamePaused) {
+    socket.emit('resume_game', { roomId: currentRoom });
+  } else {
+    socket.emit('pause_game', { roomId: currentRoom });
+  }
+}
+function resumeGame() {
+  if (!socket || !currentRoom) return;
+  socket.emit('resume_game', { roomId: currentRoom });
+}
 
 // ── 타이머 ────────────────────────────────────────────────────
 function startClientTimer(seconds) {
