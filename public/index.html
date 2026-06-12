@@ -377,6 +377,30 @@
 
   .stone-opt { min-width: 54px; }
 
+  /* 진행 중인 방 목록 */
+  .room-list-empty { color: var(--text2); font-size: 0.83rem; text-align: center; padding: 8px 0; }
+  .room-item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border-radius: 9px;
+    padding: 10px 13px; cursor: pointer;
+    border: 1px solid var(--border); transition: all 0.15s;
+  }
+  .room-item:hover { border-color: var(--accent2); transform: translateX(2px); }
+  .room-item-players { flex: 1; font-size: 0.88rem; font-weight: 600; color: var(--text); }
+  .room-item-badges { display: flex; gap: 5px; align-items: center; }
+  .room-badge { font-size: 0.68rem; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+  .room-badge-timer { background: rgba(200,136,26,0.15); color: var(--accent2); border: 1px solid rgba(200,136,26,0.3); }
+  .room-badge-spec { background: rgba(122,74,21,0.1); color: var(--accent); border: 1px solid var(--border); }
+  .room-badge-id { font-size: 0.68rem; color: var(--text2); letter-spacing: 1px; }
+  /* 관전자 수 배지 */
+  #spectator-count {
+    display: none; align-items: center; justify-content: center; gap: 5px;
+    font-size: 0.8rem; color: var(--text2);
+    background: var(--surface); border-radius: 8px;
+    padding: 5px 11px; border: 1px solid var(--border);
+  }
+  #spectator-count.show { display: flex; }
+
   @media (max-width: 700px) {
     .lobby-grid { grid-template-columns: 1fr; }
     #game-screen.active { flex-direction: column; align-items: center; }
@@ -471,6 +495,16 @@
       </div>
     </div>
 
+    <div class="card lobby-wide" id="room-list-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div class="card-title">진행 중인 방 (관전)</div>
+        <button class="btn-secondary btn-sm" onclick="requestRoomList()" style="font-size:0.72rem;padding:3px 9px;">↻ 새로고침</button>
+      </div>
+      <div id="room-list-container">
+        <div class="room-list-empty">진행 중인 방이 없습니다</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -514,6 +548,7 @@
       <span class="style-badge" id="p2-style-badge">클래식</span>
     </div>
     <div id="status-bar">게임 준비 중...</div>
+    <div id="spectator-count">👁 <span id="spectator-count-num">0</span>명 관전 중</div>
     <div id="turn-timer-wrap" style="display:none">
       <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar-fill"></div></div>
       <span id="turn-timer-text">30</span>
@@ -1138,8 +1173,8 @@ function initSocket() {
     updateHeaderNick();
     renderStonePreviews();
     selectStoneStyle(currentStoneStyle);
-    // 기록 즉시 로드
     socket.emit('request_record', { nickname: myNickname });
+    socket.emit('get_room_list');
   });
   socket.on('your_record', (rec) => { updateRecordUI(rec); });
   socket.on('disconnect', () => { addChat('서버와 연결이 끊어졌습니다.', true); });
@@ -1186,24 +1221,32 @@ function initSocket() {
     document.getElementById('turn-timer-wrap').style.display = 'none';
     document.getElementById('consent-banner').classList.remove('show');
     document.getElementById('game-actions').style.display = '';
+    updateSpectatorCount(0);
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     document.getElementById('overlay').classList.remove('show');
     addChat('게임 시작!', true);
   });
-  socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut }) => {
+  socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut, isPaused: paused, spectatorCount: specCnt }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; isSpectating = true; gameActive = true;
     roomUseTimer = ut !== false;
     lastMove = null;
-    gamePaused = false;
-    document.getElementById('pause-overlay').classList.remove('show');
+    gamePaused = paused || false;
+    const po = document.getElementById('pause-overlay');
+    if (gamePaused) {
+      po.classList.add('show');
+      document.getElementById('pause-by-text').textContent = '';
+    } else {
+      po.classList.remove('show');
+    }
     clearClientTimer();
     pendingConsentType = null;
     document.getElementById('turn-timer-wrap').style.display = 'none';
     document.getElementById('consent-banner').classList.remove('show');
     document.getElementById('game-actions').style.display = 'none';
+    updateSpectatorCount(specCnt || 0);
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     addChat('관전 모드로 입장했습니다.', true);
@@ -1317,6 +1360,9 @@ function initSocket() {
   socket.on('chat', ({ nickname, message }) => {
     addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
   });
+
+  socket.on('room_list', (list) => { updateRoomList(list); });
+  socket.on('spectator_update', ({ count }) => { updateSpectatorCount(count); });
 }
 
 // ── 로비 ──────────────────────────────────────────────────────
@@ -1332,6 +1378,43 @@ function joinRoom() {
   socket.emit('join_room', { roomId: code, nickname: myNickname, stoneStyle: currentStoneStyle });
 }
 function cancelWaiting() { socket.emit('cancel_random'); showScreen('lobby-screen'); }
+
+// ── 관전 ──────────────────────────────────────────────────────
+function requestRoomList() {
+  if (socket) socket.emit('get_room_list');
+}
+
+function updateRoomList(list) {
+  const container = document.getElementById('room-list-container');
+  if (!container) return;
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div class="room-list-empty">진행 중인 방이 없습니다</div>';
+    return;
+  }
+  container.innerHTML = list.map(r => `
+    <div class="room-item" onclick="spectateRoom('${escapeHtml(r.roomId)}')">
+      <div class="room-item-players">${r.players.map(n => escapeHtml(n)).join(' <span style="color:var(--text2)">vs</span> ')}</div>
+      <div class="room-item-badges">
+        ${r.useTimer ? '<span class="room-badge room-badge-timer">⏱</span>' : '<span class="room-badge" style="background:rgba(0,0,0,0.05);color:var(--text2);border:1px solid var(--border)">무제한</span>'}
+        ${r.spectatorCount > 0 ? `<span class="room-badge room-badge-spec">👁 ${r.spectatorCount}</span>` : ''}
+        <span class="room-badge-id">${escapeHtml(r.roomId)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function spectateRoom(roomId) {
+  if (!socket) return;
+  socket.emit('join_room', { roomId, nickname: myNickname, stoneStyle: currentStoneStyle });
+}
+
+function updateSpectatorCount(count) {
+  const el = document.getElementById('spectator-count');
+  const numEl = document.getElementById('spectator-count-num');
+  if (!el || !numEl) return;
+  numEl.textContent = count;
+  el.classList.toggle('show', count > 0);
+}
 
 // ── 일시정지 ──────────────────────────────────────────────────
 function togglePause() {
@@ -1414,12 +1497,13 @@ function goLobby() {
   pendingConsentType = null;
   document.getElementById('turn-timer-wrap').style.display = 'none';
   document.getElementById('consent-banner').classList.remove('show');
-  currentRoom = null; myColor = 0; gameBoard = []; gameActive = false;
+  currentRoom = null; myColor = 0; gameBoard = []; gameActive = false; isSpectating = false;
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('chat-messages').innerHTML = '';
   showScreen('lobby-screen');
   renderStonePreviews();
   selectStoneStyle(currentStoneStyle);
+  if (socket) socket.emit('get_room_list');
 }
 
 // ── 채팅 ──────────────────────────────────────────────────────
