@@ -38,26 +38,35 @@ function createBoard() {
 }
 
 async function getRecord(nickname) {
-  let rec = await Record.findOne({ nickname });
-  if (!rec) rec = await Record.create({ nickname, win: 0, lose: 0, draw: 0, points: 0 });
-  return { win: rec.win, lose: rec.lose, draw: rec.draw, points: rec.points || 0 };
+  try {
+    let rec = await Record.findOne({ nickname });
+    if (!rec) rec = await Record.create({ nickname, win: 0, lose: 0, draw: 0, points: 0 });
+    return { win: rec.win, lose: rec.lose, draw: rec.draw, points: rec.points || 0 };
+  } catch (err) {
+    console.error('getRecord error (DB unavailable?):', err.message);
+    return { win: 0, lose: 0, draw: 0, points: 0 };
+  }
 }
 
 async function addWin(nickname) {
-  await Record.findOneAndUpdate({ nickname }, { $inc: { win: 1, points: 20 } }, { upsert: true });
+  try { await Record.findOneAndUpdate({ nickname }, { $inc: { win: 1, points: 20 } }, { upsert: true }); }
+  catch (err) { console.error('addWin error:', err.message); }
 }
 async function addLose(nickname) {
-  await Record.findOneAndUpdate(
-    { nickname },
-    [{ $set: {
-      lose:   { $add: [{ $ifNull: ['$lose', 0] }, 1] },
-      points: { $max: [0, { $subtract: [{ $ifNull: ['$points', 0] }, 10] }] }
-    }}],
-    { upsert: true }
-  );
+  try {
+    await Record.findOneAndUpdate(
+      { nickname },
+      [{ $set: {
+        lose:   { $add: [{ $ifNull: ['$lose', 0] }, 1] },
+        points: { $max: [0, { $subtract: [{ $ifNull: ['$points', 0] }, 10] }] }
+      }}],
+      { upsert: true }
+    );
+  } catch (err) { console.error('addLose error:', err.message); }
 }
 async function addDraw(nickname) {
-  await Record.findOneAndUpdate({ nickname }, { $inc: { draw: 1, points: 5 } }, { upsert: true });
+  try { await Record.findOneAndUpdate({ nickname }, { $inc: { draw: 1, points: 5 } }, { upsert: true }); }
+  catch (err) { console.error('addDraw error:', err.message); }
 }
 
 function checkWin(board, row, col, player) {
