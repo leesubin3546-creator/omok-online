@@ -7,18 +7,18 @@
 <script src="/socket.io/socket.io.js"></script>
 <style>
   :root {
-    --bg: #13100c;
-    --surface: #1e1a14;
-    --card: #28231c;
-    --border: rgba(210,170,100,0.18);
-    --accent: #c8922a;
-    --accent2: #e8d09a;
-    --text: #f2e8d8;
-    --text2: #a89070;
-    --board-bg: #d4a96a;
-    --board-line: #8b6328;
+    --bg: #f5ede0;
+    --surface: #ede0cc;
+    --card: #e0cfa8;
+    --border: rgba(140,100,50,0.22);
+    --accent: #7a4a15;
+    --accent2: #c8881a;
+    --text: #2a1805;
+    --text2: #7a5828;
+    --board-bg: #c88c42;
+    --board-line: #7a4a18;
     --radius: 14px;
-    --shadow: 0 8px 36px rgba(0,0,0,0.6);
+    --shadow: 0 8px 36px rgba(100,60,10,0.15);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -39,10 +39,11 @@
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(100,60,10,0.08);
   }
-  header h1 { font-size: 1.25rem; color: var(--accent2); letter-spacing: 3px; font-weight: 600; }
+  header h1 { font-size: 1.25rem; color: var(--accent); letter-spacing: 3px; font-weight: 700; }
   #player-info { font-size: 0.88rem; color: var(--text2); }
-  #player-info span { color: var(--accent); font-weight: 700; }
+  #player-info span { color: var(--accent2); font-weight: 700; }
 
   .screen { display: none; width: 100%; max-width: 1160px; padding: 28px 16px; }
   .screen.active { display: flex; flex-direction: column; align-items: center; gap: 18px; }
@@ -55,11 +56,12 @@
     display: flex; flex-direction: column; gap: 12px;
   }
   .card-title {
-    font-size: 0.85rem;
-    color: var(--accent2);
+    font-size: 0.82rem;
+    color: var(--accent);
     letter-spacing: 2px;
     font-weight: 700;
     text-transform: uppercase;
+    opacity: 0.75;
   }
 
   /* 닉네임 */
@@ -72,8 +74,9 @@
     width: 100%; max-width: 400px;
     display: flex; flex-direction: column; gap: 14px;
     text-align: center;
+    box-shadow: var(--shadow);
   }
-  #nickname-area .logo { font-size: 2.2rem; color: var(--accent2); letter-spacing: 5px; font-weight: 700; }
+  #nickname-area .logo { font-size: 2.2rem; color: var(--accent); letter-spacing: 5px; font-weight: 700; }
   #nickname-area .sub { color: var(--text2); font-size: 0.88rem; line-height: 1.6; }
 
   /* 로비 */
@@ -81,41 +84,70 @@
   .lobby-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .lobby-wide { grid-column: 1 / -1; }
 
-  /* 기록 */
-  .record-stats { display: flex; gap: 12px; }
+  /* 급수 표시 */
+  .rank-display { text-align: center; padding: 4px 0 8px; }
+  .rank-badge-main {
+    font-size: 2rem; font-weight: 800;
+    color: var(--accent);
+    letter-spacing: 2px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .rank-badge-main.dan { color: var(--accent2); }
+  .rank-pts-row {
+    font-size: 0.78rem; color: var(--text2);
+    display: flex; gap: 6px; justify-content: center; align-items: center;
+    margin-bottom: 6px;
+  }
+  .rank-bar-wrap {
+    height: 7px; background: var(--card);
+    border-radius: 4px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .rank-bar-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--accent), var(--accent2));
+    border-radius: 4px;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+  .rank-bar-fill.dan-fill { background: linear-gradient(to right, #c8881a, #f0b830); }
+
+  /* 기록 stats */
+  .record-stats { display: flex; gap: 10px; }
   .stat {
     flex: 1; text-align: center;
     background: var(--card);
     border-radius: 10px;
-    padding: 12px 8px;
+    padding: 10px 8px;
     border: 1px solid var(--border);
   }
-  .stat-num { font-size: 1.8rem; font-weight: 700; }
-  .stat-num.win { color: #7ecb7e; }
-  .stat-num.lose { color: #d07070; }
+  .stat-num { font-size: 1.7rem; font-weight: 700; }
+  .stat-num.win  { color: #2a6e2a; }
+  .stat-num.lose { color: #8a2020; }
   .stat-num.draw { color: var(--accent2); }
-  .stat-label { font-size: 0.75rem; color: var(--text2); margin-top: 3px; }
+  .stat-label { font-size: 0.72rem; color: var(--text2); margin-top: 2px; }
 
   /* 돌 디자인 선택 */
   .stone-picker-desc { color: var(--text2); font-size: 0.8rem; margin-top: -4px; }
-  .stone-picker { display: flex; gap: 10px; flex-wrap: wrap; }
+  .stone-picker { display: flex; gap: 6px; flex-wrap: wrap; }
   .stone-opt {
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
-    cursor: pointer; padding: 12px 10px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer; padding: 10px 6px 8px;
     border-radius: 12px;
     border: 2px solid var(--border);
     background: var(--card);
     transition: all 0.18s;
     user-select: none;
-    flex: 1; min-width: 80px;
+    flex: 1; min-width: 70px;
   }
-  .stone-opt:hover { border-color: rgba(200,146,42,0.5); transform: translateY(-2px); }
+  .stone-opt:hover { border-color: rgba(122,74,21,0.45); transform: translateY(-2px); }
   .stone-opt.selected {
     border-color: var(--accent);
-    background: rgba(200,146,42,0.1);
-    box-shadow: 0 0 18px rgba(200,146,42,0.22);
+    background: rgba(122,74,21,0.08);
+    box-shadow: 0 0 16px rgba(122,74,21,0.18);
   }
-  .stone-opt span { font-size: 0.72rem; color: var(--text2); font-weight: 600; letter-spacing: 0.5px; }
+  .stone-opt span { font-size: 0.7rem; color: var(--text2); font-weight: 600; letter-spacing: 0.3px; }
   .stone-opt.selected span { color: var(--accent); }
 
   /* 입력/버튼 */
@@ -130,17 +162,17 @@
     outline: none;
     transition: border-color 0.2s;
   }
-  input[type=text]:focus { border-color: var(--accent); }
+  input[type=text]:focus { border-color: var(--accent2); }
   button {
     padding: 10px 20px;
     border: none; border-radius: 9px;
     font-size: 0.9rem; cursor: pointer;
     transition: all 0.18s; font-weight: 600;
   }
-  .btn-primary { background: var(--accent); color: #1a1000; }
-  .btn-primary:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); color: #fff5e8; }
+  .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
   .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:hover { background: #352d22; }
+  .btn-secondary:hover { background: #d4be94; }
   .btn-sm { padding: 7px 14px; font-size: 0.82rem; }
   .muted { color: var(--text2); font-size: 0.88rem; line-height: 1.5; }
 
@@ -156,7 +188,7 @@
     padding: 20px;
     box-shadow: var(--shadow);
     user-select: none;
-    border: 3px solid #a07030;
+    border: 3px solid #8a5a18;
   }
   #board-canvas { display: block; cursor: crosshair; }
 
@@ -167,24 +199,34 @@
     border-radius: 11px; padding: 12px 15px;
     display: flex; align-items: center; gap: 11px;
     border: 1.5px solid var(--border);
-    transition: border-color 0.25s;
+    transition: border-color 0.25s, box-shadow 0.25s;
   }
-  .player-card.active-turn { border-color: var(--accent); }
+  .player-card.active-turn {
+    border-color: var(--accent2);
+    box-shadow: 0 0 12px rgba(200,136,26,0.18);
+  }
   .stone-icon-canvas { width: 28px; height: 28px; flex-shrink: 0; }
   .player-name { font-weight: 700; flex: 1; font-size: 0.92rem; }
-  .player-rec { font-size: 0.72rem; color: var(--text2); }
-
-  /* 플레이어 카드 스타일 태그 */
-  .style-badge {
-    font-size: 0.65rem; color: var(--text2); background: var(--card);
+  .player-rec { font-size: 0.72rem; color: var(--text2); margin-top: 1px; }
+  .rank-tag {
+    display: inline-block; font-size: 0.65rem;
+    background: var(--card); color: var(--accent);
     border: 1px solid var(--border); border-radius: 4px;
-    padding: 1px 5px; letter-spacing: 0.5px;
+    padding: 1px 5px; margin-left: 4px;
+    font-weight: 700; letter-spacing: 0.3px;
+  }
+  .rank-tag.dan { color: var(--accent2); border-color: rgba(200,136,26,0.35); }
+
+  .style-badge {
+    font-size: 0.62rem; color: var(--text2); background: var(--card);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; letter-spacing: 0.3px; flex-shrink: 0;
   }
 
   #status-bar {
     background: var(--surface); border-radius: 10px;
     padding: 11px 14px; text-align: center;
-    font-size: 0.9rem; color: var(--accent2);
+    font-size: 0.9rem; color: var(--accent);
     font-weight: 700; border: 1px solid var(--border);
     letter-spacing: 1px;
   }
@@ -198,9 +240,9 @@
     font-size: 0.83rem; display: flex; flex-direction: column; gap: 3px;
   }
   #chat-messages::-webkit-scrollbar { width: 4px; }
-  #chat-messages::-webkit-scrollbar-thumb { background: #3a2e22; border-radius: 4px; }
+  #chat-messages::-webkit-scrollbar-thumb { background: #c4a070; border-radius: 4px; }
   .chat-msg { line-height: 1.5; }
-  .chat-msg .cn { color: var(--accent); font-weight: 700; }
+  .chat-msg .cn { color: var(--accent2); font-weight: 700; }
   .chat-msg .sys { color: var(--text2); font-style: italic; }
   #chat-input-row {
     display: flex; gap: 6px; padding: 7px 10px;
@@ -211,7 +253,7 @@
   /* 오버레이 */
   #overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.78); z-index: 100;
+    background: rgba(60,35,10,0.72); z-index: 100;
     align-items: center; justify-content: center;
   }
   #overlay.show { display: flex; }
@@ -219,14 +261,20 @@
     background: var(--surface);
     border-radius: var(--radius); padding: 40px 48px;
     text-align: center; border: 1px solid var(--border);
-    display: flex; flex-direction: column; gap: 16px; min-width: 300px;
+    display: flex; flex-direction: column; gap: 14px; min-width: 300px;
+    box-shadow: var(--shadow);
   }
   #overlay-title { font-size: 2rem; font-weight: 700; }
-  #overlay-sub { color: var(--text2); }
+  #overlay-sub { color: var(--text2); font-size: 0.92rem; }
+  #overlay-rank-change {
+    font-size: 0.85rem; font-weight: 600;
+    color: var(--accent2); min-height: 18px;
+  }
   #overlay-records { display: flex; gap: 24px; justify-content: center; }
   .ov-rec { text-align: center; }
-  .ov-rec-name { font-size: 0.78rem; color: var(--text2); }
-  .ov-rec-val { font-size: 0.92rem; }
+  .ov-rec-name { font-size: 0.78rem; color: var(--text2); margin-bottom: 2px; }
+  .ov-rec-val { font-size: 0.9rem; font-weight: 600; }
+  .ov-rec-rank { font-size: 0.78rem; color: var(--accent); margin-top: 2px; font-weight: 700; }
   #overlay-btns { display: flex; gap: 10px; justify-content: center; }
 
   /* 대기 */
@@ -235,6 +283,7 @@
     background: var(--surface); border-radius: var(--radius);
     border: 1px solid var(--border); padding: 48px 60px;
     text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center;
+    box-shadow: var(--shadow);
   }
   .spinner {
     width: 46px; height: 46px;
@@ -247,16 +296,15 @@
   .room-id-display {
     background: var(--card); border-radius: 9px; padding: 12px 20px;
     font-size: 1.6rem; letter-spacing: 8px; font-weight: 700;
-    color: var(--accent2); text-align: center; border: 1px solid var(--border);
+    color: var(--accent); text-align: center; border: 1px solid var(--border);
   }
-  .error-msg { color: #d07070; font-size: 0.83rem; min-height: 18px; }
+  .error-msg { color: #8a2020; font-size: 0.83rem; min-height: 18px; }
 
   @media (max-width: 700px) {
     .lobby-grid { grid-template-columns: 1fr; }
     #game-screen.active { flex-direction: column; align-items: center; }
     #side-panel { width: 100%; max-width: 420px; }
-    .stone-picker { gap: 6px; }
-    .stone-opt { min-width: 60px; padding: 10px 6px 8px; }
+    .stone-opt { min-width: 60px; padding: 8px 5px 7px; }
   }
 </style>
 </head>
@@ -284,6 +332,17 @@
 
     <div class="card">
       <div class="card-title">나의 기록</div>
+      <div class="rank-display">
+        <div class="rank-badge-main" id="my-rank-badge">18급</div>
+        <div class="rank-pts-row">
+          <span id="my-pts-display">0 pts</span>
+          <span>·</span>
+          <span id="my-next-rank-label">다음 17급까지 50pts</span>
+        </div>
+        <div class="rank-bar-wrap">
+          <div class="rank-bar-fill" id="rank-bar-fill"></div>
+        </div>
+      </div>
       <div class="record-stats">
         <div class="stat"><div class="stat-num win" id="rec-win">0</div><div class="stat-label">승</div></div>
         <div class="stat"><div class="stat-num lose" id="rec-lose">0</div><div class="stat-label">패</div></div>
@@ -296,24 +355,40 @@
       <p class="stone-picker-desc">각자 선택한 디자인이 게임에서 그대로 적용됩니다</p>
       <div class="stone-picker" id="stone-picker">
         <div class="stone-opt" data-style="classic" onclick="selectStoneStyle('classic')">
-          <canvas id="sp-classic" width="80" height="44"></canvas>
+          <canvas id="sp-classic" width="72" height="40"></canvas>
           <span>클래식</span>
         </div>
         <div class="stone-opt" data-style="flat" onclick="selectStoneStyle('flat')">
-          <canvas id="sp-flat" width="80" height="44"></canvas>
+          <canvas id="sp-flat" width="72" height="40"></canvas>
           <span>플랫</span>
         </div>
         <div class="stone-opt" data-style="marble" onclick="selectStoneStyle('marble')">
-          <canvas id="sp-marble" width="80" height="44"></canvas>
+          <canvas id="sp-marble" width="72" height="40"></canvas>
           <span>마블</span>
         </div>
         <div class="stone-opt" data-style="glass" onclick="selectStoneStyle('glass')">
-          <canvas id="sp-glass" width="80" height="44"></canvas>
+          <canvas id="sp-glass" width="72" height="40"></canvas>
           <span>유리</span>
         </div>
         <div class="stone-opt" data-style="neon" onclick="selectStoneStyle('neon')">
-          <canvas id="sp-neon" width="80" height="44"></canvas>
+          <canvas id="sp-neon" width="72" height="40"></canvas>
           <span>네온</span>
+        </div>
+        <div class="stone-opt" data-style="leaf" onclick="selectStoneStyle('leaf')">
+          <canvas id="sp-leaf" width="72" height="40"></canvas>
+          <span>나뭇잎</span>
+        </div>
+        <div class="stone-opt" data-style="gem" onclick="selectStoneStyle('gem')">
+          <canvas id="sp-gem" width="72" height="40"></canvas>
+          <span>보석</span>
+        </div>
+        <div class="stone-opt" data-style="star" onclick="selectStoneStyle('star')">
+          <canvas id="sp-star" width="72" height="40"></canvas>
+          <span>별빛</span>
+        </div>
+        <div class="stone-opt" data-style="wood" onclick="selectStoneStyle('wood')">
+          <canvas id="sp-wood" width="72" height="40"></canvas>
+          <span>나무결</span>
         </div>
       </div>
     </div>
@@ -363,7 +438,7 @@
       <canvas id="p1-stone-icon" class="stone-icon-canvas" width="28" height="28"></canvas>
       <div style="flex:1;min-width:0;">
         <div class="player-name" id="p1-name">-</div>
-        <div class="player-rec" id="p1-rec">0승 0패</div>
+        <div class="player-rec" id="p1-rec">0승 0패 <span class="rank-tag" id="p1-rank-tag">18급</span></div>
       </div>
       <span class="style-badge" id="p1-style-badge">클래식</span>
     </div>
@@ -371,7 +446,7 @@
       <canvas id="p2-stone-icon" class="stone-icon-canvas" width="28" height="28"></canvas>
       <div style="flex:1;min-width:0;">
         <div class="player-name" id="p2-name">-</div>
-        <div class="player-rec" id="p2-rec">0승 0패</div>
+        <div class="player-rec" id="p2-rec">0승 0패 <span class="rank-tag" id="p2-rank-tag">18급</span></div>
       </div>
       <span class="style-badge" id="p2-style-badge">클래식</span>
     </div>
@@ -392,6 +467,7 @@
   <div id="overlay-box">
     <div id="overlay-title">게임 종료</div>
     <div id="overlay-sub"></div>
+    <div id="overlay-rank-change"></div>
     <div id="overlay-records"></div>
     <div id="overlay-btns">
       <button class="btn-primary" onclick="requestRematch()" id="rematch-btn">재대결</button>
@@ -403,20 +479,94 @@
 <script>
 const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
-const STYLE_NAMES = { classic:'클래식', flat:'플랫', marble:'마블', glass:'유리', neon:'네온' };
+const ALL_STYLES = ['classic','flat','marble','glass','neon','leaf','gem','star','wood'];
+const STYLE_NAMES = {
+  classic:'클래식', flat:'플랫', marble:'마블', glass:'유리', neon:'네온',
+  leaf:'나뭇잎', gem:'보석', star:'별빛', wood:'나무결'
+};
 
+// ── 급수 시스템 ───────────────────────────────────────────────
+const RANK_THRESHOLDS = [
+  { pts:    0, name: '18급' }, { pts:   50, name: '17급' },
+  { pts:  100, name: '16급' }, { pts:  150, name: '15급' },
+  { pts:  200, name: '14급' }, { pts:  250, name: '13급' },
+  { pts:  300, name: '12급' }, { pts:  350, name: '11급' },
+  { pts:  400, name: '10급' }, { pts:  450, name: '9급'  },
+  { pts:  500, name: '8급'  }, { pts:  550, name: '7급'  },
+  { pts:  600, name: '6급'  }, { pts:  650, name: '5급'  },
+  { pts:  700, name: '4급'  }, { pts:  750, name: '3급'  },
+  { pts:  800, name: '2급'  }, { pts:  850, name: '1급'  },
+  { pts:  900, name: '1단'  }, { pts: 1200, name: '2단'  },
+  { pts: 1500, name: '3단'  }, { pts: 1800, name: '4단'  },
+  { pts: 2100, name: '5단'  }, { pts: 2400, name: '6단'  },
+  { pts: 2700, name: '7단'  }, { pts: 3000, name: '8단'  },
+  { pts: 3300, name: '9단'  },
+];
+
+function isDan(rank) { return rank.endsWith('단'); }
+
+function getRank(points) {
+  const p = Math.max(0, points || 0);
+  let rank = '18급';
+  for (const t of RANK_THRESHOLDS) {
+    if (p >= t.pts) rank = t.name;
+    else break;
+  }
+  return rank;
+}
+
+function getNextRankInfo(points) {
+  const p = Math.max(0, points || 0);
+  for (let i = 0; i < RANK_THRESHOLDS.length - 1; i++) {
+    if (p < RANK_THRESHOLDS[i + 1].pts) {
+      return {
+        currentBase: RANK_THRESHOLDS[i].pts,
+        next: RANK_THRESHOLDS[i + 1].pts,
+        nextName: RANK_THRESHOLDS[i + 1].name,
+        progress: p - RANK_THRESHOLDS[i].pts,
+        range: RANK_THRESHOLDS[i + 1].pts - RANK_THRESHOLDS[i].pts,
+      };
+    }
+  }
+  return null; // 9단 (최고)
+}
+
+function updateRankUI(points) {
+  const p = Math.max(0, points || 0);
+  const rank = getRank(p);
+  const badge = document.getElementById('my-rank-badge');
+  badge.textContent = rank;
+  badge.className = 'rank-badge-main' + (isDan(rank) ? ' dan' : '');
+  document.getElementById('my-pts-display').textContent = p + ' pts';
+  const next = getNextRankInfo(p);
+  const fill = document.getElementById('rank-bar-fill');
+  if (next) {
+    const pct = Math.round((next.progress / next.range) * 100);
+    fill.style.width = pct + '%';
+    fill.className = 'rank-bar-fill' + (isDan(next.nextName) ? ' dan-fill' : '');
+    document.getElementById('my-next-rank-label').textContent =
+      `다음 ${next.nextName}까지 ${next.range - next.progress}pts`;
+  } else {
+    fill.style.width = '100%';
+    fill.className = 'rank-bar-fill dan-fill';
+    document.getElementById('my-next-rank-label').textContent = '✦ 최고 단위 달성!';
+  }
+}
+
+// ── 상태 ──────────────────────────────────────────────────────
 let socket = null;
 let myNickname = localStorage.getItem('omok_nickname') || '';
 let currentRoom = null;
 let myColor = 0;
-let myRecord = { win: 0, lose: 0, draw: 0 };
+let myRecord = { win: 0, lose: 0, draw: 0, points: 0 };
+let myPointsBefore = 0;
 let gameBoard = [];
 let currentTurn = 1;
 let isSpectating = false;
 let gameActive = false;
 let currentStoneStyle = localStorage.getItem('omok_stone_style') || 'classic';
-let p1StoneStyle = 'classic'; // 흑돌 플레이어의 스타일
-let p2StoneStyle = 'classic'; // 백돌 플레이어의 스타일
+let p1StoneStyle = 'classic';
+let p2StoneStyle = 'classic';
 
 // ── 돌 드로잉 ─────────────────────────────────────────────────
 function drawStoneOnCtx(c, x, y, r, color, style) {
@@ -424,45 +574,31 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
   switch(style) {
 
     case 'classic': {
-      // 3D 구체 - 풍부한 그라디언트
       const g = c.createRadialGradient(x - r*0.3, y - r*0.3, r*0.04, x, y, r);
       if (color === 1) {
-        g.addColorStop(0, '#606060');
-        g.addColorStop(0.3, '#282828');
-        g.addColorStop(0.7, '#101010');
-        g.addColorStop(1, '#040404');
+        g.addColorStop(0, '#606060'); g.addColorStop(0.3, '#282828');
+        g.addColorStop(0.7, '#101010'); g.addColorStop(1, '#040404');
       } else {
-        g.addColorStop(0, '#ffffff');
-        g.addColorStop(0.4, '#e8e8e8');
-        g.addColorStop(0.85, '#d0d0d0');
-        g.addColorStop(1, '#bababa');
+        g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#e8e8e8');
+        g.addColorStop(0.85, '#d0d0d0'); g.addColorStop(1, '#bababa');
       }
-      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
-      c.fillStyle = g; c.fill();
-      // 하이라이트 (빛 반사)
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
       const hl = c.createRadialGradient(x - r*0.27, y - r*0.3, 0, x - r*0.1, y - r*0.14, r*0.65);
       hl.addColorStop(0, color===1 ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.92)');
       hl.addColorStop(0.4, color===1 ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.28)');
       hl.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = hl; c.fill();
-      // 외곽 미세 테두리
       if (color === 2) { c.strokeStyle = 'rgba(0,0,0,0.1)'; c.lineWidth = 0.5; c.stroke(); }
       break;
     }
 
     case 'flat': {
-      // 미니멀 플랫 디자인
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
-      c.fillStyle = color === 1 ? '#1c1c1c' : '#f0f0f0';
-      c.fill();
-      // 미세 내부 빛
+      c.fillStyle = color === 1 ? '#1c1c1c' : '#f0f0f0'; c.fill();
       if (color === 1) {
-        c.strokeStyle = 'rgba(255,255,255,0.06)';
-        c.lineWidth = 1.5; c.stroke();
+        c.strokeStyle = 'rgba(255,255,255,0.06)'; c.lineWidth = 1.5; c.stroke();
       } else {
-        c.strokeStyle = 'rgba(0,0,0,0.1)';
-        c.lineWidth = 1.5; c.stroke();
-        // 작은 하이라이트
+        c.strokeStyle = 'rgba(0,0,0,0.1)'; c.lineWidth = 1.5; c.stroke();
         c.beginPath(); c.arc(x - r*0.28, y - r*0.28, r*0.25, 0, Math.PI*2);
         c.fillStyle = 'rgba(255,255,255,0.45)'; c.fill();
       }
@@ -470,107 +606,209 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
     }
 
     case 'marble': {
-      // 마블 텍스처 - 베이스 + 정맥 곡선
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
       const g = c.createRadialGradient(x - r*0.2, y - r*0.28, 0, x, y, r);
       if (color === 1) {
-        g.addColorStop(0, '#303030');
-        g.addColorStop(0.5, '#181818');
-        g.addColorStop(1, '#060606');
+        g.addColorStop(0, '#303030'); g.addColorStop(0.5, '#181818'); g.addColorStop(1, '#060606');
       } else {
-        g.addColorStop(0, '#faf8f4');
-        g.addColorStop(0.4, '#ede8e0');
-        g.addColorStop(1, '#d4cec4');
+        g.addColorStop(0, '#faf8f4'); g.addColorStop(0.4, '#ede8e0'); g.addColorStop(1, '#d4cec4');
       }
       c.fillStyle = g; c.fill();
-      // 마블 정맥 (circle clip 안에서)
-      c.save();
-      c.clip();
+      c.save(); c.clip();
       c.strokeStyle = color===1 ? 'rgba(95,88,80,0.55)' : 'rgba(165,152,132,0.65)';
-      c.lineWidth = color===1 ? 0.8 : 0.7;
-      c.lineCap = 'round';
-      c.beginPath();
-      c.moveTo(x - r*0.85, y - r*0.1);
-      c.bezierCurveTo(x - r*0.3, y - r*0.58, x + r*0.38, y - r*0.08, x + r*0.78, y + r*0.58);
-      c.stroke();
-      c.beginPath();
-      c.moveTo(x - r*0.22, y + r*0.78);
-      c.bezierCurveTo(x - r*0.04, y + r*0.18, x + r*0.28, y - r*0.22, x + r*0.48, y - r*0.78);
-      c.stroke();
-      c.strokeStyle = color===1 ? 'rgba(95,88,80,0.28)' : 'rgba(165,152,132,0.38)';
-      c.lineWidth = 0.45;
-      c.beginPath();
-      c.moveTo(x - r*0.6, y + r*0.42);
-      c.bezierCurveTo(x - r*0.18, y + r*0.08, x + r*0.18, y + r*0.28, x + r*0.62, y - r*0.18);
-      c.stroke();
+      c.lineWidth = color===1 ? 0.8 : 0.7; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x - r*0.85, y - r*0.1);
+      c.bezierCurveTo(x - r*0.3, y - r*0.58, x + r*0.38, y - r*0.08, x + r*0.78, y + r*0.58); c.stroke();
+      c.beginPath(); c.moveTo(x - r*0.22, y + r*0.78);
+      c.bezierCurveTo(x - r*0.04, y + r*0.18, x + r*0.28, y - r*0.22, x + r*0.48, y - r*0.78); c.stroke();
       c.restore();
-      // 외곽
       if (color === 2) { c.strokeStyle = 'rgba(0,0,0,0.07)'; c.lineWidth = 0.5; c.stroke(); }
       break;
     }
 
     case 'glass': {
-      // 반투명 유리 효과
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
       const g = c.createLinearGradient(x - r*0.5, y - r, x + r*0.5, y + r);
       if (color === 1) {
-        g.addColorStop(0, 'rgba(52,52,88,0.94)');
-        g.addColorStop(0.5, 'rgba(10,10,22,0.92)');
-        g.addColorStop(1, 'rgba(28,28,58,0.96)');
+        g.addColorStop(0, 'rgba(52,52,88,0.94)'); g.addColorStop(0.5, 'rgba(10,10,22,0.92)'); g.addColorStop(1, 'rgba(28,28,58,0.96)');
       } else {
-        g.addColorStop(0, 'rgba(242,250,255,0.92)');
-        g.addColorStop(0.4, 'rgba(198,222,248,0.86)');
-        g.addColorStop(1, 'rgba(152,186,222,0.92)');
+        g.addColorStop(0, 'rgba(242,250,255,0.92)'); g.addColorStop(0.4, 'rgba(198,222,248,0.86)'); g.addColorStop(1, 'rgba(152,186,222,0.92)');
       }
       c.fillStyle = g; c.fill();
-      // 테두리 광채
-      c.strokeStyle = color===1 ? 'rgba(100,112,175,0.72)' : 'rgba(215,232,255,0.88)';
-      c.lineWidth = 1; c.stroke();
-      // 유리 반사 하이라이트
-      c.save();
-      c.clip();
+      c.strokeStyle = color===1 ? 'rgba(100,112,175,0.72)' : 'rgba(215,232,255,0.88)'; c.lineWidth = 1; c.stroke();
+      c.save(); c.clip();
       const hl = c.createRadialGradient(x - r*0.18, y - r*0.32, 0, x - r*0.1, y - r*0.2, r*0.7);
-      hl.addColorStop(0, 'rgba(255,255,255,0.88)');
-      hl.addColorStop(0.22, 'rgba(255,255,255,0.45)');
-      hl.addColorStop(0.55, 'rgba(255,255,255,0.1)');
-      hl.addColorStop(1, 'rgba(255,255,255,0)');
+      hl.addColorStop(0, 'rgba(255,255,255,0.88)'); hl.addColorStop(0.22, 'rgba(255,255,255,0.45)');
+      hl.addColorStop(0.55, 'rgba(255,255,255,0.1)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
       c.fillStyle = hl;
-      c.beginPath(); c.ellipse(x - r*0.18, y - r*0.28, r*0.52, r*0.34, -0.3, 0, Math.PI*2);
-      c.fill();
-      // 하단 미세 반사
-      const bot = c.createRadialGradient(x + r*0.2, y + r*0.35, 0, x + r*0.2, y + r*0.35, r*0.4);
-      bot.addColorStop(0, color===1 ? 'rgba(80,100,180,0.3)' : 'rgba(255,255,255,0.25)');
-      bot.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = bot;
-      c.beginPath(); c.arc(x + r*0.2, y + r*0.35, r*0.4, 0, Math.PI*2);
-      c.fill();
+      c.beginPath(); c.ellipse(x - r*0.18, y - r*0.28, r*0.52, r*0.34, -0.3, 0, Math.PI*2); c.fill();
       c.restore();
       break;
     }
 
     case 'neon': {
-      // 네온 글로우 링
-      const rc = color === 1 ? '#f59e0b' : '#818cf8'; // 흑: 앰버, 백: 인디고
-      // 베이스 (어두운 배경)
+      const rc = color === 1 ? '#f59e0b' : '#818cf8';
       c.beginPath(); c.arc(x, y, r, 0, Math.PI*2);
-      c.fillStyle = color === 1 ? '#06060e' : '#0c0c1a';
-      c.fill();
-      // 외곽 글로우 링
+      c.fillStyle = color === 1 ? '#06060e' : '#0c0c1a'; c.fill();
       c.shadowColor = rc; c.shadowBlur = 12;
       c.beginPath(); c.arc(x, y, r - 2, 0, Math.PI*2);
       c.strokeStyle = rc; c.lineWidth = 2.2; c.stroke();
-      // 내부 가는 링
       c.shadowBlur = 4;
       c.beginPath(); c.arc(x, y, r * 0.6, 0, Math.PI*2);
       c.strokeStyle = color === 1 ? 'rgba(245,158,11,0.25)' : 'rgba(129,140,248,0.25)';
       c.lineWidth = 0.8; c.stroke();
-      // 중앙 도트
       c.shadowBlur = 8;
       c.beginPath(); c.arc(x, y, r * 0.22, 0, Math.PI*2);
-      c.fillStyle = rc; c.fill();
-      c.shadowBlur = 0;
+      c.fillStyle = rc; c.fill(); c.shadowBlur = 0;
       break;
     }
+
+    case 'leaf': {
+      const g = c.createRadialGradient(x - r*0.25, y - r*0.28, r*0.04, x, y, r);
+      if (color === 1) {
+        g.addColorStop(0, '#2d5a1b'); g.addColorStop(0.45, '#1a3a0e'); g.addColorStop(1, '#0d2208');
+      } else {
+        g.addColorStop(0, '#eef7d8'); g.addColorStop(0.4, '#d5ecb0'); g.addColorStop(1, '#a8d078');
+      }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      c.save(); c.clip();
+      c.strokeStyle = color === 1 ? 'rgba(90,185,55,0.65)' : 'rgba(55,130,20,0.48)';
+      c.lineCap = 'round';
+      c.lineWidth = color === 1 ? 0.9 : 0.75;
+      c.beginPath(); c.moveTo(x, y - r*0.7); c.lineTo(x, y + r*0.7); c.stroke();
+      c.lineWidth = color === 1 ? 0.55 : 0.48;
+      const veins = [
+        [x, y - r*0.38,  x - r*0.38, y - r*0.44,  x - r*0.74, y - r*0.3],
+        [x, y - r*0.38,  x + r*0.38, y - r*0.44,  x + r*0.74, y - r*0.3],
+        [x, y + r*0.02,  x - r*0.4,  y - r*0.04,  x - r*0.78, y + r*0.12],
+        [x, y + r*0.02,  x + r*0.4,  y - r*0.04,  x + r*0.78, y + r*0.12],
+        [x, y + r*0.4,   x - r*0.35, y + r*0.36,  x - r*0.68, y + r*0.5],
+        [x, y + r*0.4,   x + r*0.35, y + r*0.36,  x + r*0.68, y + r*0.5],
+      ];
+      for (const [sx, sy, cx2, cy2, ex, ey] of veins) {
+        c.beginPath(); c.moveTo(sx, sy); c.quadraticCurveTo(cx2, cy2, ex, ey); c.stroke();
+      }
+      c.restore();
+      if (color === 2) { c.strokeStyle = 'rgba(60,140,20,0.22)'; c.lineWidth = 0.5; c.stroke(); }
+      break;
+    }
+
+    case 'gem': {
+      const g = c.createLinearGradient(x - r, y - r*0.8, x + r*0.6, y + r);
+      if (color === 1) {
+        g.addColorStop(0, '#2d0a50'); g.addColorStop(0.5, '#180628'); g.addColorStop(1, '#0a0215');
+      } else {
+        g.addColorStop(0, '#f4f0ff'); g.addColorStop(0.4, '#ddd8ff'); g.addColorStop(1, '#b8b0f0');
+      }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      c.save(); c.clip();
+      const fc = color === 1 ? 'rgba(160,90,255,0.5)' : 'rgba(100,80,255,0.45)';
+      c.strokeStyle = fc; c.lineWidth = 0.65; c.lineCap = 'round';
+      const cp = { x: x, y: y - r*0.15 };
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+        c.beginPath(); c.moveTo(cp.x, cp.y);
+        c.lineTo(x + r*0.96*Math.cos(a), y + r*0.96*Math.sin(a)); c.stroke();
+      }
+      c.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI*2 - Math.PI/6;
+        const sx = x + r*0.38*Math.cos(a), sy = y - r*0.15 + r*0.38*Math.sin(a);
+        if (i===0) c.moveTo(sx, sy); else c.lineTo(sx, sy);
+      }
+      c.closePath();
+      c.strokeStyle = color===1 ? 'rgba(180,120,255,0.42)' : 'rgba(140,120,255,0.5)';
+      c.lineWidth = 0.7; c.stroke();
+      if (color === 2) {
+        [['rgba(255,100,100,0.3)', 0.28, -0.3], ['rgba(80,80,255,0.28)', -0.3, 0.1],
+         ['rgba(60,220,120,0.22)', 0.1, 0.36]].forEach(([clr, fx, fy]) => {
+          c.fillStyle = clr;
+          c.beginPath(); c.arc(x + fx*r, y + fy*r, r*0.14, 0, Math.PI*2); c.fill();
+        });
+      }
+      c.restore();
+      const hl = c.createRadialGradient(x - r*0.18, y - r*0.32, 0, x, y, r*0.75);
+      hl.addColorStop(0, color===1 ? 'rgba(200,150,255,0.6)' : 'rgba(255,255,255,0.9)');
+      hl.addColorStop(1, 'rgba(255,255,255,0)');
+      c.save(); c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.clip();
+      c.fillStyle = hl; c.fill(); c.restore();
+      break;
+    }
+
+    case 'star': {
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      if (color === 1) {
+        g.addColorStop(0, '#1a1a3e'); g.addColorStop(0.6, '#0c0c22'); g.addColorStop(1, '#050510');
+      } else {
+        g.addColorStop(0, '#fffff0'); g.addColorStop(0.5, '#f0f4e0'); g.addColorStop(1, '#d8dcc4');
+      }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      c.save(); c.clip();
+      const starClr = color === 1 ? 'rgba(255,220,80,0.92)' : 'rgba(140,165,220,0.88)';
+      c.fillStyle = starClr;
+      c.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const angle = (i * Math.PI / 5) - Math.PI / 2;
+        const rad = i % 2 === 0 ? r*0.38 : r*0.16;
+        const sx = x + rad*Math.cos(angle), sy = y + rad*Math.sin(angle);
+        if (i===0) c.moveTo(sx, sy); else c.lineTo(sx, sy);
+      }
+      c.closePath(); c.fill();
+      const shl = c.createRadialGradient(x, y - r*0.06, 0, x, y, r*0.42);
+      shl.addColorStop(0, color===1 ? 'rgba(255,252,200,0.65)' : 'rgba(255,255,255,0.55)');
+      shl.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = shl;
+      c.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const angle = (i * Math.PI / 5) - Math.PI / 2;
+        const rad = i % 2 === 0 ? r*0.38 : r*0.16;
+        const sx = x + rad*Math.cos(angle), sy = y + rad*Math.sin(angle);
+        if (i===0) c.moveTo(sx, sy); else c.lineTo(sx, sy);
+      }
+      c.closePath(); c.fill();
+      const dotClr = color === 1 ? 'rgba(255,240,150,0.72)' : 'rgba(200,215,245,0.82)';
+      [[0.62, -0.45], [-0.65, -0.28], [0.38, 0.62], [-0.48, 0.58], [0.7, 0.28]].forEach(([dx, dy]) => {
+        c.fillStyle = dotClr;
+        c.beginPath(); c.arc(x + dx*r, y + dy*r, r*0.055, 0, Math.PI*2); c.fill();
+      });
+      c.restore();
+      break;
+    }
+
+    case 'wood': {
+      const g = c.createRadialGradient(x - r*0.15, y - r*0.15, 0, x, y, r);
+      if (color === 1) {
+        g.addColorStop(0, '#3a2010'); g.addColorStop(0.4, '#221208'); g.addColorStop(1, '#100802');
+      } else {
+        g.addColorStop(0, '#f5e8c8'); g.addColorStop(0.4, '#e8d4a8'); g.addColorStop(1, '#cfb880');
+      }
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fillStyle = g; c.fill();
+      c.save(); c.clip();
+      const rcx = x + r*0.08, rcy = y - r*0.05;
+      c.strokeStyle = color === 1 ? 'rgba(70,35,10,0.55)' : 'rgba(165,120,55,0.42)';
+      c.lineWidth = 0.65;
+      for (let i = 1; i <= 4; i++) {
+        const rr = r * (i / 4.8);
+        c.beginPath(); c.ellipse(rcx, rcy, rr, rr*0.88, 0.12, 0, Math.PI*2); c.stroke();
+      }
+      c.strokeStyle = color === 1 ? 'rgba(55,28,8,0.28)' : 'rgba(185,145,80,0.25)';
+      c.lineWidth = 0.38;
+      for (let i = -1; i <= 1; i++) {
+        c.beginPath();
+        c.moveTo(x - r*0.82, y + i*r*0.22);
+        c.quadraticCurveTo(x, y + i*r*0.28 + r*0.04, x + r*0.82, y + i*r*0.2);
+        c.stroke();
+      }
+      c.restore();
+      const hl = c.createRadialGradient(x - r*0.3, y - r*0.3, 0, x, y, r);
+      hl.addColorStop(0, color===1 ? 'rgba(180,100,40,0.2)' : 'rgba(255,245,215,0.58)');
+      hl.addColorStop(0.5, 'rgba(255,255,255,0)');
+      c.fillStyle = hl;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI*2); c.fill();
+      if (color === 2) { c.strokeStyle = 'rgba(140,100,40,0.2)'; c.lineWidth = 0.5; c.stroke(); }
+      break;
+    }
+
   }
   c.restore();
 }
@@ -585,13 +823,14 @@ function selectStoneStyle(style) {
 }
 
 function renderStonePreviews() {
-  ['classic','flat','marble','glass','neon'].forEach(style => {
+  ALL_STYLES.forEach(style => {
     const canvas = document.getElementById('sp-' + style);
     if (!canvas) return;
     const c = canvas.getContext('2d');
-    c.clearRect(0, 0, 80, 44);
-    drawStoneOnCtx(c, 20, 22, 16, 1, style);
-    drawStoneOnCtx(c, 60, 22, 16, 2, style);
+    c.clearRect(0, 0, canvas.width, canvas.height);
+    const cy = canvas.height / 2;
+    drawStoneOnCtx(c, 18, cy, 15, 1, style);
+    drawStoneOnCtx(c, 54, cy, 15, 2, style);
   });
 }
 
@@ -620,6 +859,7 @@ function updateRecordUI(rec) {
   document.getElementById('rec-win').textContent = rec.win;
   document.getElementById('rec-lose').textContent = rec.lose;
   document.getElementById('rec-draw').textContent = rec.draw;
+  updateRankUI(rec.points || 0);
 }
 function addChat(text, isSystem = false) {
   const msgs = document.getElementById('chat-messages');
@@ -654,7 +894,9 @@ function initSocket() {
     updateHeaderNick();
     renderStonePreviews();
     selectStoneStyle(currentStoneStyle);
+    socket.emit('request_record', { nickname: myNickname });
   });
+  socket.on('your_record', (rec) => { updateRecordUI(rec); });
   socket.on('disconnect', () => { addChat('서버와 연결이 끊어졌습니다.', true); });
   socket.on('error', ({ msg }) => {
     document.getElementById('join-error').textContent = msg;
@@ -688,6 +930,8 @@ function initSocket() {
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; gameActive = true; isSpectating = false;
     myColor = yourColor;
+    const myData = players.find(p => p.color === yourColor);
+    myPointsBefore = myData ? (myData.record.points || 0) : (myRecord.points || 0);
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     document.getElementById('overlay').classList.remove('show');
@@ -708,15 +952,31 @@ function initSocket() {
   socket.on('turn_changed', ({ turn }) => { currentTurn = turn; updateStatusBar(); });
   socket.on('game_over', ({ result, winner, loser, records }) => {
     gameActive = false; drawBoard();
+    let rankChangeText = '';
     if (records) {
       const me = records.find(r => r.nickname === myNickname);
-      if (me) updateRecordUI(me.record);
+      if (me) {
+        updateRecordUI(me.record);
+        if (!isSpectating) {
+          const newPts = me.record.points || 0;
+          const oldRank = getRank(myPointsBefore);
+          const newRank = getRank(newPts);
+          const diff = newPts - myPointsBefore;
+          rankChangeText = (diff >= 0 ? '+' : '') + diff + 'pts';
+          if (oldRank !== newRank) rankChangeText += `  ${oldRank} → ${newRank}`;
+        }
+      }
     }
-    showOverlay(result, winner, loser, records);
+    showOverlay(result, winner, loser, records, rankChangeText);
     if (records) records.forEach(r => {
-      const card = getPlayerCard(r.nickname);
-      if (card) card.querySelector('.player-rec').textContent =
-        `${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무`;
+      if (document.getElementById('p1-name').textContent === r.nickname) {
+        document.getElementById('p1-rec').innerHTML =
+          `${r.record.win}승 ${r.record.lose}패 <span class="rank-tag${isDan(getRank(r.record.points||0))?' dan':''}" id="p1-rank-tag">${getRank(r.record.points||0)}</span>`;
+      }
+      if (document.getElementById('p2-name').textContent === r.nickname) {
+        document.getElementById('p2-rec').innerHTML =
+          `${r.record.win}승 ${r.record.lose}패 <span class="rank-tag${isDan(getRank(r.record.points||0))?' dan':''}" id="p2-rank-tag">${getRank(r.record.points||0)}</span>`;
+      }
     });
   });
   socket.on('rematch_requested', ({ from }) => {
@@ -778,17 +1038,22 @@ function setupPlayerCards(players) {
   const white = players.find(p => p.color === 2);
   p1StoneStyle = black ? (black.stoneStyle || 'classic') : 'classic';
   p2StoneStyle = white ? (white.stoneStyle || 'classic') : 'classic';
-  document.getElementById('p1-name').textContent = black ? black.nickname : '?';
-  document.getElementById('p1-rec').textContent = black ? `${black.record.win}승 ${black.record.lose}패` : '';
-  document.getElementById('p2-name').textContent = white ? white.nickname : '?';
-  document.getElementById('p2-rec').textContent = white ? `${white.record.win}승 ${white.record.lose}패` : '';
+
+  if (black) {
+    const rank = getRank(black.record.points || 0);
+    document.getElementById('p1-name').textContent = black.nickname;
+    document.getElementById('p1-rec').innerHTML =
+      `${black.record.win}승 ${black.record.lose}패 <span class="rank-tag${isDan(rank)?' dan':''}" id="p1-rank-tag">${rank}</span>`;
+  }
+  if (white) {
+    const rank = getRank(white.record.points || 0);
+    document.getElementById('p2-name').textContent = white.nickname;
+    document.getElementById('p2-rec').innerHTML =
+      `${white.record.win}승 ${white.record.lose}패 <span class="rank-tag${isDan(rank)?' dan':''}" id="p2-rank-tag">${rank}</span>`;
+  }
   updatePlayerStoneIcons();
 }
-function getPlayerCard(nickname) {
-  if (document.getElementById('p1-name').textContent === nickname) return document.getElementById('player1-card');
-  if (document.getElementById('p2-name').textContent === nickname) return document.getElementById('player2-card');
-  return null;
-}
+
 function updateStatusBar() {
   const bar = document.getElementById('status-bar');
   document.getElementById('player1-card').classList.toggle('active-turn', currentTurn === 1);
@@ -797,33 +1062,44 @@ function updateStatusBar() {
   if (myColor === currentTurn) { bar.textContent = '✨ 당신의 차례!'; bar.style.color = 'var(--accent2)'; }
   else { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; bar.style.color = 'var(--text2)'; }
 }
-function showOverlay(result, winner, loser, records) {
+
+function showOverlay(result, winner, loser, records, rankChangeText) {
   const title = document.getElementById('overlay-title');
   const sub = document.getElementById('overlay-sub');
   const recsEl = document.getElementById('overlay-records');
   const btn = document.getElementById('rematch-btn');
+  const rankEl = document.getElementById('overlay-rank-change');
   btn.textContent = '재대결'; btn.disabled = false;
   btn.style.display = isSpectating ? 'none' : '';
+  rankEl.textContent = rankChangeText || '';
+
   if (result === 'win') {
-    if (winner === myNickname) { title.textContent = '🎉 승리!'; title.style.color = '#7ecb7e'; }
-    else { title.textContent = '😢 패배'; title.style.color = 'var(--accent)'; }
+    if (winner === myNickname) { title.textContent = '🎉 승리!'; title.style.color = '#2a6e2a'; }
+    else { title.textContent = '😢 패배'; title.style.color = '#8a2020'; }
     sub.textContent = `${winner}님이 승리했습니다`;
   } else if (result === 'draw') {
     title.textContent = '🤝 무승부'; title.style.color = 'var(--accent2)'; sub.textContent = '비겼습니다!';
   } else if (result === 'resign') {
-    if (loser === myNickname) { title.textContent = '🏳️ 기권'; title.style.color = 'var(--accent)'; }
-    else { title.textContent = '🎉 승리!'; title.style.color = '#7ecb7e'; }
+    if (loser === myNickname) { title.textContent = '🏳️ 기권'; title.style.color = '#8a2020'; }
+    else { title.textContent = '🎉 승리!'; title.style.color = '#2a6e2a'; }
     sub.textContent = `${loser}님이 기권했습니다`;
   } else if (result === 'disconnect') {
     title.textContent = loser === myNickname ? '💨 연결 끊김' : '🎉 승리!';
-    title.style.color = loser === myNickname ? 'var(--text2)' : '#7ecb7e';
+    title.style.color = loser === myNickname ? 'var(--text2)' : '#2a6e2a';
     sub.textContent = `${loser}님의 연결이 끊어졌습니다`;
   }
-  if (records) recsEl.innerHTML = records.map(r =>
-    `<div class="ov-rec"><div class="ov-rec-name">${escapeHtml(r.nickname)}</div><div class="ov-rec-val">${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무</div></div>`
-  ).join('');
+
+  if (records) recsEl.innerHTML = records.map(r => {
+    const rank = getRank(r.record.points || 0);
+    return `<div class="ov-rec">
+      <div class="ov-rec-name">${escapeHtml(r.nickname)}</div>
+      <div class="ov-rec-val">${r.record.win}승 ${r.record.lose}패 ${r.record.draw}무</div>
+      <div class="ov-rec-rank${isDan(rank)?' dan':''}">${rank} · ${r.record.points||0}pts</div>
+    </div>`;
+  }).join('');
   document.getElementById('overlay').classList.add('show');
 }
+
 function escapeHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -869,30 +1145,24 @@ function getCell(e) {
 function drawBoard() {
   if (!ctx) return;
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-  // 보드 배경
-  ctx.fillStyle = '#d4a96a';
+  ctx.fillStyle = '#c88c42';
   ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-  // 격자
-  ctx.strokeStyle = '#8b6328'; ctx.lineWidth = 1;
+  ctx.strokeStyle = '#7a4a18'; ctx.lineWidth = 1;
   for (let i = 0; i < SIZE; i++) {
     ctx.beginPath(); ctx.moveTo(PADDING + i*CELL, PADDING); ctx.lineTo(PADDING + i*CELL, PADDING + (SIZE-1)*CELL); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(PADDING, PADDING + i*CELL); ctx.lineTo(PADDING + (SIZE-1)*CELL, PADDING + i*CELL); ctx.stroke();
   }
-  // 화점
-  ctx.fillStyle = '#8b6328';
+  ctx.fillStyle = '#7a4a18';
   [[3,3],[3,11],[7,7],[11,3],[11,11]].forEach(([r,c]) => {
     ctx.beginPath(); ctx.arc(PADDING + c*CELL, PADDING + r*CELL, 4, 0, Math.PI*2); ctx.fill();
   });
-  // 돌 렌더링 (각자 스타일 적용)
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++)
       if (gameBoard[r] && gameBoard[r][c]) drawStone(r, c, gameBoard[r][c], 1.0);
-  // 호버
   if (hoverPos) {
     if (hoverForbidden) drawForbiddenMark(hoverPos.row, hoverPos.col, false);
     else drawStone(hoverPos.row, hoverPos.col, myColor, 0.45);
   }
-  // 금수 플래시
   if (forbiddenFlash && Date.now() < forbiddenFlash.until) {
     drawForbiddenMark(forbiddenFlash.row, forbiddenFlash.col, true);
     requestAnimationFrame(drawBoard);
@@ -903,9 +1173,7 @@ function drawBoard() {
 
 function drawStone(row, col, color, alpha) {
   const x = PADDING + col * CELL, y = PADDING + row * CELL, r = CELL * 0.44;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  // 각 플레이어의 개인 스타일로 그리기
+  ctx.save(); ctx.globalAlpha = alpha;
   drawStoneOnCtx(ctx, x, y, r, color, color === 1 ? p1StoneStyle : p2StoneStyle);
   ctx.restore();
 }
@@ -914,8 +1182,8 @@ function drawForbiddenMark(row, col, flash) {
   const x = PADDING + col * CELL, y = PADDING + row * CELL, r = CELL * 0.4;
   ctx.save();
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
-  ctx.fillStyle = flash ? 'rgba(239,68,68,0.38)' : 'rgba(239,68,68,0.18)'; ctx.fill();
-  ctx.strokeStyle = '#ef4444'; ctx.lineWidth = flash ? 2.5 : 2; ctx.stroke();
+  ctx.fillStyle = flash ? 'rgba(200,40,40,0.38)' : 'rgba(200,40,40,0.18)'; ctx.fill();
+  ctx.strokeStyle = '#c82828'; ctx.lineWidth = flash ? 2.5 : 2; ctx.stroke();
   ctx.lineWidth = flash ? 3 : 2.5; ctx.lineCap = 'round';
   const s = r * 0.52;
   ctx.beginPath(); ctx.moveTo(x-s, y-s); ctx.lineTo(x+s, y+s); ctx.stroke();
