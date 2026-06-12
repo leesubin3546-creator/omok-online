@@ -11,9 +11,10 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/omok')
 
 const recordSchema = new mongoose.Schema({
   nickname: { type: String, required: true, unique: true },
-  win:  { type: Number, default: 0 },
-  lose: { type: Number, default: 0 },
-  draw: { type: Number, default: 0 },
+  win:   { type: Number, default: 0 },
+  lose:  { type: Number, default: 0 },
+  draw:  { type: Number, default: 0 },
+  points: { type: Number, default: 0 }, // 급수 포인트
 });
 const Record = mongoose.model('Record', recordSchema);
 
@@ -39,18 +40,26 @@ function createBoard() {
 
 async function getRecord(nickname) {
   let rec = await Record.findOne({ nickname });
-  if (!rec) rec = await Record.create({ nickname, win: 0, lose: 0, draw: 0 });
-  return { win: rec.win, lose: rec.lose, draw: rec.draw };
+  if (!rec) rec = await Record.create({ nickname, win: 0, lose: 0, draw: 0, points: 0 });
+  return { win: rec.win, lose: rec.lose, draw: rec.draw, points: rec.points || 0 };
 }
 
 async function addWin(nickname) {
-  await Record.findOneAndUpdate({ nickname }, { $inc: { win: 1 } }, { upsert: true });
+  await Record.findOneAndUpdate({ nickname }, { $inc: { win: 1, points: 20 } }, { upsert: true });
 }
 async function addLose(nickname) {
-  await Record.findOneAndUpdate({ nickname }, { $inc: { lose: 1 } }, { upsert: true });
+  // 포인트는 0 미만으로 내려가지 않도록 aggregation pipeline 사용
+  await Record.findOneAndUpdate(
+    { nickname },
+    [{ $set: {
+      lose:   { $add: [{ $ifNull: ['$lose', 0] }, 1] },
+      points: { $max: [0, { $subtract: [{ $ifNull: ['$points', 0] }, 10] }] }
+    }}],
+    { upsert: true }
+  );
 }
 async function addDraw(nickname) {
-  await Record.findOneAndUpdate({ nickname }, { $inc: { draw: 1 } }, { upsert: true });
+  await Record.findOneAndUpdate({ nickname }, { $inc: { draw: 1, points: 5 } }, { upsert: true });
 }
 
 function checkWin(board, row, col, player) {
@@ -225,6 +234,13 @@ function tryMatch() {
 // ── 소켓 이벤트 ───────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log('접속:', socket.id);
+
+  // 기록 요청 (로비 로드 시)
+  socket.on('request_record', async ({ nickname }) => {
+    if (!nickname) return;
+    const rec = await getRecord(nickname);
+    socket.emit('your_record', rec);
+  });
 
   // 랜덤 매칭 신청
   socket.on('join_random', ({ nickname, stoneStyle }) => {
