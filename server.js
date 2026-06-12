@@ -208,6 +208,7 @@ function createRoom(roomId, isPublic = false, useTimer = true) {
     moveCount: 0,
     isPublic,
     useTimer,
+    isPaused: false,
     chat: [],
     spectators: [],
     moveHistory: [],
@@ -309,6 +310,7 @@ io.on('connection', (socket) => {
   socket.on('place_stone', async ({ roomId, row, col }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
+    if (room.isPaused) { socket.emit('error', { msg: '게임이 일시정지 중입니다.' }); return; }
     const player = room.players.find(p => p.socketId === socket.id);
     if (!player) return;
     if (player.color !== room.turn) { socket.emit('error', { msg: '당신의 차례가 아닙니다.' }); return; }
@@ -479,10 +481,34 @@ io.on('connection', (socket) => {
       room.board = createBoard(); room.turn = 1; room.status = 'playing';
       room.moveCount = 0; room.moveHistory = [];
       room.pendingUndo = null; room.pendingSurrender = null;
+      room.isPaused = false;
       room.rematchRequests = new Set();
       room.players.forEach(p => { p.color = p.color === 1 ? 2 : 1; });
       emitGameStart(room);
     }
+  });
+
+  // ── 일시정지 ──────────────────────────────────────────────────
+  socket.on('pause_game', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || room.isPaused) return;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    room.isPaused = true;
+    clearTurnTimer(room);
+    io.to(roomId).emit('game_paused', { by: player.nickname });
+    console.log(`일시정지: ${player.nickname} [${roomId}]`);
+  });
+
+  socket.on('resume_game', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || !room.isPaused) return;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    room.isPaused = false;
+    io.to(roomId).emit('game_resumed', { by: player.nickname });
+    startTurnTimer(room);
+    console.log(`재개: ${player.nickname} [${roomId}]`);
   });
 
   // ── 기권 ─────────────────────────────────────────────────────
