@@ -152,6 +152,31 @@ function isDoublethree(board, row, col) {
   return countOpenThrees(board, row, col) >= 2;
 }
 
+function countFours(board, row, col) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  let count = 0;
+  for (const [dr, dc] of dirs) {
+    const get = (i) => {
+      const r = row + dr*i, c = col + dc*i;
+      if (r<0||r>=15||c<0||c>=15) return -1;
+      return board[r][c];
+    };
+    let fwd = 0, bwd = 0;
+    for (let d = 1; d <= 4; d++) { if (get(d) === 1) fwd++; else break; }
+    for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
+    const total = fwd + bwd + 1;
+    if (total === 4) {
+      // 양끝 중 하나라도 비어있으면 사(四)
+      if (get(fwd + 1) === 0 || get(-bwd - 1) === 0) count++;
+    }
+  }
+  return count;
+}
+
+function isDoublefour(board, row, col) {
+  return countFours(board, row, col) >= 2;
+}
+
 // ── 타이머 ────────────────────────────────────────────────────
 function startTurnTimer(room) {
   if (!room.useTimer) return;
@@ -172,7 +197,6 @@ function startTurnTimer(room) {
       result: 'timeout', winner: winner ? winner.nickname : null,
       loser: loser.nickname, records,
     });
-    broadcastRoomList();
   }, TURN_TIMEOUT);
   io.to(room.id).emit('timer_start', { seconds: TURN_TIMEOUT / 1000, turn: room.turn });
 }
@@ -369,6 +393,11 @@ io.on('connection', (socket) => {
           socket.emit('forbidden', { type: 'doublethree', msg: '쌍삼 금수!' });
           return;
         }
+        if (isDoublefour(room.board, row, col)) {
+          room.board[row][col] = 0;
+          socket.emit('forbidden', { type: 'doublefour', msg: '쌍사 금수!' });
+          return;
+        }
       }
       room.board[row][col] = 0;
     }
@@ -427,6 +456,7 @@ io.on('connection', (socket) => {
     room.pendingUndo = { requesterSocketId: socket.id };
     const opponent = room.players.find(p => p.socketId !== socket.id);
     if (opponent) io.to(opponent.socketId).emit('undo_requested', { from: requester.nickname });
+    // 15초 후 자동 거절
     setTimeout(() => {
       if (room.pendingUndo && room.pendingUndo.requesterSocketId === socket.id) {
         room.pendingUndo = null;
