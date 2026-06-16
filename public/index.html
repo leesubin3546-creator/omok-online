@@ -377,7 +377,7 @@
 
   .stone-opt { min-width: 54px; }
 
-  /* 진행 중인 방 목록 */
+  /* 방 목록 */
   .room-list-empty { color: var(--text2); font-size: 0.83rem; text-align: center; padding: 8px 0; }
   .room-item {
     display: flex; align-items: center; gap: 10px;
@@ -386,12 +386,16 @@
     border: 1px solid var(--border); transition: all 0.15s;
   }
   .room-item:hover { border-color: var(--accent2); transform: translateX(2px); }
-  .room-item-players { flex: 1; font-size: 0.88rem; font-weight: 600; color: var(--text); }
+  .room-item-name { flex: 1; font-size: 0.88rem; font-weight: 600; color: var(--text); }
+  .room-item-players { font-size: 0.75rem; color: var(--text2); margin-top: 2px; }
+  .room-item-info { flex: 1; }
   .room-item-badges { display: flex; gap: 5px; align-items: center; }
   .room-badge { font-size: 0.68rem; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+  .room-badge-waiting { background: rgba(42,110,42,0.12); color: #2a6e2a; border: 1px solid rgba(42,110,42,0.25); }
+  .room-badge-playing { background: rgba(200,136,26,0.12); color: var(--accent2); border: 1px solid rgba(200,136,26,0.25); }
   .room-badge-timer { background: rgba(200,136,26,0.15); color: var(--accent2); border: 1px solid rgba(200,136,26,0.3); }
   .room-badge-spec { background: rgba(122,74,21,0.1); color: var(--accent); border: 1px solid var(--border); }
-  .room-badge-id { font-size: 0.68rem; color: var(--text2); letter-spacing: 1px; }
+  .room-badge-lock { font-size: 0.72rem; color: var(--text2); }
   /* 관전자 수 배지 */
   #spectator-count {
     display: none; align-items: center; justify-content: center; gap: 5px;
@@ -400,6 +404,95 @@
     padding: 5px 11px; border: 1px solid var(--border);
   }
   #spectator-count.show { display: flex; }
+
+  /* 모달 */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(60,35,10,0.65); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: var(--radius);
+    padding: 32px 36px; min-width: 320px; max-width: 400px; width: 90%;
+    border: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px;
+    box-shadow: var(--shadow);
+  }
+  .modal-title { font-size: 1.08rem; font-weight: 700; color: var(--accent); }
+  .modal-row { display: flex; flex-direction: column; gap: 5px; }
+  .modal-label { font-size: 0.78rem; color: var(--text2); font-weight: 600; }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+
+  /* 대기실 화면 */
+  #room-lobby-screen.active { align-items: center; min-height: 80vh; }
+  .lobby-room-wrap { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
+  .lobby-room-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); border-radius: var(--radius);
+    padding: 14px 20px; border: 1px solid var(--border);
+  }
+  .lobby-room-title { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+  .lobby-room-sub { font-size: 0.78rem; color: var(--text2); margin-top: 2px; }
+
+  .lobby-players { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .lobby-player-slot {
+    background: var(--surface); border-radius: var(--radius);
+    border: 1.5px solid var(--border); padding: 16px;
+    display: flex; flex-direction: column; gap: 10px; min-height: 130px;
+    position: relative;
+  }
+  .lobby-player-slot.empty {
+    align-items: center; justify-content: center;
+    color: var(--text2); font-size: 0.85rem;
+    border-style: dashed;
+  }
+  .lobby-slot-header { display: flex; align-items: center; gap: 10px; }
+  .lobby-slot-name { font-weight: 700; font-size: 0.95rem; }
+  .lobby-slot-role {
+    font-size: 0.62rem; padding: 1px 6px; border-radius: 4px;
+    background: var(--card); color: var(--text2);
+    border: 1px solid var(--border); font-weight: 700;
+  }
+  .lobby-slot-role.host { color: var(--accent2); border-color: rgba(200,136,26,0.4); }
+  .lobby-slot-record { font-size: 0.76rem; color: var(--text2); }
+  .lobby-slot-ready {
+    font-size: 0.76rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 6px;
+    display: inline-block; margin-top: auto;
+  }
+  .lobby-slot-ready.ready { background: rgba(42,110,42,0.12); color: #2a6e2a; border: 1px solid rgba(42,110,42,0.25); }
+  .lobby-slot-ready.not-ready { background: var(--card); color: var(--text2); border: 1px solid var(--border); }
+  .lobby-kick-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(138,32,32,0.1); color: #8a2020;
+    border: 1px solid rgba(138,32,32,0.2); border-radius: 5px;
+    font-size: 0.68rem; padding: 2px 7px; cursor: pointer;
+    font-weight: 600;
+  }
+  .lobby-kick-btn:hover { background: rgba(138,32,32,0.2); }
+
+  .lobby-spectators {
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border); padding: 14px 16px;
+  }
+  .lobby-spec-title {
+    font-size: 0.75rem; color: var(--text2); font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .lobby-spec-list { display: flex; flex-wrap: wrap; gap: 7px; min-height: 28px; }
+  .lobby-spec-tag {
+    font-size: 0.76rem; background: var(--card);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 10px; color: var(--text2);
+  }
+  .lobby-spec-empty { font-size: 0.78rem; color: var(--text2); opacity: 0.6; }
+
+  .lobby-actions { display: flex; gap: 8px; }
+  .lobby-actions button { flex: 1; }
+
+  @media (max-width: 520px) {
+    .lobby-players { grid-template-columns: 1fr; }
+  }
 
   @media (max-width: 700px) {
     .lobby-grid { grid-template-columns: 1fr; }
@@ -467,55 +560,120 @@
       </div>
     </div>
 
-    <div class="card lobby-wide" style="flex-direction:row;align-items:center;justify-content:space-between;padding:12px 18px;">
-      <span style="font-size:0.88rem;color:var(--text2);font-weight:600;">⏱ 턴 타이머 (30초)</span>
-      <label class="timer-toggle">
-        <input type="checkbox" id="timer-toggle-cb" checked onchange="useTimer=this.checked">
-        <span class="timer-slider"></span>
-      </label>
-    </div>
     <div class="lobby-grid">
       <div class="card">
         <div class="card-title">랜덤 매칭</div>
         <p class="muted">대기 중인 상대를 자동으로 찾아드립니다</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:0.82rem;color:var(--text2);">⏱ 30초 타이머</span>
+          <label class="timer-toggle">
+            <input type="checkbox" id="timer-toggle-cb" checked onchange="useTimer=this.checked">
+            <span class="timer-slider"></span>
+          </label>
+        </div>
         <button class="btn-primary" onclick="joinRandom()">빠른 대전 시작</button>
       </div>
       <div class="card">
         <div class="card-title">방 만들기</div>
-        <p class="muted">방 코드를 친구에게 공유하세요</p>
-        <button class="btn-secondary" onclick="createRoom()">방 만들기</button>
-      </div>
-      <div class="card lobby-wide">
-        <div class="card-title">방 참가</div>
-        <div style="display:flex;gap:8px;">
-          <input id="room-code-input" type="text" placeholder="방 코드 입력" maxlength="6" style="text-transform:uppercase">
-          <button class="btn-secondary" onclick="joinRoom()">입장</button>
-        </div>
-        <div id="join-error" class="error-msg"></div>
+        <p class="muted">방을 개설하고 친구를 초대하세요</p>
+        <button class="btn-secondary" onclick="openCreateRoomModal()">방 만들기</button>
       </div>
     </div>
 
     <div class="card lobby-wide" id="room-list-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <div class="card-title">진행 중인 방 (관전)</div>
+        <div class="card-title">방 목록</div>
         <button class="btn-secondary btn-sm" onclick="requestRoomList()" style="font-size:0.72rem;padding:3px 9px;">↻ 새로고침</button>
       </div>
       <div id="room-list-container">
-        <div class="room-list-empty">진행 중인 방이 없습니다</div>
+        <div class="room-list-empty">방이 없습니다</div>
       </div>
     </div>
 
   </div>
 </div>
 
-<!-- 대기 -->
+<!-- 대기실 (방 로비) -->
+<div id="room-lobby-screen" class="screen">
+  <div class="lobby-room-wrap">
+    <div class="lobby-room-header">
+      <div>
+        <div class="lobby-room-title" id="lobby-room-name">방 이름</div>
+        <div class="lobby-room-sub" id="lobby-room-sub">대기 중</div>
+      </div>
+      <button class="btn-secondary btn-sm" onclick="leaveRoomLobby()">나가기</button>
+    </div>
+
+    <div class="lobby-players" id="lobby-players-grid">
+      <!-- JS로 렌더링 -->
+    </div>
+
+    <div class="lobby-spectators">
+      <div class="lobby-spec-title">👁 관전석</div>
+      <div class="lobby-spec-list" id="lobby-spec-list">
+        <span class="lobby-spec-empty">관전자 없음</span>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;" id="lobby-spec-actions"></div>
+    </div>
+
+    <div class="lobby-actions" id="lobby-actions">
+      <!-- JS로 렌더링 -->
+    </div>
+
+    <div id="lobby-error" class="error-msg" style="text-align:center;"></div>
+  </div>
+</div>
+
+<!-- 대기 (랜덤 매칭) -->
 <div id="waiting-screen" class="screen">
   <div class="waiting-box">
     <div class="spinner"></div>
-    <div id="waiting-title" style="font-size:1.15rem;font-weight:700;">상대방을 기다리는 중...</div>
-    <div id="waiting-sub" class="muted">방 코드를 친구에게 알려주세요</div>
-    <div id="waiting-room-code" class="room-id-display" style="display:none;"></div>
+    <div id="waiting-title" style="font-size:1.15rem;font-weight:700;">매칭 중...</div>
+    <div id="waiting-sub" class="muted">상대방을 찾고 있습니다</div>
     <button class="btn-secondary btn-sm" onclick="cancelWaiting()">취소</button>
+  </div>
+</div>
+
+<!-- 방 만들기 모달 -->
+<div id="create-room-modal" class="modal-backdrop">
+  <div class="modal-box">
+    <div class="modal-title">방 만들기</div>
+    <div class="modal-row">
+      <div class="modal-label">방 이름</div>
+      <input id="modal-room-name" type="text" placeholder="방 이름 (최대 20자)" maxlength="20">
+    </div>
+    <div class="modal-row">
+      <div class="modal-label">비밀번호 (선택)</div>
+      <input id="modal-room-pw" type="text" placeholder="비밀번호 없으면 비워두세요" maxlength="20">
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
+      <span style="font-size:0.85rem;color:var(--text2);">⏱ 30초 턴 타이머</span>
+      <label class="timer-toggle">
+        <input type="checkbox" id="modal-timer-cb" checked>
+        <span class="timer-slider"></span>
+      </label>
+    </div>
+    <div id="modal-room-error" class="error-msg"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeCreateRoomModal()">취소</button>
+      <button class="btn-primary" onclick="submitCreateRoom()">만들기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 비밀번호 입력 모달 -->
+<div id="password-modal" class="modal-backdrop">
+  <div class="modal-box">
+    <div class="modal-title">🔒 비밀번호 확인</div>
+    <div class="modal-row">
+      <div class="modal-label">비밀번호</div>
+      <input id="modal-pw-input" type="text" placeholder="비밀번호 입력">
+    </div>
+    <div id="modal-pw-error" class="error-msg"></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closePasswordModal()">취소</button>
+      <button class="btn-primary" onclick="submitPasswordJoin()">입장</button>
+    </div>
   </div>
 </div>
 
@@ -690,6 +848,10 @@ let lastMove = null;
 let gamePaused = false;
 // 동의 요청
 let pendingConsentType = null; // 'undo' | 'surrender'
+// 대기실 상태
+let lobbyState = null;
+let pendingJoinRoomId = null; // 비밀번호 입력 대기 중인 방 ID
+let isLobbySpectator = false;
 
 // ── 돌 드로잉 ─────────────────────────────────────────────────
 const STONE_COLORS = {
@@ -1192,19 +1354,41 @@ function initSocket() {
   socket.on('queue_joined', ({ position }) => {
     document.getElementById('waiting-title').textContent = `매칭 중... (대기 ${position}명)`;
     document.getElementById('waiting-sub').textContent = '상대방을 찾고 있습니다';
-    document.getElementById('waiting-room-code').style.display = 'none';
     showScreen('waiting-screen');
   });
   socket.on('queue_cancelled', () => { showScreen('lobby-screen'); });
-  socket.on('room_created', ({ roomId, color }) => {
-    currentRoom = roomId; myColor = color;
-    document.getElementById('waiting-title').textContent = '상대방을 기다리는 중...';
-    document.getElementById('waiting-sub').textContent = '방 코드를 친구에게 알려주세요';
-    const el = document.getElementById('waiting-room-code');
-    el.textContent = roomId; el.style.display = 'block';
-    showScreen('waiting-screen');
+
+  socket.on('room_created', ({ roomId }) => {
+    currentRoom = roomId;
+    closeCreateRoomModal();
   });
-  socket.on('room_joined', ({ roomId, color }) => { currentRoom = roomId; myColor = color; });
+  socket.on('room_joined', ({ roomId, asSpectator }) => {
+    currentRoom = roomId;
+    isLobbySpectator = !!asSpectator;
+    closePasswordModal();
+  });
+  socket.on('lobby_state', (state) => {
+    lobbyState = state;
+    currentRoom = state.roomId;
+    renderLobbyScreen(state);
+    showScreen('room-lobby-screen');
+  });
+  socket.on('kicked', ({ msg }) => {
+    currentRoom = null; lobbyState = null;
+    alert(msg || '강퇴되었습니다.');
+    showScreen('lobby-screen');
+    if (socket) socket.emit('get_room_list');
+  });
+  socket.on('join_error', ({ msg }) => {
+    const lobbyErr = document.getElementById('lobby-error');
+    const modalPwErr = document.getElementById('modal-pw-error');
+    if (modalPwErr && document.getElementById('password-modal').classList.contains('show')) {
+      modalPwErr.textContent = msg;
+    } else if (lobbyErr) {
+      lobbyErr.textContent = msg;
+      setTimeout(() => { lobbyErr.textContent = ''; }, 3000);
+    }
+  });
 
   socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut }) => {
     currentRoom = roomId;
@@ -1366,21 +1550,51 @@ function initSocket() {
   socket.on('spectator_update', ({ count }) => { updateSpectatorCount(count); });
 }
 
+// ── 방 만들기 모달 ────────────────────────────────────────────
+function openCreateRoomModal() {
+  document.getElementById('modal-room-name').value = `${myNickname}의 방`;
+  document.getElementById('modal-room-pw').value = '';
+  document.getElementById('modal-timer-cb').checked = true;
+  document.getElementById('modal-room-error').textContent = '';
+  document.getElementById('create-room-modal').classList.add('show');
+}
+function closeCreateRoomModal() {
+  document.getElementById('create-room-modal').classList.remove('show');
+}
+function submitCreateRoom() {
+  const name = document.getElementById('modal-room-name').value.trim() || `${myNickname}의 방`;
+  const password = document.getElementById('modal-room-pw').value.trim();
+  const timerOn = document.getElementById('modal-timer-cb').checked;
+  if (!socket) return;
+  socket.emit('create_room', {
+    nickname: myNickname, stoneStyle: currentStoneStyle,
+    roomName: name, password: password || null, useTimer: timerOn
+  });
+}
+
+// ── 비밀번호 모달 ──────────────────────────────────────────────
+function openPasswordModal(roomId) {
+  pendingJoinRoomId = roomId;
+  document.getElementById('modal-pw-input').value = '';
+  document.getElementById('modal-pw-error').textContent = '';
+  document.getElementById('password-modal').classList.add('show');
+}
+function closePasswordModal() {
+  document.getElementById('password-modal').classList.remove('show');
+  pendingJoinRoomId = null;
+}
+function submitPasswordJoin() {
+  if (!pendingJoinRoomId || !socket) return;
+  const pw = document.getElementById('modal-pw-input').value.trim();
+  socket.emit('join_room', { roomId: pendingJoinRoomId, nickname: myNickname, stoneStyle: currentStoneStyle, password: pw });
+}
+
 // ── 로비 ──────────────────────────────────────────────────────
 function joinRandom() {
   if (socket) socket.emit('join_random', { nickname: myNickname, stoneStyle: currentStoneStyle, useTimer });
 }
-function createRoom() {
-  if (socket) socket.emit('create_room', { nickname: myNickname, stoneStyle: currentStoneStyle, useTimer });
-}
-function joinRoom() {
-  const code = document.getElementById('room-code-input').value.trim().toUpperCase();
-  if (!code) { document.getElementById('join-error').textContent = '방 코드를 입력해주세요.'; return; }
-  socket.emit('join_room', { roomId: code, nickname: myNickname, stoneStyle: currentStoneStyle });
-}
 function cancelWaiting() { socket.emit('cancel_random'); showScreen('lobby-screen'); }
 
-// ── 관전 ──────────────────────────────────────────────────────
 function requestRoomList() {
   if (socket) socket.emit('get_room_list');
 }
@@ -1389,24 +1603,153 @@ function updateRoomList(list) {
   const container = document.getElementById('room-list-container');
   if (!container) return;
   if (!list || list.length === 0) {
-    container.innerHTML = '<div class="room-list-empty">진행 중인 방이 없습니다</div>';
+    container.innerHTML = '<div class="room-list-empty">방이 없습니다</div>';
     return;
   }
-  container.innerHTML = list.map(r => `
-    <div class="room-item" onclick="spectateRoom('${escapeHtml(r.roomId)}')">
-      <div class="room-item-players">${r.players.map(n => escapeHtml(n)).join(' <span style="color:var(--text2)">vs</span> ')}</div>
-      <div class="room-item-badges">
-        ${r.useTimer ? '<span class="room-badge room-badge-timer">⏱</span>' : '<span class="room-badge" style="background:rgba(0,0,0,0.05);color:var(--text2);border:1px solid var(--border)">무제한</span>'}
-        ${r.spectatorCount > 0 ? `<span class="room-badge room-badge-spec">👁 ${r.spectatorCount}</span>` : ''}
-        <span class="room-badge-id">${escapeHtml(r.roomId)}</span>
+  container.innerHTML = list.map(r => {
+    const isWaiting = r.status === 'waiting';
+    const playerStr = r.players.length > 0
+      ? r.players.map(n => escapeHtml(n)).join(isWaiting ? ', ' : ' vs ')
+      : '대기 중';
+    const onclick = isWaiting
+      ? `enterRoom('${escapeHtml(r.roomId)}', ${r.hasPassword})`
+      : `spectateRoom('${escapeHtml(r.roomId)}')`;
+    return `
+    <div class="room-item" onclick="${onclick}">
+      <div class="room-item-info">
+        <div class="room-item-name">${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.name)}</div>
+        <div class="room-item-players">${isWaiting ? `${r.playerCount}/2명` : ''} ${playerStr}</div>
       </div>
-    </div>
-  `).join('');
+      <div class="room-item-badges">
+        ${isWaiting
+          ? `<span class="room-badge room-badge-waiting">대기중</span>`
+          : `<span class="room-badge room-badge-playing">게임중</span>`}
+        ${r.useTimer ? '<span class="room-badge room-badge-timer">⏱</span>' : ''}
+        ${r.spectatorCount > 0 ? `<span class="room-badge room-badge-spec">👁 ${r.spectatorCount}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function enterRoom(roomId, hasPassword) {
+  if (!socket) return;
+  if (hasPassword) {
+    openPasswordModal(roomId);
+  } else {
+    socket.emit('join_room', { roomId, nickname: myNickname, stoneStyle: currentStoneStyle });
+  }
 }
 
 function spectateRoom(roomId) {
   if (!socket) return;
   socket.emit('join_room', { roomId, nickname: myNickname, stoneStyle: currentStoneStyle });
+}
+
+// ── 대기실 렌더링 ─────────────────────────────────────────────
+function renderLobbyScreen(state) {
+  document.getElementById('lobby-room-name').textContent = state.name || '대기실';
+  document.getElementById('lobby-room-sub').textContent =
+    state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음';
+
+  const isHost = state.players.some(p => p.isHost && p.nickname === myNickname);
+  const meAsPlayer = state.players.find(p => p.nickname === myNickname);
+  const meAsSpec = state.spectators.find(s => s.nickname === myNickname);
+  isLobbySpectator = !!meAsSpec;
+
+  // 플레이어 슬롯
+  const grid = document.getElementById('lobby-players-grid');
+  const slots = ['⚫ 흑', '⚪ 백'];
+  grid.innerHTML = '';
+  for (let i = 0; i < 2; i++) {
+    const p = state.players[i];
+    if (p) {
+      const rank = getRank(p.record.points || 0);
+      const isMe = p.nickname === myNickname;
+      const canKick = isHost && !isMe;
+      grid.innerHTML += `
+        <div class="lobby-player-slot">
+          ${canKick ? `<button class="lobby-kick-btn" onclick="kickPlayer('${escapeHtml(p.nickname)}')">강퇴</button>` : ''}
+          <div class="lobby-slot-header">
+            <span style="font-size:1.1rem;">${i === 0 ? '⚫' : '⚪'}</span>
+            <span class="lobby-slot-name">${escapeHtml(p.nickname)}${isMe ? ' (나)' : ''}</span>
+            ${p.isHost ? '<span class="lobby-slot-role host">방장</span>' : ''}
+          </div>
+          <div class="lobby-slot-record">
+            ${rank} · ${p.record.win}승 ${p.record.lose}패 ${p.record.points || 0}pts
+          </div>
+          <div class="lobby-slot-ready ${p.isHost ? 'ready' : (p.isReady ? 'ready' : 'not-ready')}">
+            ${p.isHost ? '방장' : (p.isReady ? '✓ 준비완료' : '대기 중')}
+          </div>
+        </div>`;
+    } else {
+      grid.innerHTML += `<div class="lobby-player-slot empty">${slots[i]}<br><span style="font-size:0.78rem;margin-top:4px;">빈 슬롯</span></div>`;
+    }
+  }
+
+  // 관전석
+  const specList = document.getElementById('lobby-spec-list');
+  if (state.spectators.length === 0) {
+    specList.innerHTML = '<span class="lobby-spec-empty">관전자 없음</span>';
+  } else {
+    specList.innerHTML = state.spectators.map(s =>
+      `<span class="lobby-spec-tag">${escapeHtml(s.nickname)}${s.nickname === myNickname ? ' (나)' : ''}</span>`
+    ).join('');
+  }
+
+  // 관전석 이동 버튼
+  const specActions = document.getElementById('lobby-spec-actions');
+  specActions.innerHTML = '';
+  if (meAsPlayer && !meAsPlayer.isHost) {
+    specActions.innerHTML = `<button class="btn-secondary btn-sm" onclick="moveToSpectator()">관전석으로 이동</button>`;
+  } else if (meAsSpec && state.players.length < 2) {
+    specActions.innerHTML = `<button class="btn-secondary btn-sm" onclick="moveToPlayer()">플레이어로 이동</button>`;
+  }
+
+  // 액션 버튼
+  const actions = document.getElementById('lobby-actions');
+  actions.innerHTML = '';
+  if (isHost) {
+    actions.innerHTML = `<button class="btn-primary" onclick="startGame()">게임 시작</button>`;
+  } else if (meAsPlayer && !meAsPlayer.isHost) {
+    const ready = meAsPlayer.isReady;
+    actions.innerHTML = `<button class="btn-${ready ? 'secondary' : 'primary'}" onclick="toggleReady()">
+      ${ready ? '✓ 준비완료 (취소)' : '준비'}
+    </button>`;
+  }
+}
+
+function leaveRoomLobby() {
+  if (!socket || !currentRoom) return;
+  socket.emit('leave_room', { roomId: currentRoom });
+  currentRoom = null; lobbyState = null; isLobbySpectator = false;
+  showScreen('lobby-screen');
+  socket.emit('get_room_list');
+}
+
+function toggleReady() {
+  if (!socket || !currentRoom) return;
+  socket.emit('player_ready', { roomId: currentRoom });
+}
+
+function startGame() {
+  if (!socket || !currentRoom) return;
+  socket.emit('start_game', { roomId: currentRoom });
+}
+
+function kickPlayer(nickname) {
+  if (!socket || !currentRoom) return;
+  if (!confirm(`${nickname}님을 강퇴하시겠습니까?`)) return;
+  socket.emit('kick_player', { roomId: currentRoom, targetNickname: nickname });
+}
+
+function moveToSpectator() {
+  if (!socket || !currentRoom) return;
+  socket.emit('move_to_spectator', { roomId: currentRoom });
+}
+
+function moveToPlayer() {
+  if (!socket || !currentRoom) return;
+  socket.emit('move_to_player', { roomId: currentRoom });
 }
 
 function updateSpectatorCount(count) {
@@ -1499,6 +1842,7 @@ function goLobby() {
   document.getElementById('turn-timer-wrap').style.display = 'none';
   document.getElementById('consent-banner').classList.remove('show');
   currentRoom = null; myColor = 0; gameBoard = []; gameActive = false; isSpectating = false;
+  lobbyState = null; isLobbySpectator = false;
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('chat-messages').innerHTML = '';
   showScreen('lobby-screen');
@@ -1516,7 +1860,8 @@ function sendChat() {
   input.value = '';
 }
 document.getElementById('chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
-document.getElementById('room-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
+document.getElementById('modal-room-name').addEventListener('keydown', e => { if (e.key === 'Enter') submitCreateRoom(); });
+document.getElementById('modal-pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitPasswordJoin(); });
 
 // ── UI ────────────────────────────────────────────────────────
 function setupPlayerCards(players) {
@@ -1716,14 +2061,31 @@ function isClientForbidden(row, col) {
     for (let d=1;d<=5;d++){const r=row-dr*d,c=col-dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
     if (cnt >= 6) return true;
   }
-  let threes = 0, fours = 0;
+  // 쌍삼: 5칸 슬라이딩 윈도우 (점프삼 포함)
+  let threes = 0;
+  for (const [dr,dc] of dirs) {
+    const get = i => { const r=row+dr*i,c=col+dc*i; if(r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
+    let found = false;
+    for (let s = -4; s <= 0 && !found; s++) {
+      let blacks=0, empties=0, valid=true;
+      for (let i=s; i<=s+4; i++) {
+        const v=get(i);
+        if (v===-1||v===2){valid=false;break;}
+        if (v===1) blacks++; else empties++;
+      }
+      if (!valid||blacks!==3||empties!==2) continue;
+      if (get(s-1)===0 && get(s+5)===0) found=true;
+    }
+    if (found) threes++;
+  }
+  // 쌍사: 연속/점프 4 중 열린 쪽이 있는 것 2개 이상
+  let fours = 0;
   for (const [dr,dc] of dirs) {
     const get = i => { const r=row+dr*i,c=col+dc*i; if(r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
     let fwd=0,bwd=0;
     for (let d=1;d<=4;d++){if(get(d)===1)fwd++;else break;}
     for (let d=1;d<=4;d++){if(get(-d)===1)bwd++;else break;}
     const total=fwd+bwd+1;
-    if (total===3 && get(fwd+1)===0 && get(-bwd-1)===0) threes++;
     if (total===4 && (get(fwd+1)===0 || get(-bwd-1)===0)) fours++;
   }
   if (fours >= 2) return true;
