@@ -37,14 +37,27 @@ function createBoard() {
   return Array.from({ length: 15 }, () => new Array(15).fill(0));
 }
 
+function getGrade(points) {
+  if (points >= 1000) return '9단';
+  if (points >= 800)  return '8단';
+  if (points >= 600)  return '7단';
+  if (points >= 450)  return '6단';
+  if (points >= 320)  return '5단';
+  if (points >= 210)  return '4단';
+  if (points >= 120)  return '3단';
+  if (points >= 50)   return '2단';
+  if (points >= 10)   return '1단';
+  return '입문';
+}
+
 async function getRecord(nickname) {
   try {
     let rec = await Record.findOne({ nickname });
     if (!rec) rec = await Record.create({ nickname, win: 0, lose: 0, draw: 0, points: 0 });
-    return { win: rec.win, lose: rec.lose, draw: rec.draw, points: rec.points || 0 };
+    return { win: rec.win, lose: rec.lose, draw: rec.draw, points: rec.points || 0, grade: getGrade(rec.points || 0) };
   } catch (err) {
-    console.error('getRecord error (DB unavailable?):', err.message);
-    return { win: 0, lose: 0, draw: 0, points: 0 };
+    console.error('getRecord error:', err.message);
+    return { win: 0, lose: 0, draw: 0, points: 0, grade: '입문' };
   }
 }
 
@@ -131,6 +144,9 @@ function isOverline(board, row, col) {
 }
 
 function countOpenThrees(board, row, col) {
+  // board[row][col] = 1 상태에서 호출.
+  // 각 방향에서 5칸 슬라이딩 윈도우로 "흑 3개 + 빈 2개, 양끝 열림" 패턴 감지.
+  // 연속 3(_XXX_)은 물론 점프 3(_X_XX_, _XX_X_)도 처리.
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   let count = 0;
   for (const [dr, dc] of dirs) {
@@ -139,11 +155,20 @@ function countOpenThrees(board, row, col) {
       if (r<0||r>=15||c<0||c>=15) return -1;
       return board[r][c];
     };
-    let fwd = 0, bwd = 0;
-    for (let d = 1; d <= 4; d++) { if (get(d) === 1) fwd++; else break; }
-    for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
-    const total = fwd + bwd + 1;
-    if (total === 3 && get(fwd + 1) === 0 && get(-bwd - 1) === 0) count++;
+    let found = false;
+    for (let s = -4; s <= 0 && !found; s++) {
+      let blacks = 0, empties = 0, valid = true;
+      for (let i = s; i <= s + 4; i++) {
+        const v = get(i);
+        if (v === -1 || v === 2) { valid = false; break; }
+        if (v === 1) blacks++;
+        else empties++;
+      }
+      if (!valid || blacks !== 3 || empties !== 2) continue;
+      // 윈도우 양쪽 끝이 모두 열려있어야 열린 3
+      if (get(s - 1) === 0 && get(s + 5) === 0) found = true;
+    }
+    if (found) count++;
   }
   return count;
 }
@@ -166,7 +191,6 @@ function countFours(board, row, col) {
     for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
     const total = fwd + bwd + 1;
     if (total === 4) {
-      // 양끝 중 하나라도 비어있으면 사(四)
       if (get(fwd + 1) === 0 || get(-bwd - 1) === 0) count++;
     }
   }
@@ -220,16 +244,29 @@ async function emitGameStart(room) {
       useTimer: room.useTimer !== false,
     });
   });
+  // 대기실 관전자에게도 game_start 전달 (관전 상태로)
+  room.spectators.forEach(spec => {
+    io.to(spec.socketId).emit('spectate_start', {
+      roomId: room.id, board: room.board, players: playerData,
+      turn: room.turn, useTimer: room.useTimer !== false, isPaused: false,
+      spectatorCount: room.spectators.length,
+    });
+  });
   startTurnTimer(room);
   broadcastRoomList();
 }
 
+// ── 방 목록 브로드캐스트 ──────────────────────────────────────
 function broadcastRoomList() {
   const list = [];
   for (const room of rooms.values()) {
-    if (room.status === 'playing') {
+    if (room.status === 'waiting' || room.status === 'playing') {
       list.push({
         roomId: room.id,
+        name: room.name,
+        hasPassword: !!room.password,
+        status: room.status,
+        playerCount: room.players.length,
         players: room.players.map(p => p.nickname),
         spectatorCount: room.spectators.length,
         useTimer: room.useTimer !== false,
@@ -239,19 +276,43 @@ function broadcastRoomList() {
   io.emit('room_list', list);
 }
 
-function createRoom(roomId, isPublic = false, useTimer = true) {
+// ── 대기실 상태 브로드캐스트 ──────────────────────────────────
+async function broadcastLobbyState(room) {
+  const playerData = await Promise.all(room.players.map(async p => ({
+    nickname: p.nickname,
+    color: p.color,
+    isHost: p.socketId === room.hostSocketId,
+    isReady: room.readySet.has(p.socketId),
+    record: await getRecord(p.nickname),
+    stoneStyle: p.stoneStyle || 'classic',
+  })));
+  const spectatorData = room.spectators.map(s => ({ nickname: s.nickname }));
+  io.to(room.id).emit('lobby_state', {
+    roomId: room.id,
+    name: room.name,
+    useTimer: room.useTimer,
+    players: playerData,
+    spectators: spectatorData,
+    hostSocketId: room.hostSocketId,
+  });
+}
+
+function createRoom(roomId, options = {}) {
   const room = {
     id: roomId,
+    name: options.name || `방 ${roomId}`,
+    password: options.password || null,
+    hostSocketId: options.hostSocketId || null,
     players: [],
+    readySet: new Set(),
     board: createBoard(),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
-    isPublic,
-    useTimer,
+    useTimer: options.useTimer !== false,
     isPaused: false,
     chat: [],
-    spectators: [],
+    spectators: [],   // { socketId, nickname } — 대기실+게임 관전 통합
     moveHistory: [],
     pendingUndo: null,
     pendingSurrender: null,
@@ -276,13 +337,13 @@ function tryMatch(queueKey) {
       continue;
     }
     const roomId = generateRoomId();
-    const room = createRoom(roomId, false, queueKey === 'timer');
+    const room = createRoom(roomId, { useTimer: queueKey === 'timer', name: '빠른 매칭', hostSocketId: p1.socketId });
     room.players.push({ socketId: p1.socketId, nickname: p1.nickname, color: 1, stoneStyle: p1.stoneStyle || 'classic' });
     room.players.push({ socketId: p2.socketId, nickname: p2.nickname, color: 2, stoneStyle: p2.stoneStyle || 'classic' });
     room.status = 'playing';
     s1.join(roomId); s2.join(roomId);
     emitGameStart(room);
-    console.log(`매칭 완료: ${p1.nickname} vs ${p2.nickname} [${roomId}] [타이머:${queueKey}]`);
+    console.log(`매칭 완료: ${p1.nickname} vs ${p2.nickname} [${roomId}]`);
   }
 }
 
@@ -296,21 +357,12 @@ io.on('connection', (socket) => {
     socket.emit('your_record', rec);
   });
 
+  // ── 방 목록 요청 ─────────────────────────────────────────────
   socket.on('get_room_list', () => {
-    const list = [];
-    for (const room of rooms.values()) {
-      if (room.status === 'playing') {
-        list.push({
-          roomId: room.id,
-          players: room.players.map(p => p.nickname),
-          spectatorCount: room.spectators.length,
-          useTimer: room.useTimer !== false,
-        });
-      }
-    }
-    socket.emit('room_list', list);
+    broadcastRoomList();
   });
 
+  // ── 빠른 매칭 ────────────────────────────────────────────────
   socket.on('join_random', ({ nickname, stoneStyle, useTimer }) => {
     for (const q of Object.values(matchQueues)) {
       if (q.findIndex(p => p.socketId === socket.id) !== -1) return;
@@ -318,7 +370,6 @@ io.on('connection', (socket) => {
     const qKey = useTimer === false ? 'noTimer' : 'timer';
     matchQueues[qKey].push({ socketId: socket.id, nickname, stoneStyle: stoneStyle || 'classic' });
     socket.emit('queue_joined', { position: matchQueues[qKey].length });
-    console.log(`매칭 대기: ${nickname} (대기열: ${matchQueues[qKey].length}명) [타이머:${qKey}]`);
     tryMatch(qKey);
   });
 
@@ -330,19 +381,41 @@ io.on('connection', (socket) => {
     socket.emit('queue_cancelled');
   });
 
-  socket.on('create_room', ({ nickname, stoneStyle, useTimer }) => {
+  // ── 방 생성 ──────────────────────────────────────────────────
+  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password }) => {
     const roomId = generateRoomId();
-    const room = createRoom(roomId, false, useTimer !== false);
-    room.players.push({ socketId: socket.id, nickname, color: 1, stoneStyle: stoneStyle || 'classic' });
+    const room = createRoom(roomId, {
+      name: (roomName || `${nickname}의 방`).substring(0, 20),
+      password: password || null,
+      useTimer: useTimer !== false,
+      hostSocketId: socket.id,
+    });
+    const rec = await getRecord(nickname);
+    room.players.push({
+      socketId: socket.id, nickname, color: 1,
+      stoneStyle: stoneStyle || 'classic',
+    });
     socket.join(roomId);
-    socket.emit('room_created', { roomId, color: 1 });
+    socket.emit('room_created', { roomId });
+    await broadcastLobbyState(room);
+    broadcastRoomList();
+    console.log(`방 생성: ${nickname} [${roomId}] "${room.name}"`);
   });
 
-  socket.on('join_room', async ({ roomId, nickname, stoneStyle }) => {
-    const room = rooms.get(roomId.toUpperCase());
-    if (!room) { socket.emit('error', { msg: '존재하지 않는 방입니다.' }); return; }
-    if (room.status === 'playing' && !room.players.find(p => p.socketId === socket.id)) {
-      room.spectators.push(socket.id);
+  // ── 방 입장 ──────────────────────────────────────────────────
+  socket.on('join_room', async ({ roomId, nickname, stoneStyle, password }) => {
+    const room = rooms.get(roomId.toUpperCase ? roomId.toUpperCase() : roomId);
+    if (!room) { socket.emit('join_error', { msg: '존재하지 않는 방입니다.' }); return; }
+
+    // 비밀번호 확인
+    if (room.password && room.password !== password) {
+      socket.emit('join_error', { msg: '비밀번호가 틀렸습니다.' }); return;
+    }
+
+    // 게임 중 → 관전 입장
+    if (room.status === 'playing') {
+      if (room.spectators.find(s => s.socketId === socket.id)) return;
+      room.spectators.push({ socketId: socket.id, nickname });
       socket.join(roomId);
       const players = await Promise.all(room.players.map(async p => ({
         nickname: p.nickname, color: p.color,
@@ -358,18 +431,158 @@ io.on('connection', (socket) => {
       broadcastRoomList();
       return;
     }
-    if (room.players.length >= 2) { socket.emit('error', { msg: '방이 꽉 찼습니다.' }); return; }
-    room.players.push({ socketId: socket.id, nickname, color: 2, stoneStyle: stoneStyle || 'classic' });
-    socket.join(roomId);
-    if (room.players.length === 2) {
-      room.status = 'playing';
-      emitGameStart(room);
-    } else {
-      socket.emit('room_joined', { roomId, color: 2 });
+
+    // 대기 중 → 플레이어로 입장 (슬롯이 있을 때)
+    if (room.status === 'waiting') {
+      // 이미 입장한 경우 (재연결 등)
+      if (room.players.find(p => p.socketId === socket.id)) {
+        socket.join(roomId);
+        await broadcastLobbyState(room);
+        return;
+      }
+      // 관전자로 이미 있는 경우
+      if (room.spectators.find(s => s.socketId === socket.id)) {
+        socket.join(roomId);
+        await broadcastLobbyState(room);
+        return;
+      }
+
+      if (room.players.length < 2) {
+        // 플레이어 슬롯 입장
+        room.players.push({
+          socketId: socket.id, nickname, color: 2,
+          stoneStyle: stoneStyle || 'classic',
+        });
+        socket.join(roomId);
+        socket.emit('room_joined', { roomId });
+        await broadcastLobbyState(room);
+        broadcastRoomList();
+      } else {
+        // 플레이어 슬롯 꽉 참 → 관전자로 입장
+        room.spectators.push({ socketId: socket.id, nickname });
+        socket.join(roomId);
+        socket.emit('room_joined', { roomId, asSpectator: true });
+        await broadcastLobbyState(room);
+        broadcastRoomList();
+      }
+      return;
+    }
+
+    socket.emit('join_error', { msg: '입장할 수 없는 방입니다.' });
+  });
+
+  // ── 대기실: 관전자 슬롯으로 이동 ─────────────────────────────
+  socket.on('move_to_spectator', async ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'waiting') return;
+    const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
+    if (playerIdx === -1) return;
+
+    const player = room.players[playerIdx];
+    room.players.splice(playerIdx, 1);
+    room.readySet.delete(socket.id);
+
+    // 방장이 나가면 다음 플레이어에게 방장 이전
+    if (room.hostSocketId === socket.id && room.players.length > 0) {
+      room.hostSocketId = room.players[0].socketId;
+      // 플레이어 색상 재배정
+      room.players.forEach((p, i) => { p.color = i + 1; });
+    }
+
+    room.spectators.push({ socketId: socket.id, nickname: player.nickname });
+    await broadcastLobbyState(room);
+    broadcastRoomList();
+  });
+
+  // ── 대기실: 관전자 → 플레이어 슬롯으로 이동 ──────────────────
+  socket.on('move_to_player', async ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'waiting') return;
+    if (room.players.length >= 2) { socket.emit('join_error', { msg: '플레이어 슬롯이 꽉 찼습니다.' }); return; }
+
+    const specIdx = room.spectators.findIndex(s => s.socketId === socket.id);
+    if (specIdx === -1) return;
+
+    const spec = room.spectators[specIdx];
+    room.spectators.splice(specIdx, 1);
+    const color = room.players.length === 0 ? 1 : 2;
+    room.players.push({ socketId: socket.id, nickname: spec.nickname, color, stoneStyle: 'classic' });
+
+    if (room.players.length === 1) room.hostSocketId = socket.id;
+    await broadcastLobbyState(room);
+    broadcastRoomList();
+  });
+
+  // ── 대기실: 준비 토글 ────────────────────────────────────────
+  socket.on('player_ready', async ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'waiting') return;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player || player.socketId === room.hostSocketId) return; // 방장은 준비 불필요
+
+    if (room.readySet.has(socket.id)) room.readySet.delete(socket.id);
+    else room.readySet.add(socket.id);
+
+    await broadcastLobbyState(room);
+  });
+
+  // ── 대기실: 시작 (방장) ──────────────────────────────────────
+  socket.on('start_game', async ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'waiting') return;
+    if (room.hostSocketId !== socket.id) { socket.emit('join_error', { msg: '방장만 시작할 수 있습니다.' }); return; }
+    if (room.players.length < 2) { socket.emit('join_error', { msg: '플레이어가 2명이어야 합니다.' }); return; }
+
+    // 방장 제외 나머지 플레이어 모두 준비 확인
+    const nonHostPlayers = room.players.filter(p => p.socketId !== room.hostSocketId);
+    const allReady = nonHostPlayers.every(p => room.readySet.has(p.socketId));
+    if (!allReady) { socket.emit('join_error', { msg: '모든 플레이어가 준비되어야 합니다.' }); return; }
+
+    room.status = 'playing';
+    room.readySet.clear();
+    await emitGameStart(room);
+  });
+
+  // ── 대기실: 강퇴 (방장) ──────────────────────────────────────
+  socket.on('kick_player', async ({ roomId, targetNickname }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.hostSocketId !== socket.id) return;
+
+    const playerIdx = room.players.findIndex(p => p.nickname === targetNickname && p.socketId !== socket.id);
+    if (playerIdx !== -1) {
+      const kicked = room.players[playerIdx];
+      room.players.splice(playerIdx, 1);
+      room.readySet.delete(kicked.socketId);
+      // 색상 재배정
+      room.players.forEach((p, i) => { p.color = i + 1; });
+      io.to(kicked.socketId).emit('kicked', { msg: '방장에 의해 강퇴되었습니다.' });
+      const kickedSocket = io.sockets.sockets.get(kicked.socketId);
+      if (kickedSocket) kickedSocket.leave(roomId);
+      await broadcastLobbyState(room);
+      broadcastRoomList();
+      return;
+    }
+
+    const specIdx = room.spectators.findIndex(s => s.nickname === targetNickname);
+    if (specIdx !== -1) {
+      const kicked = room.spectators[specIdx];
+      room.spectators.splice(specIdx, 1);
+      io.to(kicked.socketId).emit('kicked', { msg: '방장에 의해 강퇴되었습니다.' });
+      const kickedSocket = io.sockets.sockets.get(kicked.socketId);
+      if (kickedSocket) kickedSocket.leave(roomId);
+      await broadcastLobbyState(room);
+      broadcastRoomList();
     }
   });
 
-  // 돌 놓기
+  // ── 방 나가기 ────────────────────────────────────────────────
+  socket.on('leave_room', async ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    handleLeaveRoom(socket.id, room, roomId);
+  });
+
+  // ── 돌 놓기 ──────────────────────────────────────────────────
   socket.on('place_stone', async ({ roomId, row, col }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
@@ -447,16 +660,11 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'playing') return;
     const requester = room.players.find(p => p.socketId === socket.id);
     if (!requester) return;
-    if (room.moveHistory.length < 1) {
-      socket.emit('undo_result', { ok: false, reason: '무를 수 있는 돌이 없습니다.' }); return;
-    }
-    if (room.pendingUndo) {
-      socket.emit('undo_result', { ok: false, reason: '이미 요청 중입니다.' }); return;
-    }
+    if (room.moveHistory.length < 1) { socket.emit('undo_result', { ok: false, reason: '무를 수 있는 돌이 없습니다.' }); return; }
+    if (room.pendingUndo) { socket.emit('undo_result', { ok: false, reason: '이미 요청 중입니다.' }); return; }
     room.pendingUndo = { requesterSocketId: socket.id };
     const opponent = room.players.find(p => p.socketId !== socket.id);
     if (opponent) io.to(opponent.socketId).emit('undo_requested', { from: requester.nickname });
-    // 15초 후 자동 거절
     setTimeout(() => {
       if (room.pendingUndo && room.pendingUndo.requesterSocketId === socket.id) {
         room.pendingUndo = null;
@@ -471,7 +679,6 @@ io.on('connection', (socket) => {
     const { requesterSocketId } = room.pendingUndo;
     const requester = room.players.find(p => p.socketId === requesterSocketId);
     room.pendingUndo = null;
-
     if (accept && requester) {
       clearTurnTimer(room);
       const undoCount = Math.min(2, room.moveHistory.length);
@@ -494,9 +701,7 @@ io.on('connection', (socket) => {
     if (!room || room.status !== 'playing') return;
     const requester = room.players.find(p => p.socketId === socket.id);
     if (!requester) return;
-    if (room.pendingSurrender) {
-      socket.emit('surrender_result', { ok: false, reason: '이미 요청 중입니다.' }); return;
-    }
+    if (room.pendingSurrender) { socket.emit('surrender_result', { ok: false, reason: '이미 요청 중입니다.' }); return; }
     room.pendingSurrender = { requesterSocketId: socket.id };
     const opponent = room.players.find(p => p.socketId !== socket.id);
     if (opponent) io.to(opponent.socketId).emit('surrender_requested', { from: requester.nickname });
@@ -515,7 +720,6 @@ io.on('connection', (socket) => {
     const loser = room.players.find(p => p.socketId === requesterSocketId);
     const winner = room.players.find(p => p.socketId !== requesterSocketId);
     room.pendingSurrender = null;
-
     if (accept && loser) {
       clearTurnTimer(room);
       room.status = 'finished';
@@ -524,10 +728,7 @@ io.on('connection', (socket) => {
       const records = await Promise.all(room.players.map(async p => ({
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
-      io.to(roomId).emit('game_over', {
-        result: 'resign', winner: winner ? winner.nickname : null,
-        loser: loser.nickname, records,
-      });
+      io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records });
       broadcastRoomList();
     } else {
       if (loser) io.to(loser.socketId).emit('surrender_result', { ok: false, reason: '상대방이 거절했습니다.' });
@@ -554,6 +755,7 @@ io.on('connection', (socket) => {
       room.pendingUndo = null; room.pendingSurrender = null;
       room.isPaused = false;
       room.rematchRequests = new Set();
+      room.readySet = new Set();
       room.players.forEach(p => { p.color = p.color === 1 ? 2 : 1; });
       emitGameStart(room);
     }
@@ -568,7 +770,6 @@ io.on('connection', (socket) => {
     room.isPaused = true;
     clearTurnTimer(room);
     io.to(roomId).emit('game_paused', { by: player.nickname });
-    console.log(`일시정지: ${player.nickname} [${roomId}]`);
   });
 
   socket.on('resume_game', ({ roomId }) => {
@@ -579,7 +780,6 @@ io.on('connection', (socket) => {
     room.isPaused = false;
     io.to(roomId).emit('game_resumed', { by: player.nickname });
     startTurnTimer(room);
-    console.log(`재개: ${player.nickname} [${roomId}]`);
   });
 
   // ── 기권 ─────────────────────────────────────────────────────
@@ -596,10 +796,7 @@ io.on('connection', (socket) => {
     const records = await Promise.all(room.players.map(async p => ({
       nickname: p.nickname, record: await getRecord(p.nickname)
     })));
-    io.to(roomId).emit('game_over', {
-      result: 'resign', winner: winner ? winner.nickname : null,
-      loser: loser.nickname, records,
-    });
+    io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records });
     broadcastRoomList();
   });
 
@@ -618,39 +815,71 @@ io.on('connection', (socket) => {
     }
 
     for (const [roomId, room] of rooms.entries()) {
-      const specIdx = room.spectators.indexOf(socket.id);
-      if (specIdx !== -1) {
-        room.spectators.splice(specIdx, 1);
-        io.to(roomId).emit('spectator_update', { count: room.spectators.length });
-        broadcastRoomList();
-        break;
-      }
-    }
-
-    for (const [roomId, room] of rooms.entries()) {
-      const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
-      if (playerIdx !== -1 && room.status === 'playing') {
-        const loser = room.players[playerIdx];
-        const winner = room.players.find(p => p.socketId !== socket.id);
-        clearTurnTimer(room);
-        room.status = 'finished';
-        (async () => {
-          await addLose(loser.nickname);
-          if (winner) await addWin(winner.nickname);
-          const records = await Promise.all(room.players.map(async p => ({
-            nickname: p.nickname, record: await getRecord(p.nickname)
-          })));
-          io.to(roomId).emit('game_over', {
-            result: 'disconnect', winner: winner ? winner.nickname : null,
-            loser: loser.nickname, records,
-          });
-          broadcastRoomList();
-        })();
-        setTimeout(() => { if (rooms.has(roomId)) rooms.delete(roomId); }, 30000);
-      }
+      handleLeaveRoom(socket.id, room, roomId, true);
     }
   });
 });
+
+async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
+  // 관전자 처리
+  const specIdx = room.spectators.findIndex(s => s.socketId === socketId);
+  if (specIdx !== -1) {
+    room.spectators.splice(specIdx, 1);
+    if (room.status === 'waiting') {
+      await broadcastLobbyState(room);
+    } else {
+      io.to(roomId).emit('spectator_update', { count: room.spectators.length });
+    }
+    broadcastRoomList();
+    return;
+  }
+
+  // 플레이어 처리
+  const playerIdx = room.players.findIndex(p => p.socketId === socketId);
+  if (playerIdx === -1) return;
+
+  if (room.status === 'waiting') {
+    const player = room.players[playerIdx];
+    room.players.splice(playerIdx, 1);
+    room.readySet.delete(socketId);
+
+    if (room.players.length === 0 && room.spectators.length === 0) {
+      rooms.delete(roomId);
+      broadcastRoomList();
+      return;
+    }
+
+    // 방장 이전
+    if (room.hostSocketId === socketId && room.players.length > 0) {
+      room.hostSocketId = room.players[0].socketId;
+      room.players.forEach((p, i) => { p.color = i + 1; });
+    }
+
+    await broadcastLobbyState(room);
+    broadcastRoomList();
+    return;
+  }
+
+  if (room.status === 'playing') {
+    const loser = room.players[playerIdx];
+    const winner = room.players.find(p => p.socketId !== socketId);
+    clearTurnTimer(room);
+    room.status = 'finished';
+    (async () => {
+      await addLose(loser.nickname);
+      if (winner) await addWin(winner.nickname);
+      const records = await Promise.all(room.players.map(async p => ({
+        nickname: p.nickname, record: await getRecord(p.nickname)
+      })));
+      io.to(roomId).emit('game_over', {
+        result: 'disconnect', winner: winner ? winner.nickname : null,
+        loser: loser.nickname, records,
+      });
+      broadcastRoomList();
+    })();
+    setTimeout(() => { if (rooms.has(roomId)) rooms.delete(roomId); }, 30000);
+  }
+}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
