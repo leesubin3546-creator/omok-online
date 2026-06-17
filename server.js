@@ -178,6 +178,9 @@ function isDoublethree(board, row, col) {
 }
 
 function countFours(board, row, col) {
+  // board[row][col] = 1 상태에서 호출.
+  // 5칸 슬라이딩 윈도우로 "흑 4개 + 빈 1개" 패턴 감지 (연속 4 + 점프 4 모두 처리).
+  // 열린 4(_XXXX_): 양쪽이 모두 열려있으면 방향당 2로 카운트 (강화 룰).
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   let count = 0;
   for (const [dr, dc] of dirs) {
@@ -186,13 +189,22 @@ function countFours(board, row, col) {
       if (r<0||r>=15||c<0||c>=15) return -1;
       return board[r][c];
     };
-    let fwd = 0, bwd = 0;
-    for (let d = 1; d <= 4; d++) { if (get(d) === 1) fwd++; else break; }
-    for (let d = 1; d <= 4; d++) { if (get(-d) === 1) bwd++; else break; }
-    const total = fwd + bwd + 1;
-    if (total === 4) {
-      if (get(fwd + 1) === 0 || get(-bwd - 1) === 0) count++;
+    let bestForDir = 0;
+    for (let s = -4; s <= 0; s++) {
+      let blacks = 0, empties = 0, valid = true;
+      for (let i = s; i <= s + 4; i++) {
+        const v = get(i);
+        if (v === -1 || v === 2) { valid = false; break; }
+        if (v === 1) blacks++;
+        else empties++;
+      }
+      if (!valid || blacks !== 4 || empties !== 1) continue;
+      const before = get(s - 1);
+      const after = get(s + 5);
+      const val = (before === 0 && after === 0) ? 2 : 1;
+      if (val > bestForDir) bestForDir = val;
     }
+    count += bestForDir;
   }
   return count;
 }
