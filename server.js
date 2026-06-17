@@ -143,10 +143,8 @@ function isOverline(board, row, col) {
   return false;
 }
 
-function countOpenThrees(board, row, col) {
-  // board[row][col] = 1 상태에서 호출.
-  // 각 방향에서 5칸 슬라이딩 윈도우로 "흑 3개 + 빈 2개, 양끝 열림" 패턴 감지.
-  // 연속 3(_XXX_)은 물론 점프 3(_X_XX_, _XX_X_)도 처리.
+// 단순 열린삼 카운트 (조건부 쌍삼 체크 내부에서 재귀 방지용으로 사용)
+function countOpenThreesSimple(board, row, col) {
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   let count = 0;
   for (const [dr, dc] of dirs) {
@@ -165,8 +163,61 @@ function countOpenThrees(board, row, col) {
         else empties++;
       }
       if (!valid || blacks !== 3 || empties !== 2) continue;
-      // 윈도우 양쪽 끝이 모두 열려있어야 열린 3
       if (get(s - 1) === 0 && get(s + 5) === 0) found = true;
+    }
+    if (found) count++;
+  }
+  return count;
+}
+
+function countOpenThrees(board, row, col) {
+  // 공식 렌주룰 조건부 삼: 5칸 윈도우(흑3+빈2+양끝열림)에서
+  // 빈 자리 중 하나를 채웠을 때 ① 흑 4개가 연속이고(→직선 4 형성)
+  // ② 그 연장 자리가 금수가 아닐 때만 진삼으로 카운트.
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  let count = 0;
+  for (const [dr, dc] of dirs) {
+    const get = (i) => {
+      const r = row + dr*i, c = col + dc*i;
+      if (r<0||r>=15||c<0||c>=15) return -1;
+      return board[r][c];
+    };
+    let found = false;
+    for (let s = -4; s <= 0 && !found; s++) {
+      let blacks = 0, valid = true;
+      const emptyPos = [];
+      for (let i = s; i <= s + 4; i++) {
+        const v = get(i);
+        if (v === -1 || v === 2) { valid = false; break; }
+        if (v === 1) blacks++;
+        else emptyPos.push(i);
+      }
+      if (!valid || blacks !== 3 || emptyPos.length !== 2) continue;
+      if (get(s - 1) !== 0 || get(s + 5) !== 0) continue;
+
+      for (const ep of emptyPos) {
+        // 채운 후 4흑이 연속인지 확인
+        const bpos = [];
+        for (let i = s; i <= s + 4; i++) {
+          if ((i === ep) || get(i) === 1) bpos.push(i);
+        }
+        if (bpos.length !== 4) continue;
+        if (Math.max(...bpos) - Math.min(...bpos) !== 3) continue; // 비연속
+
+        // 연장 자리가 금수인지 확인 (단순 룰 사용, 재귀 방지)
+        const er = row + dr * ep, ec = col + dc * ep;
+        if (er < 0 || er >= 15 || ec < 0 || ec >= 15) continue;
+        board[er][ec] = 1;
+        const ext5 = checkExactFive(board, er, ec, 1);
+        let extForbidden = false;
+        if (!ext5) {
+          extForbidden = isOverline(board, er, ec) ||
+                         countFours(board, er, ec) >= 2 ||
+                         countOpenThreesSimple(board, er, ec) >= 2;
+        }
+        board[er][ec] = 0;
+        if (!extForbidden) { found = true; break; }
+      }
     }
     if (found) count++;
   }
@@ -178,9 +229,8 @@ function isDoublethree(board, row, col) {
 }
 
 function countFours(board, row, col) {
-  // board[row][col] = 1 상태에서 호출.
-  // 5칸 슬라이딩 윈도우로 "흑 4개 + 빈 1개" 패턴 감지 (연속 4 + 점프 4 모두 처리).
-  // 열린 4(_XXXX_): 양쪽이 모두 열려있으면 방향당 2로 카운트 (강화 룰).
+  // 공식 렌주룰: 5칸 슬라이딩 윈도우 흑4+빈1 → 방향당 사 1개.
+  // 열린 4(_XXXX_)도 사 1개 (표준 렌주룰).
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   let count = 0;
   for (const [dr, dc] of dirs) {
@@ -189,8 +239,8 @@ function countFours(board, row, col) {
       if (r<0||r>=15||c<0||c>=15) return -1;
       return board[r][c];
     };
-    let bestForDir = 0;
-    for (let s = -4; s <= 0; s++) {
+    let found = false;
+    for (let s = -4; s <= 0 && !found; s++) {
       let blacks = 0, empties = 0, valid = true;
       for (let i = s; i <= s + 4; i++) {
         const v = get(i);
@@ -199,12 +249,9 @@ function countFours(board, row, col) {
         else empties++;
       }
       if (!valid || blacks !== 4 || empties !== 1) continue;
-      const before = get(s - 1);
-      const after = get(s + 5);
-      const val = (before === 0 && after === 0) ? 2 : 1;
-      if (val > bestForDir) bestForDir = val;
+      found = true;
     }
-    count += bestForDir;
+    if (found) count++;
   }
   return count;
 }

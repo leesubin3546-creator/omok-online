@@ -2061,38 +2061,83 @@ function isClientForbidden(row, col) {
     for (let d=1;d<=5;d++){const r=row-dr*d,c=col-dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
     if (cnt >= 6) return true;
   }
-  // 쌍삼: 5칸 슬라이딩 윈도우 (점프삼 포함)
+  // ── 사 카운트 (공식 렌주: 방향당 최대 1, 열린4도 1개) ──────────
+  function cntFours(row2, col2) {
+    let fc = 0;
+    for (const [dr,dc] of dirs) {
+      const g = i => { const r=row2+dr*i,c=col2+dc*i; if(r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
+      let found=false;
+      for (let s=-4;s<=0&&!found;s++){
+        let bl=0,em=0,ok=true;
+        for(let i=s;i<=s+4;i++){const v=g(i);if(v===-1||v===2){ok=false;break;}if(v===1)bl++;else em++;}
+        if(ok&&bl===4&&em===1) found=true;
+      }
+      if(found) fc++;
+    }
+    return fc;
+  }
+  // ── 단순 열린삼 (조건부 삼 내부 재귀 방지용) ─────────────────
+  function cntThreesSimple(row2, col2) {
+    let tc=0;
+    for(const [dr,dc] of dirs){
+      const g=i=>{const r=row2+dr*i,c=col2+dc*i;if(r<0||r>=15||c<0||c>=15)return -1;return b[r][c];};
+      let found=false;
+      for(let s=-4;s<=0&&!found;s++){
+        let bl=0,em=0,ok=true;
+        for(let i=s;i<=s+4;i++){const v=g(i);if(v===-1||v===2){ok=false;break;}if(v===1)bl++;else em++;}
+        if(!ok||bl!==3||em!==2)continue;
+        if(g(s-1)===0&&g(s+5)===0)found=true;
+      }
+      if(found)tc++;
+    }
+    return tc;
+  }
+  // ── exactFive 체크 (클라이언트) ──────────────────────────────
+  function clientExact5(r2,c2){
+    for(const[dr,dc]of dirs){
+      let cnt=1;
+      for(let d=1;d<5;d++){const r=r2+dr*d,c=c2+dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
+      for(let d=1;d<5;d++){const r=r2-dr*d,c=c2-dc*d;if(r<0||r>=15||c<0||c>=15||b[r][c]!==1)break;cnt++;}
+      if(cnt===5)return true;
+    }
+    return false;
+  }
+  // ── 쌍사 (공식 렌주) ─────────────────────────────────────────
+  if (cntFours(row, col) >= 2) return true;
+  // ── 쌍삼 (공식 렌주 조건부: 연장 자리가 금수면 진삼 제외) ────
   let threes = 0;
   for (const [dr,dc] of dirs) {
     const get = i => { const r=row+dr*i,c=col+dc*i; if(r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
-    let found = false;
-    for (let s = -4; s <= 0 && !found; s++) {
-      let blacks=0, empties=0, valid=true;
-      for (let i=s; i<=s+4; i++) {
-        const v=get(i);
-        if (v===-1||v===2){valid=false;break;}
-        if (v===1) blacks++; else empties++;
+    let found=false;
+    for(let s=-4;s<=0&&!found;s++){
+      let blacks=0,valid=true;const emptyPos=[];
+      for(let i=s;i<=s+4;i++){const v=get(i);if(v===-1||v===2){valid=false;break;}if(v===1)blacks++;else emptyPos.push(i);}
+      if(!valid||blacks!==3||emptyPos.length!==2)continue;
+      if(get(s-1)!==0||get(s+5)!==0)continue;
+      for(const ep of emptyPos){
+        // 채운 후 4흑 연속 확인
+        const bpos=[];
+        for(let i=s;i<=s+4;i++){if(i===ep||get(i)===1)bpos.push(i);}
+        if(bpos.length!==4)continue;
+        if(Math.max(...bpos)-Math.min(...bpos)!==3)continue;
+        // 연장 자리 금수 확인
+        const er=row+dr*ep,ec=col+dc*ep;
+        if(er<0||er>=15||ec<0||ec>=15)continue;
+        b[er][ec]=1;
+        const ext5=clientExact5(er,ec);
+        let extForbid=false;
+        if(!ext5){
+          // overline
+          for(const[dr2,dc2]of dirs){let c2=1;for(let d=1;d<=5;d++){const r2=er+dr2*d,cc=ec+dc2*d;if(r2<0||r2>=15||cc<0||cc>=15||b[r2][cc]!==1)break;c2++;}for(let d=1;d<=5;d++){const r2=er-dr2*d,cc=ec-dc2*d;if(r2<0||r2>=15||cc<0||cc>=15||b[r2][cc]!==1)break;c2++;}if(c2>=6){extForbid=true;break;}}
+          if(!extForbid&&cntFours(er,ec)>=2)extForbid=true;
+          if(!extForbid&&cntThreesSimple(er,ec)>=2)extForbid=true;
+        }
+        b[er][ec]=0;
+        if(!extForbid){found=true;break;}
       }
-      if (!valid||blacks!==3||empties!==2) continue;
-      if (get(s-1)===0 && get(s+5)===0) found=true;
     }
-    if (found) threes++;
+    if(found)threes++;
   }
-  // 쌍사: 슬라이딩 윈도우로 점프 4 포함 감지. 열린 4(_XXXX_)는 방향당 2로 카운트 (강화 룰).
-  let fours = 0;
-  for (const [dr,dc] of dirs) {
-    const get = i => { const r=row+dr*i,c=col+dc*i; if(r<0||r>=15||c<0||c>=15) return -1; return b[r][c]; };
-    let bestForDir = 0;
-    for (let s=-4; s<=0; s++) {
-      let blacks=0,empties=0,valid=true;
-      for (let i=s;i<=s+4;i++){const v=get(i);if(v===-1||v===2){valid=false;break;}if(v===1)blacks++;else empties++;}
-      if (!valid||blacks!==4||empties!==1) continue;
-      const val=(get(s-1)===0&&get(s+5)===0)?2:1;
-      if (val>bestForDir) bestForDir=val;
-    }
-    fours+=bestForDir;
-  }
-  if (fours >= 2) return true;
   return threes >= 2;
 }
 
