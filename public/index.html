@@ -575,28 +575,34 @@
     flex-direction: row; align-items: flex-start;
     justify-content: center; flex-wrap: wrap; gap: 20px; padding-bottom: 40px;
   }
-  #holdem-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; max-width:680px; width:100%; }
+  #holdem-wrap { display:flex; flex-direction:column; align-items:center; gap:18px; max-width:920px; width:100%; }
   #poker-table {
-    position:relative; width:640px; height:375px;
+    position:relative; width:820px; height:480px;
     background: radial-gradient(ellipse at center, #2d8a4e 0%, #1a6b34 65%, #0f4a24 100%);
-    border-radius:50%; border:8px solid #8B6914;
-    box-shadow: 0 0 0 3px #6B4F10, 0 8px 40px rgba(0,0,0,0.45);
+    border-radius:50%; border:10px solid #8B6914;
+    box-shadow: 0 0 0 4px #6B4F10, inset 0 0 60px rgba(0,0,0,0.25), 0 12px 50px rgba(0,0,0,0.55);
     overflow:visible; flex-shrink:0;
   }
+  @keyframes hdDealCard {
+    0%   { transform: scale(0.15) translateY(-30px) rotate(-20deg); opacity:0; }
+    65%  { transform: scale(1.06) translateY(3px) rotate(1deg); opacity:1; }
+    100% { transform: scale(1) translateY(0) rotate(0deg); opacity:1; }
+  }
+  .hd-card.deal-anim { animation: hdDealCard 0.38s cubic-bezier(0.25,0.46,0.45,0.94) both; }
   .hd-seat {
     position:absolute; transform:translate(-50%,-50%);
     display:flex; flex-direction:column; align-items:center; gap:3px; z-index:5;
   }
   .hd-seat-info {
-    background:rgba(0,0,0,0.78); border-radius:10px; padding:5px 10px;
-    text-align:center; border:1.5px solid rgba(255,255,255,0.15); min-width:82px;
+    background:rgba(0,0,0,0.82); border-radius:12px; padding:6px 13px;
+    text-align:center; border:2px solid rgba(255,255,255,0.15); min-width:95px;
     transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .hd-seat-info.active-turn { border-color:#f0b830; box-shadow:0 0 14px rgba(240,184,48,0.65); }
+  .hd-seat-info.active-turn { border-color:#f0b830; box-shadow:0 0 18px rgba(240,184,48,0.75); }
   .hd-seat-info.folded { opacity:0.38; }
   .hd-seat-info.disconnected { opacity:0.32; border-color:rgba(255,80,80,0.5); }
-  .hd-seat-name { font-size:0.76rem; font-weight:700; color:#fff; white-space:nowrap; max-width:110px; overflow:hidden; text-overflow:ellipsis; }
-  .hd-seat-chips { font-size:0.68rem; color:#f0b830; font-weight:600; }
+  .hd-seat-name { font-size:0.84rem; font-weight:700; color:#fff; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+  .hd-seat-chips { font-size:0.76rem; color:#f0b830; font-weight:600; }
   .hd-seat-bet-bubble { background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:1px 7px; font-size:0.62rem; color:#aef0c0; font-weight:600; display:none; }
   .hd-seat-bet-bubble.show { display:block; }
   .hd-seat-tag { display:inline-block; font-size:0.56rem; padding:0 4px; border-radius:3px; font-weight:800; margin-left:3px; vertical-align:middle; }
@@ -614,20 +620,20 @@
   #hd-side-pots-wrap { display:flex; gap:4px; flex-wrap:wrap; justify-content:center; }
   .hd-side-pot-chip { font-size:0.6rem; background:rgba(255,255,255,0.15); color:#fff; border-radius:7px; padding:1px 7px; border:1px solid rgba(255,255,255,0.25); }
   /* Cards */
-  .hd-card { width:34px; height:48px; background:#fff; border-radius:4px; border:1px solid #ccc; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:800; box-shadow:0 2px 4px rgba(0,0,0,0.2); position:relative; flex-shrink:0; user-select:none; }
+  .hd-card { width:38px; height:54px; background:#fff; border-radius:5px; border:1px solid #ccc; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:800; box-shadow:0 3px 6px rgba(0,0,0,0.25); position:relative; flex-shrink:0; user-select:none; }
   .hd-card.red { color:#cc0000; }
   .hd-card.black { color:#111; }
   .hd-card.back { background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%); border-color:#1e3a8a; }
-  .hd-card.back::after { content:'♦'; font-size:1rem; color:rgba(255,255,255,0.18); position:absolute; }
+  .hd-card.back::after { content:'♦'; font-size:1.1rem; color:rgba(255,255,255,0.18); position:absolute; }
   .hd-card.empty { background:rgba(255,255,255,0.07); border:1.5px dashed rgba(255,255,255,0.28); box-shadow:none; }
-  .hd-card .card-rank { font-size:0.75rem; line-height:1.1; }
-  .hd-card .card-suit { font-size:0.62rem; line-height:1; }
-  #hd-community-cards .hd-card { width:44px; height:62px; }
-  #hd-community-cards .hd-card .card-rank { font-size:0.88rem; }
-  #hd-community-cards .hd-card .card-suit { font-size:0.72rem; }
-  #hd-my-hole-cards .hd-card { width:56px; height:78px; }
-  #hd-my-hole-cards .hd-card .card-rank { font-size:1.05rem; }
-  #hd-my-hole-cards .hd-card .card-suit { font-size:0.88rem; }
+  .hd-card .card-rank { font-size:0.82rem; line-height:1.1; }
+  .hd-card .card-suit { font-size:0.68rem; line-height:1; }
+  #hd-community-cards .hd-card { width:52px; height:74px; border-radius:6px; }
+  #hd-community-cards .hd-card .card-rank { font-size:1.05rem; }
+  #hd-community-cards .hd-card .card-suit { font-size:0.85rem; }
+  #hd-my-hole-cards .hd-card { width:72px; height:100px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.35); }
+  #hd-my-hole-cards .hd-card .card-rank { font-size:1.35rem; }
+  #hd-my-hole-cards .hd-card .card-suit { font-size:1.1rem; }
   .hd-card.winner-card { box-shadow:0 0 12px 3px rgba(240,184,48,0.85); }
   /* Action panel */
   #hd-action-panel { width:100%; background:var(--surface); border-radius:var(--radius); padding:14px 18px; border:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
@@ -692,8 +698,9 @@
   .hr-rank { font-size:0.65rem; color:var(--border); font-weight:600; }
   .hr-row.current .hr-rank { color:#f0b830; opacity:0.75; }
   @media (max-width:760px) {
-    #poker-table { width:100%; min-height:280px; }
+    #poker-table { width:100%; min-height:320px; }
     #holdem-screen.active { flex-direction:column; align-items:center; }
+    #holdem-wrap { max-width:100%; }
     #hd-side-panel { width:100%; max-width:480px; }
     #holdem-wrap { max-width:100%; }
   }
@@ -2910,12 +2917,13 @@ const HD_SEAT_POS = [
 const SUIT_SYMBOL = { s:'♠', h:'♥', d:'♦', c:'♣' };
 const SUIT_COLOR  = { s:'black', h:'red', d:'red', c:'black' };
 
-function renderHdCard(card, big) {
+function renderHdCard(card, big, delay) {
+  const delayStyle = (delay != null && delay > 0) ? ` style="animation-delay:${delay}ms"` : '';
   if (!card) {
     return `<div class="hd-card empty"></div>`;
   }
   if (card === 'back') {
-    return `<div class="hd-card back"></div>`;
+    return `<div class="hd-card back deal-anim"${delayStyle}></div>`;
   }
   let rank, suit;
   if (typeof card === 'object') {
@@ -2927,7 +2935,7 @@ function renderHdCard(card, big) {
     suit = card.slice(-1);
   }
   const cls = SUIT_COLOR[suit] || 'black';
-  return `<div class="hd-card ${cls}">
+  return `<div class="hd-card ${cls} deal-anim"${delayStyle}>
     <div class="card-rank">${rank}</div>
     <div class="card-suit">${SUIT_SYMBOL[suit] || suit}</div>
   </div>`;
@@ -2945,7 +2953,7 @@ function renderHoldemTable(state) {
   const cc = state.communityCards || [];
   let ccHtml = '';
   for (let i = 0; i < 5; i++) {
-    ccHtml += renderHdCard(cc[i] || null);
+    ccHtml += renderHdCard(cc[i] || null, false, i * 90);
   }
   document.getElementById('hd-community-cards').innerHTML = ccHtml;
 
@@ -2988,11 +2996,11 @@ function renderHoldemTable(state) {
     // 홀 카드
     let cardsHtml = '';
     if (!folded && p.holeCards) {
-      cardsHtml = p.holeCards.map(c => renderHdCard(c)).join('');
+      cardsHtml = p.holeCards.map((c, ci) => renderHdCard(c, false, serverIdx * 80 + ci * 130)).join('');
     } else if (folded) {
       cardsHtml = '';
     } else {
-      cardsHtml = renderHdCard('back') + renderHdCard('back');
+      cardsHtml = renderHdCard('back', false, serverIdx * 80) + renderHdCard('back', false, serverIdx * 80 + 130);
     }
 
     // 베팅 버블
@@ -3024,7 +3032,7 @@ function renderHoldemTable(state) {
   if (me) {
     let myCardsHtml = '';
     if (me.holeCards && me.holeCards.length) {
-      myCardsHtml = me.holeCards.map(c => renderHdCard(c, true)).join('');
+      myCardsHtml = me.holeCards.map((c, ci) => renderHdCard(c, true, ci * 180)).join('');
     } else {
       myCardsHtml = renderHdCard(null) + renderHdCard(null);
     }
