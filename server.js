@@ -105,6 +105,52 @@ function generateRoomId() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// ── 오델로 로직 ───────────────────────────────────────────────
+function createOthelloBoard() {
+  const board = Array.from({ length: 8 }, () => new Array(8).fill(0));
+  board[3][3] = 2; board[3][4] = 1;
+  board[4][3] = 1; board[4][4] = 2;
+  return board;
+}
+
+const OTHELLO_DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+function getOthelloFlips(board, row, col, player) {
+  const opp = player === 1 ? 2 : 1;
+  const flips = [];
+  for (const [dr, dc] of OTHELLO_DIRS) {
+    const line = [];
+    let r = row + dr, c = col + dc;
+    while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === opp) {
+      line.push([r, c]);
+      r += dr; c += dc;
+    }
+    if (line.length > 0 && r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === player) {
+      flips.push(...line);
+    }
+  }
+  return flips;
+}
+
+function getOthelloValidMoves(board, player) {
+  const moves = [];
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++)
+      if (board[r][c] === 0 && getOthelloFlips(board, r, c, player).length > 0)
+        moves.push([r, c]);
+  return moves;
+}
+
+function countOthelloPieces(board) {
+  let black = 0, white = 0;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c] === 1) black++;
+      else if (board[r][c] === 2) white++;
+    }
+  return { black, white };
+}
+
 function checkExactFive(board, row, col, player) {
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
   for (const [dr, dc] of dirs) {
@@ -301,6 +347,7 @@ async function emitGameStart(room) {
       roomId: room.id, board: room.board,
       players: playerData, turn: room.turn, yourColor: p.color,
       useTimer: room.useTimer !== false,
+      gameType: room.gameType || 'gomoku',
     });
   });
   // 대기실 관전자에게도 game_start 전달 (관전 상태로)
@@ -309,6 +356,7 @@ async function emitGameStart(room) {
       roomId: room.id, board: room.board, players: playerData,
       turn: room.turn, useTimer: room.useTimer !== false, isPaused: false,
       spectatorCount: room.spectators.length,
+      gameType: room.gameType || 'gomoku',
     });
   });
   startTurnTimer(room);
@@ -329,6 +377,7 @@ function broadcastRoomList() {
         players: room.players.map(p => p.nickname),
         spectatorCount: room.spectators.length,
         useTimer: room.useTimer !== false,
+        gameType: room.gameType || 'gomoku',
       });
     }
   }
@@ -353,18 +402,21 @@ async function broadcastLobbyState(room) {
     players: playerData,
     spectators: spectatorData,
     hostSocketId: room.hostSocketId,
+    gameType: room.gameType || 'gomoku',
   });
 }
 
 function createRoom(roomId, options = {}) {
+  const gameType = options.gameType || 'gomoku';
   const room = {
     id: roomId,
     name: options.name || `방 ${roomId}`,
     password: options.password || null,
     hostSocketId: options.hostSocketId || null,
+    gameType,
     players: [],
     readySet: new Set(),
-    board: createBoard(),
+    board: gameType === 'othello' ? createOthelloBoard() : createBoard(),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
@@ -441,13 +493,14 @@ io.on('connection', (socket) => {
   });
 
   // ── 방 생성 ──────────────────────────────────────────────────
-  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password }) => {
+  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password, gameType }) => {
     const roomId = generateRoomId();
     const room = createRoom(roomId, {
       name: (roomName || `${nickname}의 방`).substring(0, 20),
       password: password || null,
       useTimer: useTimer !== false,
       hostSocketId: socket.id,
+      gameType: gameType || 'gomoku',
     });
     const rec = await getRecord(nickname);
     room.players.push({
@@ -645,6 +698,7 @@ io.on('connection', (socket) => {
   socket.on('place_stone', async ({ roomId, row, col }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
+    if (room.gameType === 'othello') return;
     if (room.isPaused) { socket.emit('error', { msg: '게임이 일시정지 중입니다.' }); return; }
     const player = room.players.find(p => p.socketId === socket.id);
     if (!player) return;
@@ -713,6 +767,69 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── 오델로 돌 놓기 ────────────────────────────────────────────
+  socket.on('place_othello', async ({ roomId, row, col }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || room.gameType !== 'othello') return;
+    if (room.isPaused) { socket.emit('error', { msg: '게임이 일시정지 중입니다.' }); return; }
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    if (player.color !== room.turn) { socket.emit('error', { msg: '당신의 차례가 아닙니다.' }); return; }
+    if (row < 0 || row >= 8 || col < 0 || col >= 8) return;
+    if (room.board[row][col] !== 0) { socket.emit('error', { msg: '이미 돌이 놓인 자리입니다.' }); return; }
+
+    const flips = getOthelloFlips(room.board, row, col, player.color);
+    if (flips.length === 0) { socket.emit('error', { msg: '놓을 수 없는 자리입니다.' }); return; }
+
+    clearTurnTimer(room);
+    room.board[row][col] = player.color;
+    for (const [fr, fc] of flips) room.board[fr][fc] = player.color;
+    room.moveHistory.push({ row, col, color: player.color, flips: flips.map(f => [...f]) });
+    room.moveCount++;
+    room.pendingUndo = null;
+
+    const { black, white } = countOthelloPieces(room.board);
+    io.to(roomId).emit('othello_placed', { row, col, color: player.color, flips, black, white });
+
+    const nextColor = player.color === 1 ? 2 : 1;
+    const nextMoves = getOthelloValidMoves(room.board, nextColor);
+    const curMoves  = getOthelloValidMoves(room.board, player.color);
+    const boardFull = black + white === 64;
+
+    if (boardFull || (nextMoves.length === 0 && curMoves.length === 0)) {
+      // 게임 종료
+      room.status = 'finished';
+      let result, winnerNick = null, loserNick = null;
+      if (black > white) {
+        result = 'win';
+        winnerNick = room.players.find(p => p.color === 1).nickname;
+        loserNick  = room.players.find(p => p.color === 2).nickname;
+      } else if (white > black) {
+        result = 'win';
+        winnerNick = room.players.find(p => p.color === 2).nickname;
+        loserNick  = room.players.find(p => p.color === 1).nickname;
+      } else {
+        result = 'draw';
+      }
+      if (winnerNick) await addWin(winnerNick);
+      if (loserNick)  await addLose(loserNick);
+      if (result === 'draw') await Promise.all(room.players.map(p => addDraw(p.nickname)));
+      const records = await Promise.all(room.players.map(async p => ({
+        nickname: p.nickname, record: await getRecord(p.nickname)
+      })));
+      io.to(roomId).emit('game_over', { result, winner: winnerNick, loser: loserNick, records });
+      broadcastRoomList();
+    } else if (nextMoves.length === 0) {
+      // 다음 플레이어 착수 불가 → 패스 (현재 플레이어 계속)
+      io.to(roomId).emit('othello_pass', { color: nextColor });
+      startTurnTimer(room);
+    } else {
+      room.turn = nextColor;
+      io.to(roomId).emit('turn_changed', { turn: room.turn });
+      startTurnTimer(room);
+    }
+  });
+
   // ── 무르기 ────────────────────────────────────────────────────
   socket.on('undo_request', ({ roomId }) => {
     const room = rooms.get(roomId);
@@ -740,10 +857,18 @@ io.on('connection', (socket) => {
     room.pendingUndo = null;
     if (accept && requester) {
       clearTurnTimer(room);
-      const undoCount = Math.min(2, room.moveHistory.length);
+      const isOthello = room.gameType === 'othello';
+      const undoCount = isOthello ? Math.min(1, room.moveHistory.length) : Math.min(2, room.moveHistory.length);
       for (let i = 0; i < undoCount; i++) {
         const mv = room.moveHistory.pop();
-        if (mv) { room.board[mv.row][mv.col] = 0; room.moveCount--; }
+        if (mv) {
+          room.board[mv.row][mv.col] = 0;
+          room.moveCount--;
+          if (isOthello && mv.flips) {
+            const opp = mv.color === 1 ? 2 : 1;
+            for (const [fr, fc] of mv.flips) room.board[fr][fc] = opp;
+          }
+        }
       }
       room.turn = requester.color;
       io.to(roomId).emit('undo_accepted', { board: room.board, turn: room.turn, moveCount: room.moveCount });
@@ -809,7 +934,8 @@ io.on('connection', (socket) => {
     });
     if (room.rematchRequests.size === 2) {
       clearTurnTimer(room);
-      room.board = createBoard(); room.turn = 1; room.status = 'playing';
+      room.board = room.gameType === 'othello' ? createOthelloBoard() : createBoard();
+      room.turn = 1; room.status = 'playing';
       room.moveCount = 0; room.moveHistory = [];
       room.pendingUndo = null; room.pendingSurrender = null;
       room.isPaused = false;

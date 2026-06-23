@@ -500,6 +500,27 @@
     #side-panel { width: 100%; max-width: 420px; }
     .stone-opt { min-width: 52px; padding: 8px 4px 7px; }
   }
+
+  /* 오델로 */
+  #board-wrap.othello-mode { background: #1a6b34; border-color: #0d4020; }
+  #othello-score-bar {
+    display: none; justify-content: center; align-items: center; gap: 12px;
+    padding: 8px 14px; background: var(--card);
+    border-radius: 9px; border: 1px solid var(--border);
+    font-size: 0.92rem; font-weight: 700;
+  }
+  #othello-score-bar.show { display: flex; }
+  .room-badge-othello { background: rgba(26,107,52,0.15); color: #1a6b34; border-color: rgba(26,107,52,0.3); }
+  .room-badge-gomoku  { background: rgba(122,74,21,0.12); color: var(--accent); border-color: rgba(122,74,21,0.25); }
+  .game-type-picker { display: flex; gap: 14px; }
+  .game-type-picker label {
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer; font-size: 0.88rem; color: var(--text2);
+    padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); transition: all 0.15s; user-select: none;
+  }
+  .game-type-picker label:hover { border-color: var(--accent2); }
+  .game-type-picker input[type=radio] { accent-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -646,6 +667,13 @@
       <div class="modal-label">비밀번호 (선택)</div>
       <input id="modal-room-pw" type="text" placeholder="비밀번호 없으면 비워두세요" maxlength="20">
     </div>
+    <div class="modal-row">
+      <div class="modal-label">게임 종류</div>
+      <div class="game-type-picker">
+        <label><input type="radio" name="modal-game-type" value="gomoku" checked> ⚫ 오목 (렌주룰)</label>
+        <label><input type="radio" name="modal-game-type" value="othello"> 🟢 오델로</label>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
       <span style="font-size:0.85rem;color:var(--text2);">⏱ 30초 턴 타이머</span>
       <label class="timer-toggle">
@@ -706,6 +734,11 @@
       <span class="style-badge" id="p2-style-badge">클래식</span>
     </div>
     <div id="status-bar">게임 준비 중...</div>
+    <div id="othello-score-bar">
+      ⚫ <span id="othello-black-count">2</span>
+      <span style="color:var(--text2);font-weight:400;">vs</span>
+      <span id="othello-white-count">2</span> ⚪
+    </div>
     <div id="spectator-count">👁 <span id="spectator-count-num">0</span>명 관전 중</div>
     <div id="turn-timer-wrap" style="display:none">
       <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar-fill"></div></div>
@@ -751,6 +784,8 @@
 <script>
 const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
+const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
+const OTHELLO_CANVAS_SIZE = OTHELLO_CELL * OTHELLO_SIZE + OTHELLO_PADDING * 2;
 const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly'];
 const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비' };
 
@@ -852,6 +887,9 @@ let pendingConsentType = null; // 'undo' | 'surrender'
 let lobbyState = null;
 let pendingJoinRoomId = null; // 비밀번호 입력 대기 중인 방 ID
 let isLobbySpectator = false;
+// 게임 종류
+let gameType = 'gomoku'; // 'gomoku' | 'othello'
+let othelloBlack = 2, othelloWhite = 2;
 
 // ── 돌 드로잉 ─────────────────────────────────────────────────
 const STONE_COLORS = {
@@ -1390,14 +1428,20 @@ function initSocket() {
     }
   });
 
-  socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut }) => {
+  socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut, gameType: gt }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; gameActive = true; isSpectating = false;
     myColor = yourColor;
     roomUseTimer = ut !== false;
+    gameType = gt || 'gomoku';
     lastMove = null;
     gamePaused = false;
+    othelloBlack = 2; othelloWhite = 2;
+    if (gameType === 'othello') {
+      let bk=0,wh=0; for (const row of board) for (const v of row){if(v===1)bk++;else if(v===2)wh++;} othelloBlack=bk; othelloWhite=wh;
+    }
+    document.getElementById('board-wrap').classList.toggle('othello-mode', gameType === 'othello');
     document.getElementById('pause-overlay').classList.remove('show');
     const myData = players.find(p => p.color === yourColor);
     myPointsBefore = myData ? (myData.record.points || 0) : (myRecord.points || 0);
@@ -1412,9 +1456,15 @@ function initSocket() {
     document.getElementById('overlay').classList.remove('show');
     addChat('게임 시작!', true);
   });
-  socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut, isPaused: paused, spectatorCount: specCnt }) => {
+  socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut, isPaused: paused, spectatorCount: specCnt, gameType: gt }) => {
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
+    gameType = gt || 'gomoku';
+    othelloBlack = 2; othelloWhite = 2;
+    if (gameType === 'othello') {
+      let bk=0,wh=0; for (const row of board) for (const v of row){if(v===1)bk++;else if(v===2)wh++;} othelloBlack=bk; othelloWhite=wh;
+    }
+    document.getElementById('board-wrap').classList.toggle('othello-mode', gameType === 'othello');
     currentTurn = turn; isSpectating = true; gameActive = true;
     roomUseTimer = ut !== false;
     lastMove = null;
@@ -1438,6 +1488,18 @@ function initSocket() {
   });
 
   socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; lastMove = { row, col }; drawBoard(); });
+  socket.on('othello_placed', ({ row, col, color, flips, black, white }) => {
+    gameBoard[row][col] = color;
+    for (const [fr, fc] of flips) gameBoard[fr][fc] = color;
+    lastMove = { row, col };
+    othelloBlack = black; othelloWhite = white;
+    updateOthelloScoreDisplay(); drawBoard();
+  });
+  socket.on('othello_pass', ({ color }) => {
+    const who = color === 1 ? '⚫ 흑' : '⚪ 백';
+    addChat(`⏩ ${who}은 놓을 수 있는 자리가 없어 패스합니다.`, true);
+    drawBoard();
+  });
   socket.on('turn_changed', ({ turn }) => { currentTurn = turn; updateStatusBar(); });
 
   // 타이머
@@ -1565,10 +1627,11 @@ function submitCreateRoom() {
   const name = document.getElementById('modal-room-name').value.trim() || `${myNickname}의 방`;
   const password = document.getElementById('modal-room-pw').value.trim();
   const timerOn = document.getElementById('modal-timer-cb').checked;
+  const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value || 'gomoku';
   if (!socket) return;
   socket.emit('create_room', {
     nickname: myNickname, stoneStyle: currentStoneStyle,
-    roomName: name, password: password || null, useTimer: timerOn
+    roomName: name, password: password || null, useTimer: timerOn, gameType: gt
   });
 }
 
@@ -1621,6 +1684,9 @@ function updateRoomList(list) {
         <div class="room-item-players">${isWaiting ? `${r.playerCount}/2명` : ''} ${playerStr}</div>
       </div>
       <div class="room-item-badges">
+        ${r.gameType === 'othello'
+          ? `<span class="room-badge room-badge-othello">오델로</span>`
+          : `<span class="room-badge room-badge-gomoku">오목</span>`}
         ${isWaiting
           ? `<span class="room-badge room-badge-waiting">대기중</span>`
           : `<span class="room-badge room-badge-playing">게임중</span>`}
@@ -1649,7 +1715,8 @@ function spectateRoom(roomId) {
 function renderLobbyScreen(state) {
   document.getElementById('lobby-room-name').textContent = state.name || '대기실';
   document.getElementById('lobby-room-sub').textContent =
-    state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음';
+    (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +
+    (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음');
 
   const isHost = state.players.some(p => p.isHost && p.nickname === myNickname);
   const meAsPlayer = state.players.find(p => p.nickname === myNickname);
@@ -1843,6 +1910,9 @@ function goLobby() {
   document.getElementById('consent-banner').classList.remove('show');
   currentRoom = null; myColor = 0; gameBoard = []; gameActive = false; isSpectating = false;
   lobbyState = null; isLobbySpectator = false;
+  gameType = 'gomoku'; othelloBlack = 2; othelloWhite = 2;
+  document.getElementById('board-wrap').classList.remove('othello-mode');
+  document.getElementById('othello-score-bar').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('chat-messages').innerHTML = '';
   showScreen('lobby-screen');
@@ -1887,11 +1957,17 @@ function setupPlayerCards(players) {
 
 function updateStatusBar() {
   const bar = document.getElementById('status-bar');
+  document.getElementById('othello-score-bar').classList.toggle('show', gameType === 'othello');
   document.getElementById('player1-card').classList.toggle('active-turn', currentTurn === 1);
   document.getElementById('player2-card').classList.toggle('active-turn', currentTurn === 2);
   if (isSpectating) { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; return; }
   if (myColor === currentTurn) { bar.textContent = '✨ 당신의 차례!'; bar.style.color = 'var(--accent2)'; }
   else { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; bar.style.color = 'var(--text2)'; }
+}
+
+function updateOthelloScoreDisplay() {
+  document.getElementById('othello-black-count').textContent = othelloBlack;
+  document.getElementById('othello-white-count').textContent = othelloWhite;
 }
 
 function showOverlay(result, winner, loser, records, rankChangeText) {
@@ -1944,41 +2020,65 @@ let canvas, ctx, hoverPos = null, hoverForbidden = false, forbiddenFlash = null;
 
 function initCanvas() {
   canvas = document.getElementById('board-canvas');
-  canvas.width = CANVAS_SIZE; canvas.height = CANVAS_SIZE;
+  const isOthello = gameType === 'othello';
+  canvas.width  = isOthello ? OTHELLO_CANVAS_SIZE : CANVAS_SIZE;
+  canvas.height = isOthello ? OTHELLO_CANVAS_SIZE : CANVAS_SIZE;
   ctx = canvas.getContext('2d');
   canvas.onmousemove = (e) => {
     if (!gameActive || isSpectating || myColor !== currentTurn) {
       hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; drawBoard(); return;
     }
     const { row, col } = getCell(e);
-    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE && gameBoard[row][col] === 0) {
-      hoverPos = { row, col };
-      hoverForbidden = isClientForbidden(row, col);
-      canvas.style.cursor = hoverForbidden ? 'not-allowed' : 'crosshair';
-    } else { hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; }
+    if (gameType === 'othello') {
+      if (row >= 0 && row < OTHELLO_SIZE && col >= 0 && col < OTHELLO_SIZE && gameBoard[row][col] === 0) {
+        hoverPos = { row, col };
+        hoverForbidden = getOthelloFlipsClient(gameBoard, row, col, myColor).length === 0;
+        canvas.style.cursor = hoverForbidden ? 'not-allowed' : 'pointer';
+      } else { hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'default'; }
+    } else {
+      if (row >= 0 && row < SIZE && col >= 0 && col < SIZE && gameBoard[row][col] === 0) {
+        hoverPos = { row, col };
+        hoverForbidden = isClientForbidden(row, col);
+        canvas.style.cursor = hoverForbidden ? 'not-allowed' : 'crosshair';
+      } else { hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; }
+    }
     drawBoard();
   };
   canvas.onmouseleave = () => { hoverPos = null; drawBoard(); };
   canvas.onclick = (e) => {
     if (!gameActive || isSpectating || myColor !== currentTurn) return;
     const { row, col } = getCell(e);
-    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;
-    if (gameBoard[row][col] !== 0) return;
-    socket.emit('place_stone', { roomId: currentRoom, row, col });
+    if (gameType === 'othello') {
+      if (row < 0 || row >= OTHELLO_SIZE || col < 0 || col >= OTHELLO_SIZE) return;
+      if (gameBoard[row][col] !== 0) return;
+      if (getOthelloFlipsClient(gameBoard, row, col, myColor).length === 0) return;
+      socket.emit('place_othello', { roomId: currentRoom, row, col });
+    } else {
+      if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;
+      if (gameBoard[row][col] !== 0) return;
+      socket.emit('place_stone', { roomId: currentRoom, row, col });
+    }
     hoverPos = null;
   };
 }
 
 function getCell(e) {
   const rect = canvas.getBoundingClientRect();
+  if (gameType === 'othello') {
+    return {
+      col: Math.floor((e.clientX - rect.left - OTHELLO_PADDING) / OTHELLO_CELL),
+      row: Math.floor((e.clientY - rect.top  - OTHELLO_PADDING) / OTHELLO_CELL),
+    };
+  }
   return {
     col: Math.round((e.clientX - rect.left - PADDING) / CELL),
-    row: Math.round((e.clientY - rect.top - PADDING) / CELL)
+    row: Math.round((e.clientY - rect.top  - PADDING) / CELL)
   };
 }
 
 function drawBoard() {
   if (!ctx) return;
+  if (gameType === 'othello') { drawOthelloBoard(); return; }
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   // 보드 배경
   ctx.fillStyle = '#c88c42';
@@ -2040,6 +2140,126 @@ function drawForbiddenMark(row, col, flash) {
   const s = r * 0.52;
   ctx.beginPath(); ctx.moveTo(x-s, y-s); ctx.lineTo(x+s, y+s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x+s, y-s); ctx.lineTo(x-s, y+s); ctx.stroke();
+  ctx.restore();
+}
+
+// ── 오델로 클라이언트 로직 ────────────────────────────────────
+function getOthelloFlipsClient(board, row, col, player) {
+  const opp = player === 1 ? 2 : 1;
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const flips = [];
+  for (const [dr, dc] of dirs) {
+    const line = [];
+    let r = row + dr, c = col + dc;
+    while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === opp) {
+      line.push([r, c]); r += dr; c += dc;
+    }
+    if (line.length > 0 && r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === player) {
+      flips.push(...line);
+    }
+  }
+  return flips;
+}
+
+function getOthelloValidMovesClient(board, player) {
+  const moves = [];
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++)
+      if (board[r][c] === 0 && getOthelloFlipsClient(board, r, c, player).length > 0)
+        moves.push([r, c]);
+  return moves;
+}
+
+function drawOthelloBoard() {
+  const cs = OTHELLO_CANVAS_SIZE;
+  ctx.clearRect(0, 0, cs, cs);
+
+  // 보드 배경
+  ctx.fillStyle = '#1a6b34';
+  ctx.fillRect(0, 0, cs, cs);
+
+  // 격자선
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= OTHELLO_SIZE; i++) {
+    const x = OTHELLO_PADDING + i * OTHELLO_CELL;
+    const y = OTHELLO_PADDING + i * OTHELLO_CELL;
+    ctx.beginPath(); ctx.moveTo(x, OTHELLO_PADDING); ctx.lineTo(x, OTHELLO_PADDING + OTHELLO_SIZE * OTHELLO_CELL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(OTHELLO_PADDING, y); ctx.lineTo(OTHELLO_PADDING + OTHELLO_SIZE * OTHELLO_CELL, y); ctx.stroke();
+  }
+
+  // 화점 4개
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  [[2,2],[2,6],[6,2],[6,6]].forEach(([r,c]) => {
+    ctx.beginPath();
+    ctx.arc(OTHELLO_PADDING + c * OTHELLO_CELL, OTHELLO_PADDING + r * OTHELLO_CELL, 4, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // 유효 수 힌트
+  if (gameActive && !isSpectating && myColor === currentTurn) {
+    const valid = getOthelloValidMovesClient(gameBoard, myColor);
+    for (const [vr, vc] of valid) {
+      const vx = OTHELLO_PADDING + vc * OTHELLO_CELL + OTHELLO_CELL / 2;
+      const vy = OTHELLO_PADDING + vr * OTHELLO_CELL + OTHELLO_CELL / 2;
+      ctx.beginPath(); ctx.arc(vx, vy, OTHELLO_CELL * 0.13, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.38)'; ctx.fill();
+    }
+  }
+
+  // 호버 셀 강조
+  if (hoverPos) {
+    const { row, col } = hoverPos;
+    const hx = OTHELLO_PADDING + col * OTHELLO_CELL;
+    const hy = OTHELLO_PADDING + row * OTHELLO_CELL;
+    ctx.fillStyle = hoverForbidden ? 'rgba(200,40,40,0.18)' : 'rgba(255,255,255,0.15)';
+    ctx.fillRect(hx, hy, OTHELLO_CELL, OTHELLO_CELL);
+  }
+
+  // 돌 그리기
+  for (let r = 0; r < OTHELLO_SIZE; r++)
+    for (let c = 0; c < OTHELLO_SIZE; c++)
+      if (gameBoard[r] && gameBoard[r][c]) drawOthelloStone(r, c, gameBoard[r][c], 1.0);
+
+  // 마지막 돌 마커
+  if (lastMove && gameBoard[lastMove.row] && gameBoard[lastMove.row][lastMove.col]) {
+    const lx = OTHELLO_PADDING + lastMove.col * OTHELLO_CELL + OTHELLO_CELL / 2;
+    const ly = OTHELLO_PADDING + lastMove.row * OTHELLO_CELL + OTHELLO_CELL / 2;
+    const lc = gameBoard[lastMove.row][lastMove.col];
+    ctx.beginPath(); ctx.arc(lx, ly, OTHELLO_CELL * 0.1, 0, Math.PI * 2);
+    ctx.fillStyle = lc === 1 ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.55)';
+    ctx.fill();
+  }
+
+  // 호버 돌 + 플립 미리보기
+  if (hoverPos && !hoverForbidden && gameActive && !isSpectating && myColor === currentTurn) {
+    const flips = getOthelloFlipsClient(gameBoard, hoverPos.row, hoverPos.col, myColor);
+    drawOthelloStone(hoverPos.row, hoverPos.col, myColor, 0.5);
+    for (const [fr, fc] of flips) drawOthelloStone(fr, fc, myColor, 0.35);
+  }
+}
+
+function drawOthelloStone(row, col, color, alpha) {
+  const x = OTHELLO_PADDING + col * OTHELLO_CELL + OTHELLO_CELL / 2;
+  const y = OTHELLO_PADDING + row * OTHELLO_CELL + OTHELLO_CELL / 2;
+  const r = OTHELLO_CELL * 0.4;
+  ctx.save(); ctx.globalAlpha = alpha;
+
+  const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.04, x, y, r);
+  if (color === 1) {
+    g.addColorStop(0, '#505050'); g.addColorStop(0.4, '#222222'); g.addColorStop(1, '#060606');
+  } else {
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#e8e8e8'); g.addColorStop(1, '#c0c0c0');
+  }
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = g; ctx.fill();
+
+  const hl = ctx.createRadialGradient(x - r*0.27, y - r*0.3, 0, x - r*0.1, y - r*0.14, r*0.65);
+  hl.addColorStop(0, color===1 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.92)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl; ctx.fill();
+  if (color === 2) { ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 0.5; ctx.stroke(); }
+
   ctx.restore();
 }
 
