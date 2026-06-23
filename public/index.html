@@ -2913,8 +2913,15 @@ function renderHdCard(card, big) {
   if (card === 'back') {
     return `<div class="hd-card back"></div>`;
   }
-  const rank = card.slice(0, -1);
-  const suit = card.slice(-1);
+  let rank, suit;
+  if (typeof card === 'object') {
+    const RANK_MAP = {1:'A', 11:'J', 12:'Q', 13:'K', 14:'A'};
+    rank = RANK_MAP[card.rank] || String(card.rank);
+    suit = card.suit.toLowerCase();
+  } else {
+    rank = card.slice(0, -1);
+    suit = card.slice(-1);
+  }
   const cls = SUIT_COLOR[suit] || 'black';
   return `<div class="hd-card ${cls}">
     <div class="card-rank">${rank}</div>
@@ -3018,7 +3025,7 @@ function renderHoldemTable(state) {
       myCardsHtml = renderHdCard(null) + renderHdCard(null);
     }
     document.getElementById('hd-my-hole-cards').innerHTML = myCardsHtml;
-    document.getElementById('hd-my-hand-name').textContent = me.handName || '—';
+    document.getElementById('hd-my-hand-name').textContent = state.myHandName || '—';
     document.getElementById('hd-my-chips').textContent = `칩: ${me.chips.toLocaleString()}`;
   }
 
