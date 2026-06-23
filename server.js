@@ -17,8 +17,120 @@ const recordSchema = new mongoose.Schema({
   lose:  { type: Number, default: 0 },
   draw:  { type: Number, default: 0 },
   points: { type: Number, default: 0 },
+  // 재화 시스템
+  coins:          { type: Number, default: 1000000 },   // 초기 100만
+  coinsEmptyAt:   { type: Date,   default: null },      // 0원 된 시각
+  lastAttendance: { type: Date,   default: null },      // 마지막 출석
+  holdemWin:      { type: Number, default: 0 },         // 홀덤 승
+  holdemLose:     { type: Number, default: 0 },         // 홀덤 패
 });
 const Record = mongoose.model('Record', recordSchema);
+
+// ── 재화 상수 ────────────────────────────────────────────────────
+const INITIAL_COINS    = 1000000;   // 첫 지급 / 쿨타임 후 보충
+const COOLDOWN_MS      = 2 * 60 * 60 * 1000; // 2시간
+
+// 홀덤 블라인드 (바이인 → SB/BB)
+const HOLDEM_BLINDS = {
+  1000:  { sb: 10,  bb: 20  },
+  5000:  { sb: 50,  bb: 100 },
+  10000: { sb: 100, bb: 200 },
+};
+
+// 출석 상자 등급 (균등 분포)
+const ATTENDANCE_TIERS = [
+  { label: '일반',     min: 10000,    max: 100000,    prob: 0.50 },
+  { label: '고급',     min: 100000,   max: 500000,    prob: 0.30 },
+  { label: '희귀',     min: 500000,   max: 1500000,   prob: 0.15 },
+  { label: '전설',     min: 1500000,  max: 5000000,   prob: 0.03 },
+  { label: '레전더리', min: 5000000,  max: 20000000,  prob: 0.02 },
+];
+
+function rollAttendanceBox() {
+  const r = Math.random();
+  let cumulative = 0;
+  for (const tier of ATTENDANCE_TIERS) {
+    cumulative += tier.prob;
+    if (r < cumulative) {
+      const amount = Math.floor(Math.random() * (tier.max - tier.min + 1)) + tier.min;
+      return { label: tier.label, amount };
+    }
+  }
+  // fallback
+  return { label: '일반', amount: 10000 };
+}
+
+// 오늘 KST 00:00 기준 Date
+function todayKST() {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  kst.setUTCHours(0, 0, 0, 0);
+  return new Date(kst.getTime() - 9 * 60 * 60 * 1000); // UTC로 변환
+}
+
+async function getCoinsInfo(nickname) {
+  try {
+    let rec = await Record.findOne({ nickname });
+    if (!rec) rec = await Record.create({ nickname });
+
+    // 기존 유저 coins 필드 초기화
+    if (rec.coins === undefined || rec.coins === null) {
+      rec.coins = INITIAL_COINS;
+      rec.coinsEmptyAt = null;
+      rec.lastAttendance = null;
+      await rec.save();
+    }
+
+    // 쿨타임 자동 해제 체크
+    if (rec.coins === 0 && rec.coinsEmptyAt) {
+      const elapsed = Date.now() - rec.coinsEmptyAt.getTime();
+      if (elapsed >= COOLDOWN_MS) {
+        rec.coins = INITIAL_COINS;
+        rec.coinsEmptyAt = null;
+        await rec.save();
+      }
+    }
+
+    const todayMidnight = todayKST();
+    const attendanceAvailable = !rec.lastAttendance || rec.lastAttendance < todayMidnight;
+    const cooldownRemaining = (rec.coins === 0 && rec.coinsEmptyAt)
+      ? Math.max(0, COOLDOWN_MS - (Date.now() - rec.coinsEmptyAt.getTime()))
+      : 0;
+
+    return {
+      coins: rec.coins,
+      cooldownRemaining,
+      attendanceAvailable,
+    };
+  } catch (err) {
+    console.error('getCoinsInfo error:', err.message);
+    return { coins: 0, cooldownRemaining: 0, attendanceAvailable: false };
+  }
+}
+
+async function deductCoins(nickname, amount) {
+  try {
+    const rec = await Record.findOne({ nickname });
+    if (!rec || rec.coins < amount) return false;
+    rec.coins -= amount;
+    if (rec.coins === 0) rec.coinsEmptyAt = new Date();
+    await rec.save();
+    return true;
+  } catch (err) { console.error('deductCoins error:', err.message); return false; }
+}
+
+async function addCoins(nickname, amount) {
+  try {
+    await Record.findOneAndUpdate(
+      { nickname },
+      [{ $set: {
+        coins: { $add: [{ $ifNull: ['$coins', 0] }, amount] },
+        coinsEmptyAt: null,
+      }}],
+      { upsert: true }
+    );
+  } catch (err) { console.error('addCoins error:', err.message); }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -80,6 +192,20 @@ async function addLose(nickname) {
 async function addDraw(nickname) {
   try { await Record.findOneAndUpdate({ nickname }, { $inc: { draw: 1, points: 5 } }, { upsert: true }); }
   catch (err) { console.error('addDraw error:', err.message); }
+}
+async function addHoldemWin(nickname) {
+  try { await Record.findOneAndUpdate({ nickname }, { $inc: { holdemWin: 1 } }, { upsert: true }); }
+  catch (err) { console.error('addHoldemWin error:', err.message); }
+}
+async function addHoldemLose(nickname) {
+  try { await Record.findOneAndUpdate({ nickname }, { $inc: { holdemLose: 1 } }, { upsert: true }); }
+  catch (err) { console.error('addHoldemLose error:', err.message); }
+}
+async function getHoldemRecord(nickname) {
+  try {
+    const rec = await Record.findOne({ nickname });
+    return { holdemWin: rec?.holdemWin || 0, holdemLose: rec?.holdemLose || 0 };
+  } catch { return { holdemWin: 0, holdemLose: 0 }; }
 }
 
 function checkWin(board, row, col, player) {
@@ -306,6 +432,483 @@ function isDoublefour(board, row, col) {
   return countFours(board, row, col) >= 2;
 }
 
+// ── 홀덤 덱/핸드 평가 ────────────────────────────────────────
+
+function createDeck() {
+  const deck = [];
+  for (const suit of ['S', 'H', 'D', 'C'])
+    for (let rank = 2; rank <= 14; rank++)
+      deck.push({ suit, rank });
+  return deck;
+}
+
+function shuffleDeck(deck) {
+  const d = [...deck];
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+
+function getCombinations(arr, k) {
+  if (k === 0) return [[]];
+  if (arr.length < k) return [];
+  const [first, ...rest] = arr;
+  return [
+    ...getCombinations(rest, k - 1).map(c => [first, ...c]),
+    ...getCombinations(rest, k),
+  ];
+}
+
+function scoreHand5(cards) {
+  const ranks = cards.map(c => c.rank).sort((a, b) => b - a);
+  const suits = cards.map(c => c.suit);
+  const isFlush = new Set(suits).size === 1;
+  let isStraight = false, straightHigh = ranks[0];
+  if (new Set(ranks).size === 5 && ranks[0] - ranks[4] === 4) {
+    isStraight = true;
+  } else if (ranks[0] === 14 && ranks[1] === 5 && ranks[2] === 4 && ranks[3] === 3 && ranks[4] === 2) {
+    isStraight = true; straightHigh = 5;
+  }
+  const freq = {};
+  for (const r of ranks) freq[r] = (freq[r] || 0) + 1;
+  const counts = Object.entries(freq)
+    .map(([r, c]) => [+r, c])
+    .sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+  if (isFlush && isStraight) return { rank: 9, tb: [straightHigh], name: '스트레이트 플러시' };
+  if (counts[0][1] === 4) return { rank: 8, tb: [counts[0][0], counts[1][0]], name: '포카드' };
+  if (counts[0][1] === 3 && counts[1][1] === 2) return { rank: 7, tb: [counts[0][0], counts[1][0]], name: '풀하우스' };
+  if (isFlush) return { rank: 6, tb: ranks, name: '플러시' };
+  if (isStraight) return { rank: 5, tb: [straightHigh], name: '스트레이트' };
+  if (counts[0][1] === 3) return { rank: 4, tb: counts.map(c => c[0]), name: '트리플' };
+  if (counts[0][1] === 2 && counts[1][1] === 2) return { rank: 3, tb: counts.map(c => c[0]), name: '투페어' };
+  if (counts[0][1] === 2) return { rank: 2, tb: counts.map(c => c[0]), name: '원페어' };
+  return { rank: 1, tb: ranks, name: '하이카드' };
+}
+
+function evaluateHand(cards) {
+  if (!cards || cards.length < 1) return { rank: 0, tb: [], name: '없음' };
+  const k = Math.min(5, cards.length);
+  const combos = getCombinations(cards, k);
+  let best = null;
+  for (const combo of combos) {
+    const sc = scoreHand5(combo);
+    if (!best || compareHands(sc, best) > 0) best = sc;
+  }
+  return best;
+}
+
+function compareHands(a, b) {
+  if (a.rank !== b.rank) return a.rank - b.rank;
+  for (let i = 0; i < Math.max(a.tb.length, b.tb.length); i++) {
+    const av = a.tb[i] || 0, bv = b.tb[i] || 0;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
+}
+
+function computeSidePots(players) {
+  const withBets = players.filter(p => p.totalBetThisHand > 0)
+    .sort((a, b) => a.totalBetThisHand - b.totalBetThisHand);
+  const pots = [];
+  let prevLevel = 0;
+  for (const sp of withBets) {
+    if (sp.totalBetThisHand <= prevLevel) continue;
+    const level = sp.totalBetThisHand;
+    const amount = players.reduce((sum, q) =>
+      sum + Math.min(Math.max(0, q.totalBetThisHand - prevLevel), level - prevLevel), 0);
+    if (amount > 0) {
+      const eligible = players
+        .filter(q => !q.folded && q.totalBetThisHand >= level)
+        .map(q => q.nickname);
+      pots.push({ amount, eligible });
+    }
+    prevLevel = level;
+  }
+  return pots;
+}
+
+// ── 홀덤 게임 플로우 ─────────────────────────────────────────
+
+function emitHoldemState(room) {
+  const h = room.holdem;
+  if (!h) return;
+  const showAll = h.phase === 'showdown';
+  const stateBase = {
+    roomId: room.id,
+    phase: h.phase,
+    communityCards: h.communityCards,
+    pot: h.pot,
+    sidePots: h.sidePots || [],
+    dealerIndex: h.dealerIndex,
+    smallBlindIndex: h.smallBlindIndex,
+    bigBlindIndex: h.bigBlindIndex,
+    actionIndex: h.actionIndex,
+    currentBet: h.currentBet,
+    minRaise: h.minRaise,
+    smallBlindAmount: h.smallBlindAmount,
+    bigBlindAmount: h.bigBlindAmount,
+    buyIn: room.buyIn || 1000,
+    playersToActCount: h.playersToAct ? h.playersToAct.length : 0,
+  };
+  const basePlayers = room.players.map((p, idx) => ({
+    idx,
+    nickname: p.nickname,
+    chips: p.chips,
+    bet: p.bet,
+    totalBetThisHand: p.totalBetThisHand,
+    folded: p.folded,
+    allIn: p.allIn,
+    isDisconnected: p.isDisconnected || false,
+    holeCards: showAll && !p.folded ? (p.holeCards || []) : null,
+  }));
+  room.players.forEach((p, myIdx) => {
+    const personalPlayers = basePlayers.map((bp, i) => ({
+      ...bp,
+      holeCards: showAll ? bp.holeCards : (i === myIdx ? (p.holeCards || []) : null),
+    }));
+    // 내 현재 족보
+    let myHandName = null;
+    if (p.holeCards && p.holeCards.length === 2 && h.communityCards.length > 0) {
+      myHandName = evaluateHand([...p.holeCards, ...h.communityCards]).name;
+    } else if (p.holeCards && p.holeCards.length === 2) {
+      myHandName = evaluateHand([...p.holeCards]).name;
+    }
+    io.to(p.socketId).emit('holdem_state', { ...stateBase, yourIndex: myIdx, myHandName, players: personalPlayers });
+  });
+  room.spectators.forEach(spec => {
+    const fullPlayers = basePlayers.map((bp, i) => ({
+      ...bp,
+      holeCards: room.players[i].holeCards || [],
+    }));
+    io.to(spec.socketId).emit('holdem_state', { ...stateBase, yourIndex: -1, isSpectator: true, players: fullPlayers });
+  });
+}
+
+function clearHoldemTimer(room) {
+  if (room.holdem && room.holdem.actionTimer) {
+    clearTimeout(room.holdem.actionTimer);
+    room.holdem.actionTimer = null;
+  }
+}
+
+function startHoldemTimer(room) {
+  clearHoldemTimer(room);
+  const h = room.holdem;
+  if (!h || h.actionIndex < 0) return;
+  const cp = room.players[h.actionIndex];
+  if (!cp || cp.folded || cp.allIn) return;
+  io.to(room.id).emit('holdem_timer', {
+    playerIndex: h.actionIndex, nickname: cp.nickname, seconds: 30, timestamp: Date.now(),
+  });
+  h.actionTimer = setTimeout(() => {
+    if (room.status !== 'playing') return;
+    processHoldemAction(room, h.actionIndex, 'fold', 0);
+  }, 30000);
+}
+
+function postBlind(room, playerIdx, amount) {
+  const p = room.players[playerIdx];
+  if (!p || p.chips <= 0) return;
+  const actual = Math.min(amount, p.chips);
+  p.chips -= actual;
+  p.bet += actual;
+  p.totalBetThisHand += actual;
+  room.holdem.pot += actual;
+  if (p.chips === 0) p.allIn = true;
+}
+
+function startHoldemHand(room) {
+  const h = room.holdem;
+  if (!h || room.status !== 'playing') return;
+  const activeIdxs = room.players.map((p, i) => ({ p, i })).filter(({ p }) => p.chips > 0).map(({ i }) => i);
+  if (activeIdxs.length < 2) { endHoldemGame(room); return; }
+
+  for (const p of room.players) {
+    p.holeCards = [];
+    p.bet = 0;
+    p.totalBetThisHand = 0;
+    p.folded = p.chips === 0;
+    p.allIn = false;
+  }
+  h.deck = shuffleDeck(createDeck());
+  h.communityCards = [];
+  h.phase = 'preflop';
+  h.pot = 0;
+  h.sidePots = [];
+  h.currentBet = h.bigBlindAmount;
+  h.minRaise = h.bigBlindAmount;
+  h.playersToAct = [];
+  h.actionIndex = -1;
+
+  const n = activeIdxs.length;
+  // Rotate dealer
+  if (h.dealerIndex < 0) {
+    h.dealerIndex = activeIdxs[Math.floor(Math.random() * n)];
+  } else {
+    const prevPos = activeIdxs.indexOf(h.dealerIndex);
+    const startPos = prevPos === -1 ? 0 : prevPos;
+    h.dealerIndex = activeIdxs[(startPos + 1) % n];
+  }
+  const dealerPos = activeIdxs.indexOf(h.dealerIndex);
+  let sbIdx, bbIdx;
+  if (n === 2) {
+    sbIdx = h.dealerIndex;
+    bbIdx = activeIdxs[(dealerPos + 1) % n];
+  } else {
+    sbIdx = activeIdxs[(dealerPos + 1) % n];
+    bbIdx = activeIdxs[(dealerPos + 2) % n];
+  }
+  h.smallBlindIndex = sbIdx;
+  h.bigBlindIndex = bbIdx;
+
+  postBlind(room, sbIdx, h.smallBlindAmount);
+  postBlind(room, bbIdx, h.bigBlindAmount);
+
+  for (const pi of activeIdxs) {
+    room.players[pi].holeCards = [h.deck.pop(), h.deck.pop()];
+  }
+
+  // playersToAct for preflop: UTG → ... → BB
+  const bbPos = activeIdxs.indexOf(bbIdx);
+  const toAct = [];
+  for (let i = 1; i <= n; i++) {
+    const idx = activeIdxs[(bbPos + i) % n];
+    if (!room.players[idx].allIn) toAct.push(idx);
+  }
+  h.playersToAct = toAct;
+  h.actionIndex = toAct.length > 0 ? toAct[0] : -1;
+
+  if (toAct.length === 0) { runItOut(room); return; }
+  emitHoldemState(room);
+  startHoldemTimer(room);
+}
+
+function processHoldemAction(room, playerIdx, action, raiseAmount) {
+  const h = room.holdem;
+  if (!h || room.status !== 'playing') return;
+  const p = room.players[playerIdx];
+  if (!p || p.folded || p.allIn) return;
+  if (!h.playersToAct.length || h.playersToAct[0] !== playerIdx) return;
+
+  clearHoldemTimer(room);
+  h.playersToAct.shift();
+
+  if (action === 'fold') {
+    p.folded = true;
+    h.playersToAct = h.playersToAct.filter(i => !room.players[i].folded);
+    const remaining = room.players.filter(q => !q.folded);
+    if (remaining.length === 1) { endHandEarly(room, remaining[0]); return; }
+
+  } else if (action === 'check') {
+    // valid only if p.bet >= h.currentBet (client enforces)
+
+  } else if (action === 'call') {
+    const toCall = Math.min(h.currentBet - p.bet, p.chips);
+    p.chips -= toCall; p.bet += toCall; p.totalBetThisHand += toCall; h.pot += toCall;
+    if (p.chips === 0) { p.allIn = true; h.playersToAct = h.playersToAct.filter(i => i !== playerIdx); }
+
+  } else if (action === 'raise' || action === 'allin') {
+    let raiseTo;
+    if (action === 'allin') {
+      raiseTo = p.bet + p.chips;
+    } else {
+      raiseTo = Math.min(Math.max(raiseAmount, h.currentBet + h.minRaise), p.bet + p.chips);
+    }
+    const toAdd = Math.min(raiseTo - p.bet, p.chips);
+    p.chips -= toAdd; p.bet += toAdd; p.totalBetThisHand += toAdd; h.pot += toAdd;
+
+    if (p.bet > h.currentBet) {
+      h.minRaise = Math.max(h.bigBlindAmount, p.bet - h.currentBet);
+      h.currentBet = p.bet;
+      // Reopen action
+      const nPlayers = room.players.length;
+      const newToAct = [];
+      for (let i = 1; i < nPlayers; i++) {
+        const idx = (playerIdx + i) % nPlayers;
+        if (!room.players[idx].folded && !room.players[idx].allIn) newToAct.push(idx);
+      }
+      h.playersToAct = newToAct;
+    }
+    if (p.chips === 0) { p.allIn = true; h.playersToAct = h.playersToAct.filter(i => i !== playerIdx); }
+  }
+
+  io.to(room.id).emit('holdem_action_done', {
+    playerIdx, nickname: p.nickname, action,
+    betAmount: p.bet, pot: h.pot, chips: p.chips,
+  });
+
+  if (h.playersToAct.length === 0) {
+    advanceHoldemPhase(room);
+  } else {
+    h.actionIndex = h.playersToAct[0];
+    emitHoldemState(room);
+    startHoldemTimer(room);
+  }
+}
+
+function advanceHoldemPhase(room) {
+  const h = room.holdem;
+  clearHoldemTimer(room);
+  for (const p of room.players) p.bet = 0;
+  h.currentBet = 0;
+  h.minRaise = h.bigBlindAmount;
+
+  if (h.phase === 'preflop') {
+    h.communityCards.push(h.deck.pop(), h.deck.pop(), h.deck.pop());
+    h.phase = 'flop';
+  } else if (h.phase === 'flop') {
+    h.communityCards.push(h.deck.pop());
+    h.phase = 'turn';
+  } else if (h.phase === 'turn') {
+    h.communityCards.push(h.deck.pop());
+    h.phase = 'river';
+  } else if (h.phase === 'river') {
+    startHoldemShowdown(room);
+    return;
+  }
+
+  const canBet = room.players.filter(q => !q.folded && !q.allIn);
+  if (canBet.length <= 1) {
+    emitHoldemState(room);
+    setTimeout(() => runItOut(room), 800);
+    return;
+  }
+
+  // First actor: left of dealer, non-folded, non-allIn
+  const nPlayers = room.players.length;
+  let firstIdx = -1;
+  for (let i = 1; i <= nPlayers; i++) {
+    const idx = (h.dealerIndex + i) % nPlayers;
+    if (!room.players[idx].folded && !room.players[idx].allIn) { firstIdx = idx; break; }
+  }
+  if (firstIdx === -1) { runItOut(room); return; }
+
+  const toAct = [];
+  for (let i = 0; i < nPlayers; i++) {
+    const idx = (firstIdx + i) % nPlayers;
+    if (!room.players[idx].folded && !room.players[idx].allIn) toAct.push(idx);
+  }
+  h.playersToAct = toAct;
+  h.actionIndex = toAct[0];
+  emitHoldemState(room);
+  startHoldemTimer(room);
+}
+
+function runItOut(room) {
+  const h = room.holdem;
+  clearHoldemTimer(room);
+  while (h.communityCards.length < 5) {
+    if (h.communityCards.length === 0) {
+      h.communityCards.push(h.deck.pop(), h.deck.pop(), h.deck.pop());
+      h.phase = 'flop';
+    } else if (h.communityCards.length === 3) {
+      h.communityCards.push(h.deck.pop());
+      h.phase = 'turn';
+    } else if (h.communityCards.length === 4) {
+      h.communityCards.push(h.deck.pop());
+      h.phase = 'river';
+    } else break;
+  }
+  emitHoldemState(room);
+  setTimeout(() => startHoldemShowdown(room), 1500);
+}
+
+function startHoldemShowdown(room) {
+  const h = room.holdem;
+  h.phase = 'showdown';
+  clearHoldemTimer(room);
+  h.sidePots = computeSidePots(room.players);
+
+  const evals = {};
+  for (const p of room.players) {
+    if (!p.folded && p.holeCards && p.holeCards.length > 0) {
+      evals[p.nickname] = evaluateHand([...p.holeCards, ...h.communityCards]);
+    }
+  }
+
+  const winnings = {};
+  for (const p of room.players) winnings[p.nickname] = 0;
+
+  for (const pot of h.sidePots) {
+    const eligible = pot.eligible.filter(nick => evals[nick]);
+    if (!eligible.length) continue;
+    if (eligible.length === 1) { winnings[eligible[0]] += pot.amount; continue; }
+    let bestSc = null, winners = [];
+    for (const nick of eligible) {
+      const sc = evals[nick];
+      const cmp = bestSc ? compareHands(sc, bestSc) : 1;
+      if (cmp > 0) { bestSc = sc; winners = [nick]; }
+      else if (cmp === 0) winners.push(nick);
+    }
+    const share = Math.floor(pot.amount / winners.length);
+    const rem = pot.amount - share * winners.length;
+    winners.forEach((nick, i) => { winnings[nick] += share + (i === 0 ? rem : 0); });
+  }
+
+  for (const p of room.players) p.chips += winnings[p.nickname] || 0;
+
+  const showdownResult = room.players.map(p => ({
+    nickname: p.nickname,
+    holeCards: p.folded ? null : (p.holeCards || []),
+    handScore: evals[p.nickname] || null,
+    winAmount: winnings[p.nickname] || 0,
+    chips: p.chips,
+    folded: p.folded,
+  }));
+
+  emitHoldemState(room);
+  io.to(room.id).emit('holdem_showdown', { roomId: room.id, showdownResult, sidePots: h.sidePots });
+
+  const stillActive = room.players.filter(p => p.chips > 0);
+  if (stillActive.length <= 1) {
+    setTimeout(() => endHoldemGame(room), 3000);
+  } else {
+    setTimeout(() => startHoldemHand(room), 4000);
+  }
+}
+
+function endHandEarly(room, winnerPlayer) {
+  clearHoldemTimer(room);
+  const h = room.holdem;
+  winnerPlayer.chips += h.pot;
+  const wonAmount = h.pot;
+  h.pot = 0;
+  h.sidePots = [];
+  io.to(room.id).emit('holdem_hand_end', {
+    roomId: room.id, winner: winnerPlayer.nickname, wonAmount, reason: 'fold',
+    players: room.players.map(p => ({ nickname: p.nickname, chips: p.chips, folded: p.folded })),
+  });
+  emitHoldemState(room);
+  const stillActive = room.players.filter(p => p.chips > 0);
+  if (stillActive.length <= 1) {
+    setTimeout(() => endHoldemGame(room), 2000);
+  } else {
+    setTimeout(() => startHoldemHand(room), 3000);
+  }
+}
+
+async function endHoldemGame(room) {
+  clearHoldemTimer(room);
+  room.status = 'finished';
+  const winner = room.players.find(p => p.chips > 0);
+  const losers = room.players.filter(p => p.chips === 0);
+  if (winner) {
+    await addCoins(winner.nickname, winner.chips);
+    await addHoldemWin(winner.nickname);
+  }
+  for (const loser of losers) await addHoldemLose(loser.nickname);
+  const results = await Promise.all(room.players.map(async p => {
+    const info = await getCoinsInfo(p.nickname);
+    const hr = await getHoldemRecord(p.nickname);
+    return { nickname: p.nickname, chips: p.chips, isWinner: !!(winner && p.nickname === winner.nickname), coins: info.coins, holdemRecord: hr };
+  }));
+  io.to(room.id).emit('holdem_game_over', { roomId: room.id, winner: winner ? winner.nickname : null, results });
+  broadcastRoomList();
+  setTimeout(() => { if (rooms.has(room.id)) rooms.delete(room.id); }, 30000);
+}
+
 // ── 타이머 ────────────────────────────────────────────────────
 function startTurnTimer(room) {
   if (!room.useTimer) return;
@@ -374,10 +977,12 @@ function broadcastRoomList() {
         hasPassword: !!room.password,
         status: room.status,
         playerCount: room.players.length,
+        maxPlayers: room.gameType === 'holdem' ? 6 : 2,
         players: room.players.map(p => p.nickname),
         spectatorCount: room.spectators.length,
         useTimer: room.useTimer !== false,
         gameType: room.gameType || 'gomoku',
+        buyIn: room.buyIn,
       });
     }
   }
@@ -403,32 +1008,54 @@ async function broadcastLobbyState(room) {
     spectators: spectatorData,
     hostSocketId: room.hostSocketId,
     gameType: room.gameType || 'gomoku',
+    buyIn: room.buyIn,
+    maxPlayers: room.gameType === 'holdem' ? 6 : 2,
   });
 }
 
 function createRoom(roomId, options = {}) {
   const gameType = options.gameType || 'gomoku';
+  const buyIn = options.buyIn || 1000;
+  const blinds = HOLDEM_BLINDS[buyIn] || HOLDEM_BLINDS[1000];
   const room = {
     id: roomId,
     name: options.name || `방 ${roomId}`,
     password: options.password || null,
     hostSocketId: options.hostSocketId || null,
     gameType,
+    buyIn: gameType === 'holdem' ? buyIn : undefined,
     players: [],
     readySet: new Set(),
-    board: gameType === 'othello' ? createOthelloBoard() : createBoard(),
+    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' ? null : createBoard()),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
     useTimer: options.useTimer !== false,
     isPaused: false,
     chat: [],
-    spectators: [],   // { socketId, nickname } — 대기실+게임 관전 통합
+    spectators: [],
     moveHistory: [],
     pendingUndo: null,
     pendingSurrender: null,
     turnTimer: null,
     rematchRequests: null,
+    holdem: gameType === 'holdem' ? {
+      phase: 'waiting',
+      deck: [],
+      communityCards: [],
+      dealerIndex: -1,
+      smallBlindIndex: -1,
+      bigBlindIndex: -1,
+      actionIndex: -1,
+      playersToAct: [],
+      currentBet: 0,
+      minRaise: blinds.bb,
+      pot: 0,
+      sidePots: [],
+      smallBlindAmount: blinds.sb,
+      bigBlindAmount: blinds.bb,
+      actionTimer: null,
+    } : null,
   };
   rooms.set(roomId, room);
   return room;
@@ -468,6 +1095,39 @@ io.on('connection', (socket) => {
     socket.emit('your_record', rec);
   });
 
+  // ── 재화 정보 요청 ────────────────────────────────────────────
+  socket.on('get_coins', async ({ nickname }) => {
+    if (!nickname) return;
+    const info = await getCoinsInfo(nickname);
+    socket.emit('coins_info', info);
+  });
+
+  // ── 출석 체크 ─────────────────────────────────────────────────
+  socket.on('attendance_claim', async ({ nickname }) => {
+    if (!nickname) return;
+    try {
+      const rec = await Record.findOne({ nickname });
+      if (!rec) return;
+
+      const todayMidnight = todayKST();
+      if (rec.lastAttendance && rec.lastAttendance >= todayMidnight) {
+        socket.emit('attendance_result', { ok: false, reason: '오늘 이미 출석했습니다.' });
+        return;
+      }
+
+      const reward = rollAttendanceBox();
+      rec.coins = (rec.coins || 0) + reward.amount;
+      if (rec.coins > 0) rec.coinsEmptyAt = null;
+      rec.lastAttendance = new Date();
+      await rec.save();
+
+      socket.emit('attendance_result', { ok: true, ...reward, coins: rec.coins });
+    } catch (err) {
+      console.error('attendance_claim error:', err.message);
+      socket.emit('attendance_result', { ok: false, reason: '오류가 발생했습니다.' });
+    }
+  });
+
   // ── 방 목록 요청 ─────────────────────────────────────────────
   socket.on('get_room_list', () => {
     broadcastRoomList();
@@ -493,7 +1153,7 @@ io.on('connection', (socket) => {
   });
 
   // ── 방 생성 ──────────────────────────────────────────────────
-  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password, gameType }) => {
+  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password, gameType, buyIn }) => {
     const roomId = generateRoomId();
     const room = createRoom(roomId, {
       name: (roomName || `${nickname}의 방`).substring(0, 20),
@@ -501,11 +1161,14 @@ io.on('connection', (socket) => {
       useTimer: useTimer !== false,
       hostSocketId: socket.id,
       gameType: gameType || 'gomoku',
+      buyIn: buyIn || 1000,
     });
-    const rec = await getRecord(nickname);
+    await getRecord(nickname);
     room.players.push({
       socketId: socket.id, nickname, color: 1,
       stoneStyle: stoneStyle || 'classic',
+      chips: 0, holeCards: [], bet: 0, totalBetThisHand: 0,
+      folded: false, allIn: false, isDisconnected: false,
     });
     socket.join(roomId);
     socket.emit('room_created', { roomId });
@@ -529,16 +1192,20 @@ io.on('connection', (socket) => {
       if (room.spectators.find(s => s.socketId === socket.id)) return;
       room.spectators.push({ socketId: socket.id, nickname });
       socket.join(roomId);
-      const players = await Promise.all(room.players.map(async p => ({
-        nickname: p.nickname, color: p.color,
-        record: await getRecord(p.nickname), stoneStyle: p.stoneStyle || 'classic'
-      })));
-      socket.emit('spectate_start', {
-        roomId, board: room.board, players, turn: room.turn,
-        useTimer: room.useTimer !== false,
-        isPaused: room.isPaused,
-        spectatorCount: room.spectators.length,
-      });
+      if (room.gameType === 'holdem') {
+        emitHoldemState(room);
+      } else {
+        const players = await Promise.all(room.players.map(async p => ({
+          nickname: p.nickname, color: p.color,
+          record: await getRecord(p.nickname), stoneStyle: p.stoneStyle || 'classic'
+        })));
+        socket.emit('spectate_start', {
+          roomId, board: room.board, players, turn: room.turn,
+          useTimer: room.useTimer !== false,
+          isPaused: room.isPaused,
+          spectatorCount: room.spectators.length,
+        });
+      }
       io.to(roomId).emit('spectator_update', { count: room.spectators.length });
       broadcastRoomList();
       return;
@@ -559,11 +1226,15 @@ io.on('connection', (socket) => {
         return;
       }
 
-      if (room.players.length < 2) {
+      const maxPlayers = room.gameType === 'holdem' ? 6 : 2;
+      if (room.players.length < maxPlayers) {
         // 플레이어 슬롯 입장
         room.players.push({
-          socketId: socket.id, nickname, color: 2,
+          socketId: socket.id, nickname,
+          color: room.players.length + 1,
           stoneStyle: stoneStyle || 'classic',
+          chips: 0, holeCards: [], bet: 0, totalBetThisHand: 0,
+          folded: false, allIn: false, isDisconnected: false,
         });
         socket.join(roomId);
         socket.emit('room_joined', { roomId });
@@ -610,15 +1281,20 @@ io.on('connection', (socket) => {
   socket.on('move_to_player', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'waiting') return;
-    if (room.players.length >= 2) { socket.emit('join_error', { msg: '플레이어 슬롯이 꽉 찼습니다.' }); return; }
+    const maxP = room.gameType === 'holdem' ? 6 : 2;
+    if (room.players.length >= maxP) { socket.emit('join_error', { msg: '플레이어 슬롯이 꽉 찼습니다.' }); return; }
 
     const specIdx = room.spectators.findIndex(s => s.socketId === socket.id);
     if (specIdx === -1) return;
 
     const spec = room.spectators[specIdx];
     room.spectators.splice(specIdx, 1);
-    const color = room.players.length === 0 ? 1 : 2;
-    room.players.push({ socketId: socket.id, nickname: spec.nickname, color, stoneStyle: 'classic' });
+    const color = room.players.length + 1;
+    room.players.push({
+      socketId: socket.id, nickname: spec.nickname, color, stoneStyle: 'classic',
+      chips: 0, holeCards: [], bet: 0, totalBetThisHand: 0,
+      folded: false, allIn: false, isDisconnected: false,
+    });
 
     if (room.players.length === 1) room.hostSocketId = socket.id;
     await broadcastLobbyState(room);
@@ -643,13 +1319,41 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'waiting') return;
     if (room.hostSocketId !== socket.id) { socket.emit('join_error', { msg: '방장만 시작할 수 있습니다.' }); return; }
-    if (room.players.length < 2) { socket.emit('join_error', { msg: '플레이어가 2명이어야 합니다.' }); return; }
+    if (room.players.length < 2) { socket.emit('join_error', { msg: '플레이어가 2명 이상이어야 합니다.' }); return; }
 
-    // 방장 제외 나머지 플레이어 모두 준비 확인
     const nonHostPlayers = room.players.filter(p => p.socketId !== room.hostSocketId);
     const allReady = nonHostPlayers.every(p => room.readySet.has(p.socketId));
     if (!allReady) { socket.emit('join_error', { msg: '모든 플레이어가 준비되어야 합니다.' }); return; }
 
+    // ── 홀덤 시작 처리 ──────────────────────────────────────────
+    if (room.gameType === 'holdem') {
+      const buyIn = room.buyIn || 1000;
+      // 잔액 확인
+      for (const p of room.players) {
+        const info = await getCoinsInfo(p.nickname);
+        if (info.coins < buyIn) {
+          socket.emit('join_error', { msg: `${p.nickname} 님의 재화가 부족합니다. (필요: ${buyIn.toLocaleString()})` });
+          return;
+        }
+      }
+      // 바이인 차감
+      for (const p of room.players) {
+        const ok = await deductCoins(p.nickname, buyIn);
+        if (!ok) {
+          socket.emit('join_error', { msg: `${p.nickname} 님의 재화 차감에 실패했습니다.` });
+          return;
+        }
+        p.chips = buyIn;
+      }
+      room.status = 'playing';
+      room.readySet.clear();
+      room.holdem.phase = 'preflop';
+      broadcastRoomList();
+      startHoldemHand(room);
+      return;
+    }
+
+    // ── 기존 오목/오델로 시작 ─────────────────────────────────
     room.status = 'playing';
     room.readySet.clear();
     await emitGameStart(room);
@@ -985,6 +1689,22 @@ io.on('connection', (socket) => {
     broadcastRoomList();
   });
 
+  // ── 홀덤 액션 ────────────────────────────────────────────────
+  socket.on('holdem_action', ({ roomId, action, amount }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || room.gameType !== 'holdem') return;
+    const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
+    if (playerIdx === -1) return;
+    processHoldemAction(room, playerIdx, action, amount || 0);
+  });
+
+  // ── 홀덤 전적 요청 ───────────────────────────────────────────
+  socket.on('request_holdem_record', async ({ nickname }) => {
+    if (!nickname) return;
+    const hr = await getHoldemRecord(nickname);
+    socket.emit('holdem_record', hr);
+  });
+
   // ── 채팅 ─────────────────────────────────────────────────────
   socket.on('chat', ({ roomId, nickname, message }) => {
     if (!message || message.trim().length === 0) return;
@@ -1046,6 +1766,20 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
   }
 
   if (room.status === 'playing') {
+    // ── 홀덤: 연결 끊김 → 자동 폴드 ──────────────────────────
+    if (room.gameType === 'holdem') {
+      const p = room.players[playerIdx];
+      p.isDisconnected = true;
+      io.to(roomId).emit('holdem_player_disconnect', { nickname: p.nickname, playerIdx });
+      // 현재 액션 순서면 자동 폴드
+      const h = room.holdem;
+      if (h && h.playersToAct.length > 0 && h.playersToAct[0] === playerIdx) {
+        processHoldemAction(room, playerIdx, 'fold', 0);
+      }
+      return;
+    }
+
+    // ── 오목/오델로: 기존 처리 ───────────────────────────────
     const loser = room.players[playerIdx];
     const winner = room.players.find(p => p.socketId !== socketId);
     clearTurnTimer(room);
