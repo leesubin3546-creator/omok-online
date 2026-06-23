@@ -2961,7 +2961,7 @@ function renderHoldemTable(state) {
   table.querySelectorAll('.hd-seat').forEach(el => el.remove());
 
   const players = state.players || [];
-  const myIdx = players.findIndex(p => p.nickname === myNickname);
+  const myIdx = (state.yourIndex !== undefined && state.yourIndex >= 0) ? state.yourIndex : players.findIndex(p => p.nickname === myNickname);
   const n = players.length;
 
   players.forEach((p, serverIdx) => {
@@ -3016,7 +3016,7 @@ function renderHoldemTable(state) {
   });
 
   // 내 카드 & 상태 업데이트
-  const me = players.find(p => p.nickname === myNickname);
+  const me = myIdx >= 0 ? players[myIdx] : null;
   if (me) {
     let myCardsHtml = '';
     if (me.holeCards && me.holeCards.length) {
@@ -3043,9 +3043,10 @@ function renderHoldemTable(state) {
 }
 
 function hdUpdateActionBtns(state) {
-  const myIdx = (state.players || []).findIndex(p => p.nickname === myNickname);
+  const players = state.players || [];
+  const myIdx = (state.yourIndex !== undefined && state.yourIndex >= 0) ? state.yourIndex : players.findIndex(p => p.nickname === myNickname);
   const isMyTurn = state.actionIndex === myIdx && myIdx >= 0;
-  const me = myIdx >= 0 ? state.players[myIdx] : null;
+  const me = myIdx >= 0 ? players[myIdx] : null;
 
   const setBtns = (enabled) => {
     ['hd-btn-fold','hd-btn-check','hd-btn-call','hd-btn-raise','hd-btn-allin'].forEach(id => {
