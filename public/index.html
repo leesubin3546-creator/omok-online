@@ -521,13 +521,194 @@
   }
   .game-type-picker label:hover { border-color: var(--accent2); }
   .game-type-picker input[type=radio] { accent-color: var(--accent); }
+
+  /* ── 재화 / 출석 ─────────────────────────────────────── */
+  #coins-display {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.85rem; color: var(--text2);
+  }
+  #coins-display .coins-amount {
+    color: var(--accent2); font-weight: 800; font-size: 0.97rem;
+  }
+  .coins-card {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+  .coins-left { display: flex; flex-direction: column; gap: 4px; }
+  .coins-label { font-size: 0.75rem; color: var(--text2); font-weight: 600; }
+  .coins-value { font-size: 1.45rem; font-weight: 800; color: var(--accent2); letter-spacing: 1px; }
+  .coins-cooldown { font-size: 0.75rem; color: #b05a00; }
+  .btn-attendance {
+    padding: 9px 18px; border-radius: 10px;
+    background: linear-gradient(135deg, #c8881a, #e6a020);
+    color: #fff; font-weight: 700; font-size: 0.88rem;
+    border: none; cursor: pointer; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-attendance:hover { filter: brightness(1.08); }
+  .btn-attendance:disabled {
+    background: var(--card); color: var(--text2); cursor: not-allowed; filter: none;
+  }
+  /* 출석 상자 모달 */
+  #attendance-modal .modal-box { align-items: center; text-align: center; gap: 18px; }
+  .box-grade {
+    font-size: 1.1rem; font-weight: 700; padding: 5px 18px;
+    border-radius: 20px; letter-spacing: 1px;
+  }
+  .box-grade.일반     { background: #e8e0d0; color: #7a5828; }
+  .box-grade.고급     { background: #d4edda; color: #1a6b34; }
+  .box-grade.희귀     { background: #cce5ff; color: #004085; }
+  .box-grade.전설     { background: #fff3cd; color: #856404; }
+  .box-grade.레전더리 { background: linear-gradient(135deg,#ffd700,#ff8c00); color: #fff; }
+  .box-amount {
+    font-size: 2.2rem; font-weight: 900; color: var(--accent);
+    animation: pop-in 0.35s cubic-bezier(0.175,0.885,0.32,1.275);
+  }
+  @keyframes pop-in {
+    0%   { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+  .box-coins-after { font-size: 0.85rem; color: var(--text2); }
+
+  /* ── 홀덤 ───────────────────────────────────────────────── */
+  #holdem-screen.active {
+    flex-direction: row; align-items: flex-start;
+    justify-content: center; flex-wrap: wrap; gap: 20px; padding-bottom: 40px;
+  }
+  #holdem-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; max-width:680px; width:100%; }
+  #poker-table {
+    position:relative; width:640px; height:375px;
+    background: radial-gradient(ellipse at center, #2d8a4e 0%, #1a6b34 65%, #0f4a24 100%);
+    border-radius:50%; border:8px solid #8B6914;
+    box-shadow: 0 0 0 3px #6B4F10, 0 8px 40px rgba(0,0,0,0.45);
+    overflow:visible; flex-shrink:0;
+  }
+  .hd-seat {
+    position:absolute; transform:translate(-50%,-50%);
+    display:flex; flex-direction:column; align-items:center; gap:3px; z-index:5;
+  }
+  .hd-seat-info {
+    background:rgba(0,0,0,0.78); border-radius:10px; padding:5px 10px;
+    text-align:center; border:1.5px solid rgba(255,255,255,0.15); min-width:82px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .hd-seat-info.active-turn { border-color:#f0b830; box-shadow:0 0 14px rgba(240,184,48,0.65); }
+  .hd-seat-info.folded { opacity:0.38; }
+  .hd-seat-info.disconnected { opacity:0.32; border-color:rgba(255,80,80,0.5); }
+  .hd-seat-name { font-size:0.76rem; font-weight:700; color:#fff; white-space:nowrap; max-width:110px; overflow:hidden; text-overflow:ellipsis; }
+  .hd-seat-chips { font-size:0.68rem; color:#f0b830; font-weight:600; }
+  .hd-seat-bet-bubble { background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:1px 7px; font-size:0.62rem; color:#aef0c0; font-weight:600; display:none; }
+  .hd-seat-bet-bubble.show { display:block; }
+  .hd-seat-tag { display:inline-block; font-size:0.56rem; padding:0 4px; border-radius:3px; font-weight:800; margin-left:3px; vertical-align:middle; }
+  .hd-seat-tag.dealer { background:#f0b830; color:#000; }
+  .hd-seat-tag.sb { background:#5bc0de; color:#000; }
+  .hd-seat-tag.bb { background:#d9534f; color:#fff; }
+  .hd-seat-cards { display:flex; gap:2px; margin-top:2px; }
+  #hd-center {
+    position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);
+    display:flex; flex-direction:column; align-items:center; gap:6px; z-index:3; pointer-events:none;
+  }
+  #hd-community-cards { display:flex; gap:5px; }
+  #hd-pot-main { font-size:1rem; font-weight:800; color:#f0e060; text-shadow:0 1px 4px rgba(0,0,0,0.7); }
+  #hd-phase-badge { font-size:0.66rem; background:rgba(0,0,0,0.55); color:#9ef0b8; padding:2px 10px; border-radius:10px; letter-spacing:1px; font-weight:700; }
+  #hd-side-pots-wrap { display:flex; gap:4px; flex-wrap:wrap; justify-content:center; }
+  .hd-side-pot-chip { font-size:0.6rem; background:rgba(255,255,255,0.15); color:#fff; border-radius:7px; padding:1px 7px; border:1px solid rgba(255,255,255,0.25); }
+  /* Cards */
+  .hd-card { width:34px; height:48px; background:#fff; border-radius:4px; border:1px solid #ccc; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:800; box-shadow:0 2px 4px rgba(0,0,0,0.2); position:relative; flex-shrink:0; user-select:none; }
+  .hd-card.red { color:#cc0000; }
+  .hd-card.black { color:#111; }
+  .hd-card.back { background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%); border-color:#1e3a8a; }
+  .hd-card.back::after { content:'♦'; font-size:1rem; color:rgba(255,255,255,0.18); position:absolute; }
+  .hd-card.empty { background:rgba(255,255,255,0.07); border:1.5px dashed rgba(255,255,255,0.28); box-shadow:none; }
+  .hd-card .card-rank { font-size:0.75rem; line-height:1.1; }
+  .hd-card .card-suit { font-size:0.62rem; line-height:1; }
+  #hd-community-cards .hd-card { width:44px; height:62px; }
+  #hd-community-cards .hd-card .card-rank { font-size:0.88rem; }
+  #hd-community-cards .hd-card .card-suit { font-size:0.72rem; }
+  #hd-my-hole-cards .hd-card { width:56px; height:78px; }
+  #hd-my-hole-cards .hd-card .card-rank { font-size:1.05rem; }
+  #hd-my-hole-cards .hd-card .card-suit { font-size:0.88rem; }
+  .hd-card.winner-card { box-shadow:0 0 12px 3px rgba(240,184,48,0.85); }
+  /* Action panel */
+  #hd-action-panel { width:100%; background:var(--surface); border-radius:var(--radius); padding:14px 18px; border:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
+  #hd-my-cards-row { display:flex; align-items:center; gap:14px; }
+  #hd-my-hole-cards { display:flex; gap:8px; }
+  #hd-my-hand-info { flex:1; }
+  #hd-my-hand-name { font-size:0.9rem; font-weight:700; color:var(--accent); }
+  #hd-my-chips { font-size:0.78rem; color:var(--text2); margin-top:2px; }
+  #hd-btn-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .hd-btn { padding:9px 13px; border-radius:9px; font-weight:700; font-size:0.83rem; cursor:pointer; border:none; transition:all 0.15s; white-space:nowrap; }
+  .hd-btn:disabled { opacity:0.32; cursor:not-allowed; }
+  .hd-btn-fold { background:#8a2020; color:#fff; }
+  .hd-btn-fold:hover:not(:disabled) { filter:brightness(1.2); }
+  .hd-btn-check { background:#2a6e2a; color:#fff; }
+  .hd-btn-check:hover:not(:disabled) { filter:brightness(1.15); }
+  .hd-btn-call { background:var(--accent); color:#fff5e8; }
+  .hd-btn-call:hover:not(:disabled) { filter:brightness(1.12); }
+  .hd-btn-raise { background:var(--accent2); color:#fff; }
+  .hd-btn-raise:hover:not(:disabled) { filter:brightness(1.1); }
+  .hd-btn-allin { background:#5b21b6; color:#fff; }
+  .hd-btn-allin:hover:not(:disabled) { filter:brightness(1.2); }
+  #hd-raise-row { display:flex; align-items:center; gap:8px; }
+  #hd-raise-slider { flex:1; accent-color:var(--accent2); }
+  #hd-raise-amount { font-size:0.88rem; font-weight:700; color:var(--accent2); min-width:75px; text-align:right; }
+  .hd-preset-btn { font-size:0.68rem; padding:3px 6px; border-radius:5px; background:var(--card); border:1px solid var(--border); cursor:pointer; font-weight:600; color:var(--text); white-space:nowrap; }
+  .hd-preset-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+  /* Side panel */
+  #hd-side-panel { width:272px; display:flex; flex-direction:column; gap:11px; min-width:240px; }
+  #hd-status-bar { background:var(--surface); border-radius:10px; padding:10px 14px; text-align:center; font-size:0.88rem; color:var(--accent); font-weight:700; border:1px solid var(--border); }
+  #hd-timer-wrap { background:var(--surface); border-radius:10px; padding:8px 14px; border:1px solid var(--border); display:none; align-items:center; gap:10px; }
+  #hd-timer-wrap.show { display:flex; }
+  #hd-chat-box { background:var(--surface); border-radius:11px; border:1px solid var(--border); display:flex; flex-direction:column; height:200px; overflow:hidden; }
+  #hd-chat-messages { flex:1; overflow-y:auto; padding:10px 12px; font-size:0.8rem; display:flex; flex-direction:column; gap:3px; }
+  #hd-chat-messages::-webkit-scrollbar { width:4px; }
+  #hd-chat-messages::-webkit-scrollbar-thumb { background:#c4a070; border-radius:4px; }
+  /* Holdem lobby grid */
+  .lobby-players.holdem-lobby { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width:520px) { .lobby-players.holdem-lobby { grid-template-columns:1fr 1fr; } }
+  /* Badges */
+  .room-badge-holdem { background:rgba(91,33,182,0.12); color:#5b21b6; border:1px solid rgba(91,33,182,0.3); }
+  /* Buy-in selector */
+  #modal-buyin-row { display:none; }
+  #modal-buyin-row.show { display:flex; flex-direction:column; gap:5px; }
+  .buyin-opts { display:flex; gap:8px; }
+  .buyin-opt { flex:1; text-align:center; padding:8px 4px; border-radius:9px; border:1.5px solid var(--border); cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text2); background:var(--card); transition:all 0.15s; }
+  .buyin-opt.selected { border-color:var(--accent); background:rgba(122,74,21,0.1); color:var(--accent); }
+  /* Game over overlay */
+  #hd-gameover-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:300; align-items:center; justify-content:center; }
+  #hd-gameover-overlay.show { display:flex; }
+  #hd-gameover-box { background:var(--surface); border-radius:var(--radius); padding:36px 44px; max-width:520px; width:92%; border:1px solid var(--border); display:flex; flex-direction:column; gap:12px; text-align:center; box-shadow:var(--shadow); }
+  #hd-gameover-title { font-size:2rem; font-weight:700; }
+  .hd-result-row { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--card); border-radius:9px; font-size:0.85rem; border:1px solid var(--border); gap:8px; }
+  .hd-result-winner { color:#2a6e2a; font-weight:700; }
+  /* 족보 패널 */
+  #hd-hand-rank-panel { background:var(--surface); border-radius:11px; border:1px solid var(--border); padding:10px 12px; display:flex; flex-direction:column; gap:3px; }
+  #hd-hand-rank-panel .panel-title { font-size:0.72rem; font-weight:700; color:var(--text2); letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; }
+  .hr-row { display:flex; align-items:center; gap:7px; padding:3px 6px; border-radius:6px; font-size:0.76rem; color:var(--text2); transition:background 0.15s, color 0.15s; }
+  .hr-row.current { background:rgba(240,184,48,0.18); color:#f0b830; font-weight:700; }
+  .hr-row.current .hr-dot { background:#f0b830; box-shadow:0 0 6px rgba(240,184,48,0.6); }
+  .hr-dot { width:7px; height:7px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background 0.15s; }
+  .hr-label { flex:1; }
+  .hr-rank { font-size:0.65rem; color:var(--border); font-weight:600; }
+  .hr-row.current .hr-rank { color:#f0b830; opacity:0.75; }
+  @media (max-width:760px) {
+    #poker-table { width:100%; min-height:280px; }
+    #holdem-screen.active { flex-direction:column; align-items:center; }
+    #hd-side-panel { width:100%; max-width:480px; }
+    #holdem-wrap { max-width:100%; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>◉ 오목 온라인</h1>
-  <div id="player-info">접속자: <span id="header-nick">-</span></div>
+  <div style="display:flex;align-items:center;gap:18px;">
+    <div id="coins-display" style="display:none;">
+      💰 <span class="coins-amount" id="header-coins">0</span>
+    </div>
+    <div id="player-info">접속자: <span id="header-nick">-</span></div>
+  </div>
 </header>
 
 <!-- 닉네임 -->
@@ -544,6 +725,18 @@
 <!-- 로비 -->
 <div id="lobby-screen" class="screen">
   <div class="lobby-wrap">
+
+    <div class="card">
+      <div class="card-title">💰 재화 & 출석</div>
+      <div class="coins-card">
+        <div class="coins-left">
+          <div class="coins-label">보유 재화</div>
+          <div class="coins-value" id="lobby-coins">-</div>
+          <div class="coins-cooldown" id="coins-cooldown-msg" style="display:none;"></div>
+        </div>
+        <button class="btn-attendance" id="btn-attendance" onclick="claimAttendance()">🎁 출석 체크</button>
+      </div>
+    </div>
 
     <div class="card">
       <div class="card-title">나의 기록</div>
@@ -670,11 +863,20 @@
     <div class="modal-row">
       <div class="modal-label">게임 종류</div>
       <div class="game-type-picker">
-        <label><input type="radio" name="modal-game-type" value="gomoku" checked> ⚫ 오목 (렌주룰)</label>
-        <label><input type="radio" name="modal-game-type" value="othello"> 🟢 오델로</label>
+        <label><input type="radio" name="modal-game-type" value="gomoku" checked onchange="onModalGameTypeChange()"> ⚫ 오목 (렌주룰)</label>
+        <label><input type="radio" name="modal-game-type" value="othello" onchange="onModalGameTypeChange()"> 🟢 오델로</label>
+        <label><input type="radio" name="modal-game-type" value="holdem" onchange="onModalGameTypeChange()"> 🃏 텍사스 홀덤</label>
       </div>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
+    <div id="modal-buyin-row">
+      <div class="modal-label">바이인 (참가비)</div>
+      <div class="buyin-opts">
+        <div class="buyin-opt selected" data-buyin="1000" onclick="selectBuyIn(1000)">1,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 10/20</span></div>
+        <div class="buyin-opt" data-buyin="5000" onclick="selectBuyIn(5000)">5,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 50/100</span></div>
+        <div class="buyin-opt" data-buyin="10000" onclick="selectBuyIn(10000)">10,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 100/200</span></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;" id="modal-timer-row">
       <span style="font-size:0.85rem;color:var(--text2);">⏱ 30초 턴 타이머</span>
       <label class="timer-toggle">
         <input type="checkbox" id="modal-timer-cb" checked>
@@ -686,6 +888,17 @@
       <button class="btn-secondary" onclick="closeCreateRoomModal()">취소</button>
       <button class="btn-primary" onclick="submitCreateRoom()">만들기</button>
     </div>
+  </div>
+</div>
+
+<!-- 출석 상자 모달 -->
+<div id="attendance-modal" class="modal-backdrop">
+  <div class="modal-box" style="align-items:center;text-align:center;gap:18px;max-width:340px;">
+    <div class="modal-title">🎁 출석 보상</div>
+    <div class="box-grade" id="box-grade-label">일반</div>
+    <div class="box-amount" id="box-amount-label">+10,000</div>
+    <div class="box-coins-after" id="box-coins-after">현재 재화: 0</div>
+    <button class="btn-primary" onclick="closeAttendanceModal()">확인</button>
   </div>
 </div>
 
@@ -778,6 +991,76 @@
       <button class="btn-primary" onclick="requestRematch()" id="rematch-btn">재대결</button>
       <button class="btn-secondary" onclick="goLobby()">로비로</button>
     </div>
+  </div>
+</div>
+
+<!-- 홀덤 -->
+<div id="holdem-screen" class="screen">
+  <div id="holdem-wrap">
+    <div id="poker-table">
+      <div id="hd-center">
+        <div id="hd-community-cards"></div>
+        <div id="hd-pot-main">팟: 0</div>
+        <div id="hd-phase-badge">대기 중</div>
+        <div id="hd-side-pots-wrap"></div>
+      </div>
+    </div>
+    <div id="hd-action-panel">
+      <div id="hd-my-cards-row">
+        <div id="hd-my-hole-cards"></div>
+        <div id="hd-my-hand-info">
+          <div id="hd-my-hand-name">—</div>
+          <div id="hd-my-chips">칩: —</div>
+        </div>
+      </div>
+      <div id="hd-btn-row">
+        <button class="hd-btn hd-btn-fold"  id="hd-btn-fold"  onclick="holdemFold()"  disabled>폴드</button>
+        <button class="hd-btn hd-btn-check" id="hd-btn-check" onclick="holdemCheck()" disabled>체크</button>
+        <button class="hd-btn hd-btn-call"  id="hd-btn-call"  onclick="holdemCall()"  disabled>콜</button>
+        <button class="hd-btn hd-btn-raise" id="hd-btn-raise" onclick="holdemRaiseOpen()" disabled>레이즈</button>
+        <button class="hd-btn hd-btn-allin" id="hd-btn-allin" onclick="holdemAllIn()" disabled>올인</button>
+      </div>
+      <div id="hd-raise-row" style="display:none;">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button class="hd-preset-btn" onclick="hdSetPreset('min')">최소</button>
+          <button class="hd-preset-btn" onclick="hdSetPreset('half')">½팟</button>
+          <button class="hd-preset-btn" onclick="hdSetPreset('pot')">팟</button>
+          <button class="hd-preset-btn" onclick="hdSetPreset('allin')">올인</button>
+        </div>
+        <input type="range" id="hd-raise-slider" oninput="hdUpdateRaiseDisplay()" min="0" max="1000" value="0">
+        <div id="hd-raise-amount">0</div>
+        <button class="hd-btn hd-btn-raise" style="font-size:0.78rem;padding:6px 10px;" onclick="holdemRaise()">레이즈 확정</button>
+      </div>
+    </div>
+  </div>
+  <div id="hd-side-panel">
+    <div id="hd-status-bar">대기 중...</div>
+    <div id="hd-timer-wrap">
+      <div class="timer-bar-bg" style="flex:1;"><div class="timer-bar-fill" id="hd-timer-fill"></div></div>
+      <span id="hd-timer-text">30</span>
+    </div>
+    <div id="hd-chat-box">
+      <div id="hd-chat-messages"></div>
+      <div style="display:flex;gap:6px;padding:7px 10px;border-top:1px solid var(--border);">
+        <input id="hd-chat-input" type="text" placeholder="채팅..." maxlength="200">
+        <button class="btn-secondary btn-sm" onclick="hdSendChat()">전송</button>
+      </div>
+    </div>
+    <div id="hd-hand-rank-panel">
+      <div class="panel-title">족보</div>
+      <!-- JS로 렌더링 -->
+    </div>
+    <button class="btn-secondary btn-sm" onclick="hdGoLobby()">로비로 나가기</button>
+  </div>
+</div>
+
+<!-- 홀덤 게임오버 -->
+<div id="hd-gameover-overlay">
+  <div id="hd-gameover-box">
+    <div id="hd-gameover-title">토너먼트 종료</div>
+    <div id="hd-gameover-sub" style="color:var(--text2);font-size:0.9rem;"></div>
+    <div id="hd-gameover-results" style="display:flex;flex-direction:column;gap:6px;margin:6px 0;"></div>
+    <button class="btn-primary" onclick="hdGoLobby()">로비로</button>
   </div>
 </div>
 
@@ -1374,9 +1657,22 @@ function initSocket() {
     renderStonePreviews();
     selectStoneStyle(currentStoneStyle);
     socket.emit('request_record', { nickname: myNickname });
+    socket.emit('get_coins', { nickname: myNickname });
     socket.emit('get_room_list');
   });
   socket.on('your_record', (rec) => { updateRecordUI(rec); });
+
+  // ── 재화 정보 수신 ───────────────────────────────────────────
+  socket.on('coins_info', ({ coins, cooldownRemaining, attendanceAvailable }) => {
+    updateCoinsUI(coins, cooldownRemaining, attendanceAvailable);
+  });
+
+  // ── 출석 결과 수신 ───────────────────────────────────────────
+  socket.on('attendance_result', (data) => {
+    if (!data.ok) { alert(data.reason); return; }
+    showAttendanceModal(data.label, data.amount, data.coins);
+    updateCoinsUI(data.coins, 0, false);
+  });
   socket.on('disconnect', () => { addChat('서버와 연결이 끊어졌습니다.', true); });
   socket.on('error', ({ msg }) => {
     document.getElementById('join-error').textContent = msg;
@@ -1604,21 +1900,106 @@ function initSocket() {
     addChat(`▶ ${escapeHtml(by)}님이 게임을 재개했습니다.`, true);
   });
 
-  socket.on('chat', ({ nickname, message }) => {
-    addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
-  });
-
   socket.on('room_list', (list) => { updateRoomList(list); });
   socket.on('spectator_update', ({ count }) => { updateSpectatorCount(count); });
+
+  // ── 홀덤 소켓 핸들러 ──────────────────────────────────────────
+  socket.on('holdem_state', (state) => {
+    holdemState = state;
+    closeCreateRoomModal();
+    showScreen('holdem-screen');
+    renderHoldemTable(state);
+    renderHandRankPanel(state.myHandName || null);
+  });
+
+  socket.on('holdem_timer', ({ seconds, nickname }) => {
+    const isMe = nickname === myNickname;
+    document.getElementById('hd-status-bar').textContent =
+      isMe ? `⏳ 내 차례 (${seconds}초)` : `⏳ ${escapeHtml(nickname)} 의 차례`;
+    hdStartTimer(seconds);
+  });
+
+  socket.on('holdem_action_done', ({ nickname, action, amount, pot }) => {
+    const actMap = { fold:'폴드', check:'체크', call:'콜', raise:'레이즈', allin:'올인' };
+    const label = actMap[action] || action;
+    const amtStr = (action === 'raise' || action === 'call' || action === 'allin') && amount
+      ? ` (${amount.toLocaleString()})` : '';
+    hdAddChat(`<span style="color:var(--accent2);">${escapeHtml(nickname)}</span>: ${label}${amtStr}`);
+    if (holdemState && pot !== undefined) {
+      document.getElementById('hd-pot-main').textContent = `팟: ${pot.toLocaleString()}`;
+    }
+  });
+
+  socket.on('holdem_showdown', (state) => {
+    hdClearTimer();
+    holdemState = state;
+    renderHoldemTable(state);
+    renderHandRankPanel(state.myHandName || null);
+    document.getElementById('hd-status-bar').textContent = '🃏 쇼다운!';
+    document.getElementById('hd-timer-wrap').classList.remove('show');
+  });
+
+  socket.on('holdem_hand_end', ({ winnerNickname, reason, pot, handName }) => {
+    hdClearTimer();
+    const handStr = handName ? ` (${handName})` : '';
+    const reasonStr = reason === 'fold' ? ' — 모두 폴드' : handStr;
+    hdAddChat(`🏆 <strong>${escapeHtml(winnerNickname)}</strong> 팟 획득 +${pot.toLocaleString()}${reasonStr}`, true);
+    document.getElementById('hd-status-bar').textContent =
+      `🏆 ${winnerNickname} 팟 획득 (${pot.toLocaleString()})`;
+  });
+
+  socket.on('holdem_game_over', ({ winnerNickname, coinsAwarded, results }) => {
+    hdClearTimer();
+    showHoldemGameOver(winnerNickname, coinsAwarded, results);
+  });
+
+  socket.on('holdem_player_disconnect', ({ nickname }) => {
+    hdAddChat(`⚠️ ${escapeHtml(nickname)} 연결 끊김 — 자동 폴드`, true);
+  });
+
+  socket.on('holdem_chat', ({ nickname, message }) => {
+    hdAddChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
+  });
+
+  socket.on('chat', ({ nickname, message }) => {
+    // forward chat to holdem chat if on holdem screen
+    const onHoldem = document.getElementById('holdem-screen').classList.contains('active');
+    if (onHoldem) {
+      hdAddChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
+    } else {
+      addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
+    }
+  });
 }
 
 // ── 방 만들기 모달 ────────────────────────────────────────────
+let selectedBuyIn = 1000;
 function openCreateRoomModal() {
   document.getElementById('modal-room-name').value = `${myNickname}의 방`;
   document.getElementById('modal-room-pw').value = '';
   document.getElementById('modal-timer-cb').checked = true;
   document.getElementById('modal-room-error').textContent = '';
+  // reset game type to gomoku
+  document.querySelector('input[name="modal-game-type"][value="gomoku"]').checked = true;
+  document.getElementById('modal-buyin-row').classList.remove('show');
+  document.getElementById('modal-timer-row').style.display = '';
+  selectedBuyIn = 1000;
+  document.querySelectorAll('.buyin-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.buyin) === 1000);
+  });
   document.getElementById('create-room-modal').classList.add('show');
+}
+function onModalGameTypeChange() {
+  const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
+  const isHoldem = gt === 'holdem';
+  document.getElementById('modal-buyin-row').classList.toggle('show', isHoldem);
+  document.getElementById('modal-timer-row').style.display = isHoldem ? 'none' : '';
+}
+function selectBuyIn(amount) {
+  selectedBuyIn = amount;
+  document.querySelectorAll('.buyin-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.buyin) === amount);
+  });
 }
 function closeCreateRoomModal() {
   document.getElementById('create-room-modal').classList.remove('show');
@@ -1629,10 +2010,12 @@ function submitCreateRoom() {
   const timerOn = document.getElementById('modal-timer-cb').checked;
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value || 'gomoku';
   if (!socket) return;
-  socket.emit('create_room', {
+  const payload = {
     nickname: myNickname, stoneStyle: currentStoneStyle,
     roomName: name, password: password || null, useTimer: timerOn, gameType: gt
-  });
+  };
+  if (gt === 'holdem') payload.buyIn = selectedBuyIn;
+  socket.emit('create_room', payload);
 }
 
 // ── 비밀번호 모달 ──────────────────────────────────────────────
@@ -1671,22 +2054,29 @@ function updateRoomList(list) {
   }
   container.innerHTML = list.map(r => {
     const isWaiting = r.status === 'waiting';
+    const maxP = r.maxPlayers || 2;
     const playerStr = r.players.length > 0
       ? r.players.map(n => escapeHtml(n)).join(isWaiting ? ', ' : ' vs ')
       : '대기 중';
     const onclick = isWaiting
       ? `enterRoom('${escapeHtml(r.roomId)}', ${r.hasPassword})`
       : `spectateRoom('${escapeHtml(r.roomId)}')`;
+    let gameBadge;
+    if (r.gameType === 'holdem') {
+      gameBadge = `<span class="room-badge room-badge-holdem">🃏 홀덤</span>`;
+    } else if (r.gameType === 'othello') {
+      gameBadge = `<span class="room-badge room-badge-othello">오델로</span>`;
+    } else {
+      gameBadge = `<span class="room-badge room-badge-gomoku">오목</span>`;
+    }
     return `
     <div class="room-item" onclick="${onclick}">
       <div class="room-item-info">
         <div class="room-item-name">${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.name)}</div>
-        <div class="room-item-players">${isWaiting ? `${r.playerCount}/2명` : ''} ${playerStr}</div>
+        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · 바이인 ${r.buyIn.toLocaleString()}` : ''}</div>
       </div>
       <div class="room-item-badges">
-        ${r.gameType === 'othello'
-          ? `<span class="room-badge room-badge-othello">오델로</span>`
-          : `<span class="room-badge room-badge-gomoku">오목</span>`}
+        ${gameBadge}
         ${isWaiting
           ? `<span class="room-badge room-badge-waiting">대기중</span>`
           : `<span class="room-badge room-badge-playing">게임중</span>`}
@@ -1714,9 +2104,14 @@ function spectateRoom(roomId) {
 // ── 대기실 렌더링 ─────────────────────────────────────────────
 function renderLobbyScreen(state) {
   document.getElementById('lobby-room-name').textContent = state.name || '대기실';
-  document.getElementById('lobby-room-sub').textContent =
-    (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +
-    (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음');
+  if (state.gameType === 'holdem') {
+    document.getElementById('lobby-room-sub').textContent =
+      `🃏 텍사스 홀덤 · 바이인 ${(state.buyIn || 1000).toLocaleString()}`;
+  } else {
+    document.getElementById('lobby-room-sub').textContent =
+      (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +
+      (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음');
+  }
 
   const isHost = state.players.some(p => p.isHost && p.nickname === myNickname);
   const meAsPlayer = state.players.find(p => p.nickname === myNickname);
@@ -1725,31 +2120,59 @@ function renderLobbyScreen(state) {
 
   // 플레이어 슬롯
   const grid = document.getElementById('lobby-players-grid');
-  const slots = ['⚫ 흑', '⚪ 백'];
   grid.innerHTML = '';
-  for (let i = 0; i < 2; i++) {
-    const p = state.players[i];
-    if (p) {
-      const rank = getRank(p.record.points || 0);
-      const isMe = p.nickname === myNickname;
-      const canKick = isHost && !isMe;
-      grid.innerHTML += `
-        <div class="lobby-player-slot">
-          ${canKick ? `<button class="lobby-kick-btn" onclick="kickPlayer('${escapeHtml(p.nickname)}')">강퇴</button>` : ''}
-          <div class="lobby-slot-header">
-            <span style="font-size:1.1rem;">${i === 0 ? '⚫' : '⚪'}</span>
-            <span class="lobby-slot-name">${escapeHtml(p.nickname)}${isMe ? ' (나)' : ''}</span>
-            ${p.isHost ? '<span class="lobby-slot-role host">방장</span>' : ''}
-          </div>
-          <div class="lobby-slot-record">
-            ${rank} · ${p.record.win}승 ${p.record.lose}패 ${p.record.points || 0}pts
-          </div>
-          <div class="lobby-slot-ready ${p.isHost ? 'ready' : (p.isReady ? 'ready' : 'not-ready')}">
-            ${p.isHost ? '방장' : (p.isReady ? '✓ 준비완료' : '대기 중')}
-          </div>
-        </div>`;
-    } else {
-      grid.innerHTML += `<div class="lobby-player-slot empty">${slots[i]}<br><span style="font-size:0.78rem;margin-top:4px;">빈 슬롯</span></div>`;
+
+  if (state.gameType === 'holdem') {
+    grid.classList.add('holdem-lobby');
+    const maxP = 6;
+    for (let i = 0; i < maxP; i++) {
+      const p = state.players[i];
+      if (p) {
+        const isMe = p.nickname === myNickname;
+        const canKick = isHost && !isMe;
+        grid.innerHTML += `
+          <div class="lobby-player-slot">
+            ${canKick ? `<button class="lobby-kick-btn" onclick="kickPlayer('${escapeHtml(p.nickname)}')">강퇴</button>` : ''}
+            <div class="lobby-slot-header">
+              <span style="font-size:1rem;">🃏</span>
+              <span class="lobby-slot-name">${escapeHtml(p.nickname)}${isMe ? ' (나)' : ''}</span>
+              ${p.isHost ? '<span class="lobby-slot-role host">방장</span>' : ''}
+            </div>
+            <div class="lobby-slot-ready ${p.isHost ? 'ready' : (p.isReady ? 'ready' : 'not-ready')}">
+              ${p.isHost ? '방장' : (p.isReady ? '✓ 준비완료' : '대기 중')}
+            </div>
+          </div>`;
+      } else {
+        grid.innerHTML += `<div class="lobby-player-slot empty">슬롯 ${i+1}<br><span style="font-size:0.78rem;margin-top:4px;">빈 슬롯</span></div>`;
+      }
+    }
+  } else {
+    grid.classList.remove('holdem-lobby');
+    const slots = ['⚫ 흑', '⚪ 백'];
+    for (let i = 0; i < 2; i++) {
+      const p = state.players[i];
+      if (p) {
+        const rank = getRank(p.record.points || 0);
+        const isMe = p.nickname === myNickname;
+        const canKick = isHost && !isMe;
+        grid.innerHTML += `
+          <div class="lobby-player-slot">
+            ${canKick ? `<button class="lobby-kick-btn" onclick="kickPlayer('${escapeHtml(p.nickname)}')">강퇴</button>` : ''}
+            <div class="lobby-slot-header">
+              <span style="font-size:1.1rem;">${i === 0 ? '⚫' : '⚪'}</span>
+              <span class="lobby-slot-name">${escapeHtml(p.nickname)}${isMe ? ' (나)' : ''}</span>
+              ${p.isHost ? '<span class="lobby-slot-role host">방장</span>' : ''}
+            </div>
+            <div class="lobby-slot-record">
+              ${rank} · ${p.record.win}승 ${p.record.lose}패 ${p.record.points || 0}pts
+            </div>
+            <div class="lobby-slot-ready ${p.isHost ? 'ready' : (p.isReady ? 'ready' : 'not-ready')}">
+              ${p.isHost ? '방장' : (p.isReady ? '✓ 준비완료' : '대기 중')}
+            </div>
+          </div>`;
+      } else {
+        grid.innerHTML += `<div class="lobby-player-slot empty">${slots[i]}<br><span style="font-size:0.78rem;margin-top:4px;">빈 슬롯</span></div>`;
+      }
     }
   }
 
@@ -1766,9 +2189,10 @@ function renderLobbyScreen(state) {
   // 관전석 이동 버튼
   const specActions = document.getElementById('lobby-spec-actions');
   specActions.innerHTML = '';
+  const maxPlayers = state.gameType === 'holdem' ? 6 : 2;
   if (meAsPlayer && !meAsPlayer.isHost) {
     specActions.innerHTML = `<button class="btn-secondary btn-sm" onclick="moveToSpectator()">관전석으로 이동</button>`;
-  } else if (meAsSpec && state.players.length < 2) {
+  } else if (meAsSpec && state.players.length < maxPlayers) {
     specActions.innerHTML = `<button class="btn-secondary btn-sm" onclick="moveToPlayer()">플레이어로 이동</button>`;
   }
 
@@ -1903,6 +2327,72 @@ function requestRematch() {
   document.getElementById('rematch-btn').textContent = '수락 대기 중...';
   document.getElementById('rematch-btn').disabled = true;
 }
+// ── 재화 UI ───────────────────────────────────────────────────
+let cooldownInterval = null;
+
+function updateCoinsUI(coins, cooldownRemaining, attendanceAvailable) {
+  const fmt = (n) => n.toLocaleString('ko-KR');
+  document.getElementById('lobby-coins').textContent = fmt(coins) + ' 코인';
+  document.getElementById('header-coins').textContent = fmt(coins);
+  document.getElementById('coins-display').style.display = 'flex';
+
+  const cooldownEl = document.getElementById('coins-cooldown-msg');
+  if (coins === 0 && cooldownRemaining > 0) {
+    cooldownEl.style.display = 'block';
+    startCooldownTimer(cooldownRemaining);
+  } else {
+    cooldownEl.style.display = 'none';
+    if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
+  }
+
+  const btn = document.getElementById('btn-attendance');
+  if (attendanceAvailable) {
+    btn.disabled = false;
+    btn.textContent = '🎁 출석 체크';
+  } else {
+    btn.disabled = true;
+    btn.textContent = '✅ 오늘 출석 완료';
+  }
+}
+
+function startCooldownTimer(remainingMs) {
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  let end = Date.now() + remainingMs;
+  const tick = () => {
+    const left = Math.max(0, end - Date.now());
+    if (left === 0) {
+      clearInterval(cooldownInterval);
+      cooldownInterval = null;
+      document.getElementById('coins-cooldown-msg').style.display = 'none';
+      if (socket) socket.emit('get_coins', { nickname: myNickname });
+      return;
+    }
+    const h = Math.floor(left / 3600000);
+    const m = Math.floor((left % 3600000) / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    document.getElementById('coins-cooldown-msg').textContent =
+      `⏳ 보충까지 ${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  };
+  tick();
+  cooldownInterval = setInterval(tick, 1000);
+}
+
+function claimAttendance() {
+  if (socket) socket.emit('attendance_claim', { nickname: myNickname });
+}
+
+function showAttendanceModal(label, amount, coins) {
+  document.getElementById('box-grade-label').textContent = label;
+  document.getElementById('box-grade-label').className = 'box-grade ' + label;
+  document.getElementById('box-amount-label').textContent = '+' + amount.toLocaleString('ko-KR') + ' 코인';
+  document.getElementById('box-coins-after').textContent = '현재 재화: ' + coins.toLocaleString('ko-KR') + ' 코인';
+  document.getElementById('attendance-modal').classList.add('show');
+}
+
+function closeAttendanceModal() {
+  document.getElementById('attendance-modal').classList.remove('show');
+}
+
 function goLobby() {
   clearClientTimer();
   pendingConsentType = null;
@@ -1918,7 +2408,10 @@ function goLobby() {
   showScreen('lobby-screen');
   renderStonePreviews();
   selectStoneStyle(currentStoneStyle);
-  if (socket) socket.emit('get_room_list');
+  if (socket) {
+    socket.emit('get_room_list');
+    socket.emit('get_coins', { nickname: myNickname });
+  }
 }
 
 // ── 채팅 ──────────────────────────────────────────────────────
@@ -2360,6 +2853,380 @@ function isClientForbidden(row, col) {
   }
   return threes >= 2;
 }
+
+// ── 족보 패널 ─────────────────────────────────────────────────
+const HD_HAND_RANKS = [
+  { name: '로열 플러시',    rank: 9 },
+  { name: '스트레이트 플러시', rank: 8 },
+  { name: '포카드',        rank: 7 },
+  { name: '풀하우스',      rank: 6 },
+  { name: '플러시',        rank: 5 },
+  { name: '스트레이트',     rank: 4 },
+  { name: '트리플',        rank: 3 },
+  { name: '투페어',        rank: 2 },
+  { name: '원페어',        rank: 1 },
+  { name: '하이카드',      rank: 0 },
+];
+// 서버 handName → rank 매핑
+const HD_NAME_TO_RANK = {
+  '로열 플러시': 9, '스트레이트 플러시': 8, '포카드': 7,
+  '풀하우스': 6, '플러시': 5, '스트레이트': 4,
+  '트리플': 3, '투페어': 2, '원페어': 1, '하이카드': 0,
+};
+function renderHandRankPanel(currentHandName) {
+  const panel = document.getElementById('hd-hand-rank-panel');
+  if (!panel) return;
+  const currentRank = currentHandName != null ? (HD_NAME_TO_RANK[currentHandName] ?? -1) : -1;
+  panel.innerHTML = '<div class="panel-title">족보</div>' +
+    HD_HAND_RANKS.map(h => {
+      const isCurrent = h.rank === currentRank;
+      return `<div class="hr-row ${isCurrent ? 'current' : ''}">
+        <div class="hr-dot"></div>
+        <div class="hr-label">${h.name}</div>
+        <div class="hr-rank">${isCurrent ? '◀ 현재' : ''}</div>
+      </div>`;
+    }).join('');
+}
+
+// ── 홀덤 UI ───────────────────────────────────────────────────
+let holdemState = null;
+let hdTimerInterval = null;
+let hdRaisePending = false;
+
+// 시트 위치 (6인 기준, 각도 및 top/left%)
+const HD_SEAT_POS = [
+  { top: '88%', left: '50%' },  // 0 — 하단 중앙 (본인 기준)
+  { top: '70%', left: '88%' },  // 1 — 우하
+  { top: '30%', left: '88%' },  // 2 — 우상
+  { top: '12%', left: '50%' },  // 3 — 상단
+  { top: '30%', left: '12%' },  // 4 — 좌상
+  { top: '70%', left: '12%' },  // 5 — 좌하
+];
+
+const SUIT_SYMBOL = { s:'♠', h:'♥', d:'♦', c:'♣' };
+const SUIT_COLOR  = { s:'black', h:'red', d:'red', c:'black' };
+
+function renderHdCard(card, big) {
+  if (!card) {
+    return `<div class="hd-card empty"></div>`;
+  }
+  if (card === 'back') {
+    return `<div class="hd-card back"></div>`;
+  }
+  const rank = card.slice(0, -1);
+  const suit = card.slice(-1);
+  const cls = SUIT_COLOR[suit] || 'black';
+  return `<div class="hd-card ${cls}">
+    <div class="card-rank">${rank}</div>
+    <div class="card-suit">${SUIT_SYMBOL[suit] || suit}</div>
+  </div>`;
+}
+
+function renderHoldemTable(state) {
+  if (!state) return;
+
+  // 팟 & 커뮤니티 카드
+  document.getElementById('hd-pot-main').textContent = `팟: ${(state.pot || 0).toLocaleString()}`;
+  const phaseNames = { waiting:'대기 중', preflop:'프리플랍', flop:'플랍', turn:'턴', river:'리버', showdown:'쇼다운', ended:'종료' };
+  document.getElementById('hd-phase-badge').textContent = phaseNames[state.phase] || state.phase;
+
+  // 커뮤니티 카드 (5장, 빈 슬롯 포함)
+  const cc = state.communityCards || [];
+  let ccHtml = '';
+  for (let i = 0; i < 5; i++) {
+    ccHtml += renderHdCard(cc[i] || null);
+  }
+  document.getElementById('hd-community-cards').innerHTML = ccHtml;
+
+  // 사이드팟
+  const spWrap = document.getElementById('hd-side-pots-wrap');
+  if (state.sidePots && state.sidePots.length > 1) {
+    spWrap.innerHTML = state.sidePots.map((sp, i) =>
+      `<div class="hd-side-pot-chip">사이드팟${i+1}: ${sp.amount.toLocaleString()}</div>`
+    ).join('');
+  } else {
+    spWrap.innerHTML = '';
+  }
+
+  // 플레이어 시트 — 본인을 좌석 0으로 맞추기
+  const table = document.getElementById('poker-table');
+  // 기존 시트 제거
+  table.querySelectorAll('.hd-seat').forEach(el => el.remove());
+
+  const players = state.players || [];
+  const myIdx = players.findIndex(p => p.nickname === myNickname);
+  const n = players.length;
+
+  players.forEach((p, serverIdx) => {
+    // 로컬 시트 인덱스: 내가 0번
+    const localIdx = myIdx >= 0 ? (serverIdx - myIdx + n) % n : serverIdx;
+    const pos = HD_SEAT_POS[localIdx] || HD_SEAT_POS[0];
+
+    const isActive = state.actionIndex === serverIdx;
+    const folded = p.folded;
+    const disconnected = p.isDisconnected;
+    const isDealer = state.dealerIndex === serverIdx;
+    const isSB = state.smallBlindIndex === serverIdx;
+    const isBB = state.bigBlindIndex === serverIdx;
+
+    let tagsHtml = '';
+    if (isDealer) tagsHtml += `<span class="hd-seat-tag dealer">D</span>`;
+    if (isSB && !isDealer) tagsHtml += `<span class="hd-seat-tag sb">SB</span>`;
+    if (isBB) tagsHtml += `<span class="hd-seat-tag bb">BB</span>`;
+
+    // 홀 카드
+    let cardsHtml = '';
+    if (!folded && p.holeCards) {
+      cardsHtml = p.holeCards.map(c => renderHdCard(c)).join('');
+    } else if (folded) {
+      cardsHtml = '';
+    } else {
+      cardsHtml = renderHdCard('back') + renderHdCard('back');
+    }
+
+    // 베팅 버블
+    const betStr = p.bet > 0 ? p.bet.toLocaleString() : '';
+
+    const infoClass = [
+      'hd-seat-info',
+      isActive ? 'active-turn' : '',
+      folded ? 'folded' : '',
+      disconnected ? 'disconnected' : '',
+    ].filter(Boolean).join(' ');
+
+    const seat = document.createElement('div');
+    seat.className = 'hd-seat';
+    seat.style.top = pos.top;
+    seat.style.left = pos.left;
+    seat.innerHTML = `
+      <div class="hd-seat-cards">${cardsHtml}</div>
+      <div class="${infoClass}">
+        <div class="hd-seat-name">${escapeHtml(p.nickname)}${tagsHtml}${p.allIn ? ' <span style="font-size:0.6rem;background:#5b21b6;color:#fff;padding:0 3px;border-radius:3px;">올인</span>' : ''}</div>
+        <div class="hd-seat-chips">${p.chips.toLocaleString()} 칩</div>
+      </div>
+      <div class="hd-seat-bet-bubble ${betStr ? 'show' : ''}">${betStr ? '베팅 ' + betStr : ''}</div>`;
+    table.appendChild(seat);
+  });
+
+  // 내 카드 & 상태 업데이트
+  const me = players.find(p => p.nickname === myNickname);
+  if (me) {
+    let myCardsHtml = '';
+    if (me.holeCards && me.holeCards.length) {
+      myCardsHtml = me.holeCards.map(c => renderHdCard(c, true)).join('');
+    } else {
+      myCardsHtml = renderHdCard(null) + renderHdCard(null);
+    }
+    document.getElementById('hd-my-hole-cards').innerHTML = myCardsHtml;
+    document.getElementById('hd-my-hand-name').textContent = me.handName || '—';
+    document.getElementById('hd-my-chips').textContent = `칩: ${me.chips.toLocaleString()}`;
+  }
+
+  hdUpdateActionBtns(state);
+
+  // 내 차례 상태바
+  if (state.actionIndex >= 0 && players[state.actionIndex]) {
+    const actor = players[state.actionIndex];
+    if (actor.nickname === myNickname) {
+      document.getElementById('hd-status-bar').textContent = '⚡ 내 차례입니다';
+    } else {
+      document.getElementById('hd-status-bar').textContent = `⏳ ${escapeHtml(actor.nickname)} 의 차례`;
+    }
+  }
+}
+
+function hdUpdateActionBtns(state) {
+  const myIdx = (state.players || []).findIndex(p => p.nickname === myNickname);
+  const isMyTurn = state.actionIndex === myIdx && myIdx >= 0;
+  const me = myIdx >= 0 ? state.players[myIdx] : null;
+
+  const setBtns = (enabled) => {
+    ['hd-btn-fold','hd-btn-check','hd-btn-call','hd-btn-raise','hd-btn-allin'].forEach(id => {
+      document.getElementById(id).disabled = !enabled;
+    });
+  };
+
+  if (!isMyTurn || !me || me.folded || me.allIn) {
+    setBtns(false);
+    document.getElementById('hd-raise-row').style.display = 'none';
+    hdRaisePending = false;
+    return;
+  }
+
+  setBtns(true);
+  const currentBet = state.currentBet || 0;
+  const myBet = me.bet || 0;
+  const toCall = currentBet - myBet;
+
+  // check vs call
+  const checkBtn = document.getElementById('hd-btn-check');
+  const callBtn = document.getElementById('hd-btn-call');
+  if (toCall <= 0) {
+    checkBtn.style.display = '';
+    callBtn.style.display = 'none';
+  } else {
+    checkBtn.style.display = 'none';
+    callBtn.style.display = '';
+    callBtn.textContent = `콜 (${toCall.toLocaleString()})`;
+  }
+
+  // raise 가능 여부: 내 칩이 minRaise 이상
+  const minRaise = state.minRaise || 0;
+  const raiseBtn = document.getElementById('hd-btn-raise');
+  raiseBtn.disabled = me.chips < minRaise + toCall;
+
+  // raise slider 설정
+  const slider = document.getElementById('hd-raise-slider');
+  const minAmt = currentBet + minRaise;
+  const maxAmt = me.chips + myBet;
+  slider.min = minAmt;
+  slider.max = maxAmt;
+  if (parseInt(slider.value) < minAmt) slider.value = minAmt;
+  hdUpdateRaiseDisplay();
+
+  // 올인 버튼 레이블
+  document.getElementById('hd-btn-allin').textContent = `올인 (${(me.chips + myBet).toLocaleString()})`;
+}
+
+function hdUpdateRaiseDisplay() {
+  const val = parseInt(document.getElementById('hd-raise-slider').value) || 0;
+  document.getElementById('hd-raise-amount').textContent = val.toLocaleString();
+}
+
+function hdSetPreset(type) {
+  if (!holdemState) return;
+  const me = holdemState.players.find(p => p.nickname === myNickname);
+  if (!me) return;
+  const pot = holdemState.pot || 0;
+  const currentBet = holdemState.currentBet || 0;
+  const minRaise = holdemState.minRaise || 0;
+  const myBet = me.bet || 0;
+  const slider = document.getElementById('hd-raise-slider');
+  let val;
+  if (type === 'min') val = currentBet + minRaise;
+  else if (type === 'half') val = currentBet + Math.floor(pot / 2);
+  else if (type === 'pot') val = currentBet + pot;
+  else if (type === 'allin') val = me.chips + myBet;
+  val = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), val));
+  slider.value = val;
+  hdUpdateRaiseDisplay();
+}
+
+function holdemFold()  { if (!currentRoom) return; socket.emit('holdem_action', { roomId: currentRoom, action: 'fold' }); hdDisableAllBtns(); }
+function holdemCheck() { if (!currentRoom) return; socket.emit('holdem_action', { roomId: currentRoom, action: 'check' }); hdDisableAllBtns(); }
+function holdemCall()  { if (!currentRoom) return; socket.emit('holdem_action', { roomId: currentRoom, action: 'call' }); hdDisableAllBtns(); }
+function holdemAllIn() { if (!currentRoom) return; socket.emit('holdem_action', { roomId: currentRoom, action: 'allin' }); hdDisableAllBtns(); }
+function holdemRaiseOpen() {
+  const row = document.getElementById('hd-raise-row');
+  hdRaisePending = !hdRaisePending;
+  row.style.display = hdRaisePending ? 'flex' : 'none';
+}
+function holdemRaise() {
+  if (!currentRoom) return;
+  const amount = parseInt(document.getElementById('hd-raise-slider').value);
+  socket.emit('holdem_action', { roomId: currentRoom, action: 'raise', raiseAmount: amount });
+  hdDisableAllBtns();
+  document.getElementById('hd-raise-row').style.display = 'none';
+  hdRaisePending = false;
+}
+function hdDisableAllBtns() {
+  ['hd-btn-fold','hd-btn-check','hd-btn-call','hd-btn-raise','hd-btn-allin'].forEach(id => {
+    document.getElementById(id).disabled = true;
+  });
+}
+
+function hdStartTimer(seconds) {
+  hdClearTimer();
+  const wrap = document.getElementById('hd-timer-wrap');
+  const fill = document.getElementById('hd-timer-fill');
+  const text = document.getElementById('hd-timer-text');
+  wrap.classList.add('show');
+  let remaining = seconds;
+  fill.style.width = '100%';
+  text.textContent = remaining;
+  hdTimerInterval = setInterval(() => {
+    remaining--;
+    text.textContent = Math.max(0, remaining);
+    fill.style.width = `${Math.max(0, (remaining / seconds) * 100)}%`;
+    if (remaining <= 5) fill.style.background = '#d9534f';
+    else fill.style.background = '';
+    if (remaining <= 0) hdClearTimer();
+  }, 1000);
+}
+
+function hdClearTimer() {
+  clearInterval(hdTimerInterval);
+  hdTimerInterval = null;
+  document.getElementById('hd-timer-wrap').classList.remove('show');
+  const fill = document.getElementById('hd-timer-fill');
+  fill.style.width = '100%';
+  fill.style.background = '';
+}
+
+function hdAddChat(html, isSystem) {
+  const msgs = document.getElementById('hd-chat-messages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  if (isSystem) div.style.color = 'var(--text2)';
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hdSendChat() {
+  const input = document.getElementById('hd-chat-input');
+  const msg = input.value.trim();
+  if (!msg || !currentRoom) return;
+  socket.emit('chat', { roomId: currentRoom, nickname: myNickname, message: msg });
+  input.value = '';
+}
+
+function showHoldemGameOver(winnerNickname, coinsAwarded, results) {
+  hdClearTimer();
+  const isWinner = winnerNickname === myNickname;
+  document.getElementById('hd-gameover-title').textContent = isWinner ? '🏆 우승!' : '토너먼트 종료';
+  document.getElementById('hd-gameover-sub').textContent =
+    `우승자: ${winnerNickname}` + (isWinner ? `  +${(coinsAwarded||0).toLocaleString()} 재화 획득!` : '');
+
+  if (results && results.length) {
+    document.getElementById('hd-gameover-results').innerHTML = results.map((r, i) =>
+      `<div class="hd-result-row">
+        <span>${i+1}위 ${escapeHtml(r.nickname)}</span>
+        <span class="${r.nickname === winnerNickname ? 'hd-result-winner' : ''}">${r.nickname === winnerNickname ? '🏆 우승' : '탈락'}</span>
+      </div>`
+    ).join('');
+  }
+
+  document.getElementById('hd-gameover-overlay').classList.add('show');
+}
+
+function hdGoLobby() {
+  hdClearTimer();
+  holdemState = null;
+  hdRaisePending = false;
+  document.getElementById('hd-gameover-overlay').classList.remove('show');
+  document.getElementById('hd-chat-messages').innerHTML = '';
+  document.getElementById('hd-raise-row').style.display = 'none';
+  document.getElementById('hd-status-bar').textContent = '대기 중...';
+  document.getElementById('hd-pot-main').textContent = '팟: 0';
+  document.getElementById('hd-community-cards').innerHTML = '';
+  document.getElementById('hd-side-pots-wrap').innerHTML = '';
+  document.getElementById('hd-my-hole-cards').innerHTML = '';
+  document.getElementById('hd-my-hand-name').textContent = '—';
+  document.getElementById('hd-my-chips').textContent = '칩: —';
+  if (currentRoom) {
+    socket.emit('leave_room', { roomId: currentRoom });
+    currentRoom = null;
+  }
+  lobbyState = null;
+  showScreen('lobby-screen');
+  if (socket) {
+    socket.emit('get_room_list');
+    socket.emit('get_coins', { nickname: myNickname });
+  }
+}
+
+document.getElementById('hd-chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') hdSendChat(); });
 
 // ── 시작 ──────────────────────────────────────────────────────
 if (myNickname.length >= 2) { initSocket(); updateHeaderNick(); }
