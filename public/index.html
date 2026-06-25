@@ -1871,10 +1871,10 @@ function ttAutoCalib(ctx, W, H) {
   const data = ctx.getImageData(0, 0, W, H).data;
   const skip = 2;
 
-  // 내 영역(좌측) 초록 패널 색상
+  // 내 영역(좌측) 초록 패널 색상 — 올리브/포레스트 그린 포함
   const isGreenPanel = (r,g,b) =>
-    g > 90 && g > r * 1.25 && g > b * 1.15 &&
-    r > 35 && r < 165 && b < 140 && g < 210;
+    g > 85 && g > r * 1.1 && g > b * 1.05 &&
+    r > 30 && r < 180 && b < 155 && g < 220;
 
   // 초록 패널 bounding box 탐색
   let gxMin = scanX2, gxMax = scanX1;
@@ -1894,7 +1894,7 @@ function ttAutoCalib(ctx, W, H) {
     }
   }
 
-  if (greenHits < 40 || (gxMax - gxMin) < 60 || (gyMax - gyMin) < 50) return;
+  if (greenHits < 20 || (gxMax - gxMin) < 50 || (gyMax - gyMin) < 40) return;
 
   // 초록 패널 = 내 보드 영역
   const myX1 = gxMin;
@@ -1903,9 +1903,9 @@ function ttAutoCalib(ctx, W, H) {
   const boardY2 = gyMax;
   const myPanelW = myX2 - myX1;
 
-  // 점수열 너비 ≈ 내 패널 너비의 약 13%
+  // 점수열 너비 ≈ 내 패널 너비의 약 20% (실측 기준)
   // 상대 보드 ≈ 내 보드와 동일한 너비
-  const scoreColW = Math.round(myPanelW * 0.13);
+  const scoreColW = Math.round(myPanelW * 0.20);
   const oppX1 = myX2 + scoreColW;
   const oppX2 = oppX1 + myPanelW;
   const splitX = myX2 + Math.round(scoreColW * 0.5);
