@@ -1384,11 +1384,17 @@
     <div class="tt-panel-box">
       <div class="tt-panel-title">📺 화면 참조</div>
       <button class="tt-capture-btn" onclick="ttStartCapture()">🖥 화면 공유 시작</button>
+      <div style="font-size:0.65rem;color:rgba(255,215,0,0.5);margin-top:4px;line-height:1.4;">
+        ⚠ 공유 창 선택 시 <strong style="color:rgba(255,215,0,0.8);">전체 화면 말고 게임 창</strong>을 선택하세요
+      </div>
       <div class="tt-auto-status" id="tt-auto-status">
         <span class="tt-auto-dot"></span>
         <span>자동 분석 중 · <span id="tt-auto-time">--</span></span>
       </div>
-      <button class="tt-calib-btn" id="tt-calib-btn" onclick="ttStartCalib()" style="display:none;">🎯 보드 위치 재설정</button>
+      <div id="tt-calib-notice" style="display:none;font-size:0.68rem;color:#ff6b6b;margin-top:4px;line-height:1.4;">
+        ⚠ 보드를 자동으로 찾지 못했어요.<br>아래 버튼으로 수동 설정하세요.
+      </div>
+      <button class="tt-calib-btn" id="tt-calib-btn" onclick="ttStartCalib()" style="display:none;">🎯 보드 위치 직접 설정</button>
       <!-- 라이브 비디오 + 캘리브레이션 오버레이 -->
       <div style="position:relative;display:none;" id="tt-preview-wrap">
         <video id="tt-preview" autoplay muted playsinline
@@ -1770,9 +1776,10 @@ function ttUpdateSlotStyle(sel) {
 }
 
 // ── 화면 캡처 + 자동 분석 ──────────────────────────────────
-let ttAutoTimer = null;
-let ttCalib     = null; // {x1,y1,x2,y2} 보드 좌표 (비디오 해상도 기준)
-let ttCalibStep = 0;    // 0=대기 1=좌상단클릭 2=우하단클릭
+let ttAutoTimer   = null;
+let ttCalib       = null; // {x1,y1,x2,y2,splitX} 보드 좌표
+let ttCalibStep   = 0;    // 0=대기 1=첫클릭 2=두번째클릭
+let ttCalibFails  = 0;    // 자동 캘리브레이션 실패 횟수
 
 async function ttStartCapture() {
   try {
@@ -1827,7 +1834,18 @@ function ttAutoFrame() {
     new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
 
   // 캘리브레이션이 없으면 자동으로 찾기
-  if (!ttCalib) ttAutoCalib(ctx, W, H);
+  if (!ttCalib) {
+    ttAutoCalib(ctx, W, H);
+    if (!ttCalib) {
+      ttCalibFails++;
+      // 5번 시도 후에도 못 찾으면 수동 버튼 표시
+      if (ttCalibFails >= 5) {
+        document.getElementById('tt-calib-notice').style.display = 'block';
+        document.getElementById('tt-calib-btn').style.display    = 'block';
+      }
+      return;
+    }
+  }
 
   if (ttCalib) {
     const detected   = ttDetectDice(ctx, W, H);
@@ -1837,57 +1855,74 @@ function ttAutoFrame() {
 }
 
 // ── 자동 캘리브레이션 ─────────────────────────────────────
-// 크림색 픽셀 밀도로 주사위 슬롯 영역을 자동 탐지
+// "크림색 픽셀이 어두운 나무색(갈색) 옆에 있는" 픽셀만 카운트
+// → 게임 보드에만 존재하는 패턴, 브라우저 UI와 구분됨
 function ttAutoCalib(ctx, W, H) {
   const data = ctx.getImageData(0, 0, W, H).data;
-  const skip = 4; // 성능용 샘플링 간격
+  const skip = 4;
 
-  // 행/열별 크림 픽셀 밀도 계산
+  // 어두운 나무색 (게임 보드 배경)
+  const isWood = (r,g,b) => r>40 && r<135 && g>22 && g<90 && b>8 && b<60 && r>g && g>=b;
+
   const rowD = new Float32Array(H);
   const colD = new Float32Array(W);
-  const rowC = new Float32Array(H);
-  const colC = new Float32Array(W);
+  let hits = 0;
 
-  for (let y = 0; y < H; y += skip) {
-    for (let x = 0; x < W; x += skip) {
+  for (let y = skip; y < H - skip; y += skip) {
+    for (let x = skip; x < W - skip; x += skip) {
       const i = (y * W + x) * 4;
-      if (ttIsCream(data[i], data[i+1], data[i+2])) {
-        rowD[y]++; colD[x]++;
+      if (!ttIsCream(data[i], data[i+1], data[i+2])) continue;
+
+      // 상하좌우 이웃 중 나무색이 하나라도 있으면 게임 보드 Die 슬롯으로 판단
+      const up    = ((y-skip)*W + x) * 4;
+      const down  = ((y+skip)*W + x) * 4;
+      const left  = (y*W + (x-skip)) * 4;
+      const right = (y*W + (x+skip)) * 4;
+
+      if (isWood(data[up],data[up+1],data[up+2])     ||
+          isWood(data[down],data[down+1],data[down+2])||
+          isWood(data[left],data[left+1],data[left+2])||
+          isWood(data[right],data[right+1],data[right+2])) {
+        rowD[y]++;
+        colD[x]++;
+        hits++;
       }
-      rowC[y]++; colC[x]++;
     }
   }
-  for (let y = 0; y < H; y++) rowD[y] = rowC[y] ? rowD[y]/rowC[y] : 0;
-  for (let x = 0; x < W; x++) colD[x] = colC[x] ? colD[x]/colC[x] : 0;
 
-  // 크림 밀도가 높은 행 범위 찾기 (주사위 슬롯 영역)
-  const rowTh = 0.05;
-  let y1 = -1, y2 = -1;
-  for (let y = Math.floor(H * 0.1); y < Math.floor(H * 0.92); y++) {
-    if (rowD[y] > rowTh) { if (y1 < 0) y1 = y; y2 = y; }
+  if (hits < 30) return; // 게임 보드가 화면에 없음
+
+  // 최대값 기준 상대 임계치로 범위 결정
+  const maxRow = Math.max(...rowD);
+  const maxCol = Math.max(...colD);
+  if (maxRow === 0 || maxCol === 0) return;
+
+  const rowTh = maxRow * 0.18;
+  const colTh = maxCol * 0.12;
+
+  let y1=-1, y2=-1;
+  for (let y=0; y<H; y++) {
+    if (rowD[y] > rowTh) { if (y1<0) y1=y; y2=y; }
   }
-  if (y1 < 0 || (y2 - y1) < H * 0.05) return; // 너무 작으면 무시
-
-  // 크림 밀도가 높은 열 범위 찾기
-  const colTh = 0.03;
-  let x1 = -1, x2 = -1;
-  for (let x = Math.floor(W * 0.03); x < Math.floor(W * 0.97); x++) {
-    if (colD[x] > colTh) { if (x1 < 0) x1 = x; x2 = x; }
+  let x1=-1, x2=-1;
+  for (let x=0; x<W; x++) {
+    if (colD[x] > colTh) { if (x1<0) x1=x; x2=x; }
   }
-  if (x1 < 0 || (x2 - x1) < W * 0.1) return;
+  if (y1<0 || x1<0 || (y2-y1)<30 || (x2-x1)<60) return;
 
-  // 가운데 점수 영역 찾기 (두 패널 사이 크림 밀도 최저점)
-  const midStart = Math.floor(x1 + (x2 - x1) * 0.3);
-  const midEnd   = Math.floor(x1 + (x2 - x1) * 0.7);
-  let minD = Infinity, splitX = Math.floor((x1 + x2) / 2);
-  for (let x = midStart; x < midEnd; x++) {
-    if (colD[x] < minD) { minD = colD[x]; splitX = x; }
+  // 점수 영역 = 두 패널 사이 colD 최소 지점
+  const midStart = Math.floor(x1 + (x2-x1)*0.3);
+  const midEnd   = Math.floor(x1 + (x2-x1)*0.7);
+  let minD=Infinity, splitX=Math.floor((x1+x2)/2);
+  for (let x=midStart; x<midEnd; x++) {
+    if (colD[x]<minD) { minD=colD[x]; splitX=x; }
   }
 
-  ttCalib = { x1: x1 - 4, y1: y1 - 4, x2: x2 + 4, y2: y2 + 4, splitX };
-  // 버튼 텍스트 업데이트
+  ttCalib      = { x1:x1-6, y1:y1-6, x2:x2+6, y2:y2+6, splitX };
+  ttCalibFails = 0;
+  document.getElementById('tt-calib-notice').style.display = 'none';
   const btn = document.getElementById('tt-calib-btn');
-  if (btn) btn.textContent = '🎯 보드 위치 재설정';
+  if (btn) { btn.textContent='🎯 보드 위치 재설정'; btn.style.display='block'; }
 }
 
 // ── 색상 헬퍼 ─────────────────────────────────────────────
@@ -2104,12 +2139,14 @@ function ttCalibClick(e) {
     ttCalibStep = 2;
     document.getElementById('tt-calib-step-txt').textContent = '상대방(우측) 마지막 주사위 중심';
   } else if (ttCalibStep === 2) {
-    ttCalib.x2 = vx;
-    ttCalib.y2 = vy;
+    ttCalib.x2  = vx;
+    ttCalib.y2  = vy;
+    ttCalib.splitX = (ttCalib.x1 + vx) / 2; // 수동: 중앙을 splitX로
     ttCalibStep = 0;
+    ttCalibFails = 0;
+    document.getElementById('tt-calib-notice').style.display = 'none';
     ovl.style.display = 'none';
     ovl.onclick = null;
-    // 즉시 분석 실행
     ttAutoFrame();
   }
 }
