@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎲 티카투카</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0d0d1a;
+  color: #e8d5a3;
+  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  user-select: none;
+}
+
+h1 {
+  font-size: 1.8rem;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255,215,0,0.4);
+  margin-bottom: 16px;
+  letter-spacing: 4px;
+}
+
+.game-wrapper {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 860px;
+}
+
+/* ===== BOARD ===== */
+.board {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+}
+
+.lane-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,215,0,0.15);
+  border-radius: 14px;
+  padding: 10px 8px;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.lane-col.clickable {
+  cursor: pointer;
+  border-color: rgba(116,185,255,0.5);
+  background: rgba(116,185,255,0.04);
+}
+.lane-col.clickable:hover {
+  border-color: rgba(116,185,255,0.9);
+  background: rgba(116,185,255,0.09);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(116,185,255,0.2);
+}
+
+.lane-col.alchigi-possible {
+  border-color: rgba(255,80,80,0.7) !important;
+  background: rgba(255,80,80,0.06) !important;
+}
+.lane-col.alchigi-possible:hover {
+  box-shadow: 0 4px 20px rgba(255,80,80,0.3) !important;
+}
+
+.lane-label {
+  text-align: center;
+  font-size: 0.72rem;
+  color: rgba(255,215,0,0.5);
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+}
+
+.player-tag {
+  text-align: center;
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.3);
+  margin: 2px 0;
+}
+
+/* Dice slots */
+.dice-area {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 114px;
+}
+
+.die-slot {
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.die {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 900;
+  position: relative;
+  animation: popIn 0.2s ease-out;
+}
+
+@keyframes popIn {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.die.normal {
+  background: linear-gradient(145deg, #ffffff 0%, #cccccc 100%);
+  color: #222;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+.die.shield {
+  background: linear-gradient(145deg, #ffd700 0%, #e08c00 100%);
+  color: #1a0a00;
+  box-shadow: 0 2px 10px rgba(255,180,0,0.5);
+}
+
+.die.shield::after {
+  content: '🛡';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+/* Lane score bar */
+.lane-score-area {
+  border-top: 1px solid rgba(255,215,0,0.15);
+  border-bottom: 1px solid rgba(255,215,0,0.15);
+  padding: 5px 0;
+  text-align: center;
+}
+
+.score-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.s-ai   { color: #ff6b6b; }
+.s-human { color: #74b9ff; }
+.s-sep  { color: rgba(255,255,255,0.3); font-weight: normal; font-size: 0.75rem; }
+
+.lane-status {
+  font-size: 0.65rem;
+  margin-top: 2px;
+  min-height: 12px;
+}
+
+/* ===== SIDE PANEL ===== */
+.side-panel {
+  width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pbox {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,215,0,0.15);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.ptitle {
+  font-size: 0.68rem;
+  color: rgba(255,215,0,0.5);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Turn indicator */
+.turn-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: bold;
+}
+.turn-human { background: rgba(116,185,255,0.2); color: #74b9ff; }
+.turn-ai    { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+.turn-done  { background: rgba(255,215,0,0.15); color: #ffd700; }
+
+/* Current die display */
+.die-display-area {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.die.large {
+  width: 52px;
+  height: 52px;
+  font-size: 1.6rem;
+  border-radius: 12px;
+  cursor: default;
+}
+
+.die.choosable {
+  cursor: pointer;
+  outline: 2px solid transparent;
+  transition: all 0.15s;
+}
+.die.choosable:hover {
+  outline: 2px solid #ffd700;
+  transform: scale(1.1);
+}
+
+/* Skills */
+.skill-btn {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,215,0,0.35);
+  background: rgba(255,215,0,0.08);
+  color: #ffd700;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-family: inherit;
+  transition: all 0.15s;
+  text-align: left;
+  margin-bottom: 6px;
+}
+.skill-btn:last-child { margin-bottom: 0; }
+.skill-btn:hover:not(:disabled) {
+  background: rgba(255,215,0,0.18);
+  transform: translateX(2px);
+}
+.skill-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.hold-btn {
+  border-color: rgba(255,107,107,0.35);
+  background: rgba(255,107,107,0.08);
+  color: #ff6b6b;
+}
+.hold-btn:hover:not(:disabled) {
+  background: rgba(255,107,107,0.18);
+}
+
+/* Message */
+.msg-text {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  min-height: 48px;
+  color: #e8d5a3;
+}
+
+/* Win tracker */
+.win-track {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.win-box {
+  text-align: center;
+}
+.win-num {
+  font-size: 1.8rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.win-lbl { font-size: 0.65rem; opacity: 0.5; }
+
+/* Game Over Overlay */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+
+.result-card {
+  background: linear-gradient(145deg, #1a1a2e, #16213e);
+  border: 2px solid #ffd700;
+  border-radius: 20px;
+  padding: 40px 48px;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(255,215,0,0.25);
+}
+.result-card h2 { font-size: 2.2rem; margin-bottom: 8px; }
+.result-card p  { opacity: 0.7; margin-bottom: 20px; font-size: 0.9rem; }
+
+.restart-btn {
+  padding: 12px 32px;
+  background: linear-gradient(135deg, #ffd700, #ff8c00);
+  border: none;
+  border-radius: 10px;
+  color: #1a0a00;
+  font-size: 1rem;
+  font-weight: bold;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.restart-btn:hover { opacity: 0.9; transform: scale(1.03); }
+
+.alchigi-flash {
+  animation: flash 0.5s ease;
+}
+@keyframes flash {
+  0%,100% { background: rgba(255,80,80,0) }
+  50% { background: rgba(255,80,80,0.3) }
+}
+</style>
+</head>
+<body>
+
+<h1>🎲 티카투카</h1>
+
+<div class="game-wrapper">
+  <!-- BOARD -->
+  <div class="board" id="board"></div>
+
+  <!-- SIDE PANEL -->
+  <div class="side-panel">
+
+    <!-- Turn + Die -->
+    <div class="pbox">
+      <div class="ptitle">현재 턴</div>
+      <div style="margin-bottom:8px" id="turn-badge-wrap">
+        <span class="turn-badge turn-human" id="turn-badge">내 턴</span>
+      </div>
+      <div class="die-display-area" id="die-display"></div>
+    </div>
+
+    <!-- Skills -->
+    <div class="pbox">
+      <div class="ptitle">스킬</div>
+      <button class="skill-btn" id="tazza-btn" onclick="useTazza()">🃏 타짜의 손놀림</button>
+      <button class="skill-btn hold-btn" id="hold-btn" onclick="useHold()">✋ 홀드</button>
+    </div>
+
+    <!-- Win tracker -->
+    <div class="pbox">
+      <div class="ptitle">라인 현황</div>
+      <div class="win-track">
+        <div class="win-box">
+          <div class="win-num s-ai" id="ai-wins">0</div>
+          <div class="win-lbl">AI</div>
+        </div>
+        <div style="opacity:0.3;font-size:1.2rem">vs</div>
+        <div class="win-box">
+          <div class="win-num s-human" id="human-wins">0</div>
+          <div class="win-lbl">나</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message -->
+    <div class="pbox">
+      <div class="ptitle">로그</div>
+      <div class="msg-text" id="msg-box">게임 시작!</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let G = {};
+
+function newGame() {
+  G = {
+    // lanes[p][l] = [{value, isShield}, ...]   p:0=AI, p:1=Human
+    lanes: [[[], [], []], [[], [], []]],
+    phase: 'init',  // init | placing | choosing | shield-placing | ai-turn | done
+    currentDie: null,
+    secondDie:  null,
+    shieldDie:  null,
+    humanHeld:  false,
+    aiHeld:     false,
+    tazzaUsed:  false,
+    holdUsed:   false,
+    msg: '',
+  };
+  render();
+  setMsg('선 플레이어로 첫 실드 주사위를 받았습니다!');
+  setTimeout(() => {
+    G.currentDie = roll(true);
+    G.phase = 'placing';
+    render();
+  }, 300);
+}
+
+// ============================================================
+// DICE / SCORING
+// ============================================================
+function roll(isShield = false) {
+  return { value: Math.ceil(Math.random() * 6), isShield };
+}
+
+function laneScore(dice) {
+  if (!dice.length) return 0;
+  const cnt = {};
+  dice.forEach(d => cnt[d.value] = (cnt[d.value] || 0) + 1);
+  return Object.entries(cnt).reduce((s, [v, n]) => s + v * (2*n - 1), 0);
+}
+
+function laneResults() {
+  return [0,1,2].map(l => ({
+    ai:    laneScore(G.lanes[0][l]),
+    human: laneScore(G.lanes[1][l]),
+  }));
+}
+
+function countWins() {
+  const r = laneResults();
+  return {
+    ai:    r.filter(x => x.ai > x.human).length,
+    human: r.filter(x => x.human > x.ai).length,
+  };
+}
+
+function finalWinner() {
+  const r = laneResults();
+  const w = countWins();
+  if (w.ai >= 2) return 'ai';
+  if (w.human >= 2) return 'human';
+
+  // 1-1 + one tied lane → compare win margins
+  if (w.ai === 1 && w.human === 1) {
+    const aiMargin    = r.find(x => x.ai > x.human)?.ai - r.find(x => x.ai > x.human)?.human || 0;
+    const humanMargin = r.find(x => x.human > x.ai)?.human - r.find(x => x.human > x.ai)?.ai || 0;
+    if (aiMargin > humanMargin) return 'ai';
+    if (humanMargin > aiMargin) return 'human';
+    return 'draw';
+  }
+  // All tied (shouldn't happen often)
+  return 'draw';
+}
+
+// ============================================================
+// HUMAN ACTIONS
+// ============================================================
+function placeDie(lane) {
+  if (!['placing','shield-placing'].includes(G.phase)) return;
+
+  if (G.phase === 'shield-placing') {
+    // Place shield die on human's own field
+    if (G.lanes[1][lane].length >= 3) { setMsg('이 라인은 가득 찼습니다!'); return; }
+    G.lanes[1][lane].push(G.shieldDie);
+    G.shieldDie = null;
+    G.phase = 'ai-turn';
+    setMsg('실드 주사위 배치 완료!');
+    render();
+    scheduleAI();
+    return;
+  }
+
+  // Normal placement
+  if (G.lanes[1][lane].length >= 3) { setMsg('이 라인은 가득 찼습니다!'); return; }
+
+  const die = G.currentDie;
+  G.currentDie = null;
+  G.secondDie  = null;
+
+  // Check 알치기
+  const oppLane = G.lanes[0][lane];
+  const alchigiIdx = oppLane.findIndex(d => !d.isShield && d.value === die.value);
+
+  if (alchigiIdx !== -1) {
+    // Remove ALL non-shield dice of same value from opponent lane
+    G.lanes[0][lane] = oppLane.filter(d => d.isShield || d.value !== die.value);
+    G.lanes[1][lane].push(die);
+    G.shieldDie = roll(true);
+    G.phase = 'shield-placing';
+    setMsg(`🎯 알치기! ${die.value} 제거 성공!\n실드 주사위 ${G.shieldDie.value} → 어디든 배치하세요.`);
+    render();
+    return;
+  }
+
+  G.lanes[1][lane].push(die);
+  setMsg(`${die.value}을 ${lane+1}번 라인에 배치했습니다.`);
+  G.phase = 'ai-turn';
+  render();
+  scheduleAI();
+}
+
+function useTazza() {
+  if (G.tazzaUsed || G.phase !== 'placing') return;
+  G.secondDie  = roll(false);
+  G.tazzaUsed  = true;
+  G.phase      = 'choosing';
+  setMsg(`두 주사위 중 하나를 선택하세요!`);
+  render();
+}
+
+function chooseDie(pick) {
+  if (G.phase !== 'choosing') return;
+  if (pick === 1) G.currentDie = G.secondDie;
+  G.secondDie = null;
+  G.phase = 'placing';
+  setMsg(`${G.currentDie.value} 선택! 배치할 라인을 고르세요.`);
+  render();
+}
+
+function useHold() {
+  if (G.holdUsed || G.humanHeld) return;
+  if (!['placing','init'].includes(G.phase) && G.phase !== 'choosing') return;
+  G.humanHeld = true;
+  G.holdUsed  = true;
+  G.currentDie = null;
+  G.secondDie  = null;
+  G.phase = 'ai-turn';
+  setMsg('홀드! AI가 계속 진행합니다.');
+  render();
+  scheduleAI();
+}
+
+// ============================================================
+// AI
+// ============================================================
+function canPlay(p) {
+  // p can play if not held and at least one lane has space
+  const held = p === 0 ? G.aiHeld : G.humanHeld;
+  return !held && G.lanes[p].some(l => l.length < 3);
+}
+
+function scheduleAI() {
+  setTimeout(runAI, 700);
+}
+
+function runAI() {
+  if (G.phase === 'done') return;
+
+  if (!canPlay(0)) {
+    // AI is done
+    if (canPlay(1)) startHumanTurn();
+    else endGame();
+    return;
+  }
+
+  G.phase = 'ai-turn';
+
+  // Roll
+  let aiDie = roll(false);
+
+  // Consider 타짜의 손놀림
+  if (!G.tazzaUsedAI) {
+    const alt = roll(false);
+    const scoreA = bestScore(aiDie, 0, 1);
+    const scoreB = bestScore(alt, 0, 1);
+    if (scoreB > scoreA) aiDie = alt;
+    G.tazzaUsedAI = true;
+  }
+
+  // Consider hold
+  if (!G.aiHeld) {
+    const w = countWins();
+    if (w.ai >= 2) {
+      G.aiHeld = true;
+      setMsg('AI가 홀드했습니다!');
+      render();
+      setTimeout(() => {
+        if (canPlay(1)) startHumanTurn();
+        else endGame();
+      }, 600);
+      return;
+    }
+  }
+
+  // Choose lane
+  const lane = bestLane(aiDie, 0, 1);
+  if (lane === -1) {
+    G.aiHeld = true;
+    setMsg('AI의 모든 라인이 가득 찼습니다.');
+    render();
+    setTimeout(() => {
+      if (canPlay(1)) startHumanTurn();
+      else endGame();
+    }, 500);
+    return;
+  }
+
+  // Place
+  const oppLane = G.lanes[1][lane];
+  const alchigiTargets = oppLane.filter(d => !d.isShield && d.value === aiDie.value);
+
+  if (alchigiTargets.length > 0) {
+    G.lanes[1][lane] = oppLane.filter(d => d.isShield || d.value !== aiDie.value);
+    G.lanes[0][lane].push(aiDie);
+    const sd = roll(true);
+    const sdLane = bestLaneForShield(sd, 0);
+    G.lanes[0][sdLane].push(sd);
+    setMsg(`🤖 AI 알치기! ${aiDie.value}으로 ${lane+1}번 라인 공격!\n실드 ${sd.value} → ${sdLane+1}번 라인 배치`);
+  } else {
+    G.lanes[0][lane].push(aiDie);
+    setMsg(`🤖 AI: ${aiDie.value}을 ${lane+1}번 라인에 배치`);
+  }
+
+  render();
+
+  setTimeout(() => {
+    if (G.humanHeld) {
+      // Human held, AI keeps going
+      scheduleAI();
+    } else {
+      if (canPlay(1)) startHumanTurn();
+      else if (canPlay(0)) scheduleAI();
+      else endGame();
+    }
+  }, 600);
+}
+
+function startHumanTurn() {
+  if (!canPlay(1)) {
+    if (canPlay(0)) {
+      G.phase = 'ai-turn';
+      scheduleAI();
+    } else {
+      endGame();
+    }
+    return;
+  }
+  G.currentDie = roll(false);
+  G.phase = 'placing';
+  setMsg(`주사위 ${G.currentDie.value} — 배치할 라인을 선택하세요.`);
+  render();
+}
+
+// ============================================================
+// AI SCORING HEURISTICS
+// ============================================================
+function evalPlacement(die, lane, me, opp) {
+  if (G.lanes[me][lane].length >= 3) return -9999;
+
+  let score = 0;
+
+  // 알치기 bonus
+  const targets = G.lanes[opp][lane].filter(d => !d.isShield && d.value === die.value);
+  if (targets.length > 0) {
+    const removed = targets.reduce((s, d) => {
+      const n = G.lanes[opp][lane].filter(x => x.value === d.value).length;
+      return s + d.value * (2*n - 1);
+    }, 0);
+    score += removed * 2.5 + 20; // shield die bonus value
+  }
+
+  // Score gain
+  const before = laneScore(G.lanes[me][lane]);
+  const after  = laneScore([...G.lanes[me][lane], die]);
+  score += (after - before) * 1.5;
+
+  // Lane flip bonus
+  const oppScore = laneScore(G.lanes[opp][lane]);
+  if (before <= oppScore && after > oppScore) score += 30;
+
+  // Winning lane — extend margin (useful for tiebreaker)
+  if (before > oppScore) score += 5;
+
+  // Penalize filling a losing lane with no hope
+  if (G.lanes[me][lane].length === 2 && after < oppScore - 15) score -= 8;
+
+  return score;
+}
+
+function bestLane(die, me, opp) {
+  let best = -1, bestS = -9999;
+  for (let l = 0; l < 3; l++) {
+    const s = evalPlacement(die, l, me, opp);
+    if (s > bestS) { bestS = s; best = l; }
+  }
+  return best;
+}
+
+function bestScore(die, me, opp) {
+  let best = -9999;
+  for (let l = 0; l < 3; l++) {
+    const s = evalPlacement(die, l, me, opp);
+    if (s > best) best = s;
+  }
+  return best;
+}
+
+function bestLaneForShield(die, me) {
+  let best = 0, bestS = -9999;
+  for (let l = 0; l < 3; l++) {
+    if (G.lanes[me][l].length >= 3) continue;
+    const before = laneScore(G.lanes[me][l]);
+    const after  = laneScore([...G.lanes[me][l], die]);
+    const oppS   = laneScore(G.lanes[1-me][l]);
+    let s = (after - before) + (after > oppS ? 25 : 0) + (before > oppS ? 10 : 0);
+    if (s > bestS) { bestS = s; best = l; }
+  }
+  return best;
+}
+
+// ============================================================
+// GAME OVER
+// ============================================================
+function endGame() {
+  G.phase = 'done';
+  render();
+  const w = finalWinner();
+  let h2, sub;
+  if (w === 'human') { h2 = '🎉 승리!';  sub = '티카투카 마스터!'; }
+  else if (w === 'ai') { h2 = '😢 패배'; sub = 'AI에게 졌습니다. 다시 도전하세요!'; }
+  else { h2 = '🤝 무승부'; sub = '막상막하의 승부였습니다.'; }
+
+  const ov = document.createElement('div');
+  ov.className = 'overlay';
+  ov.innerHTML = `
+    <div class="result-card">
+      <h2>${h2}</h2>
+      <p>${sub}</p>
+      <button class="restart-btn" onclick="document.querySelector('.overlay').remove(); newGame();">다시 시작</button>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function setMsg(txt) {
+  G.msg = txt;
+}
+
+function dieHTML(d, extra = '') {
+  if (!d) return '';
+  const cls = d.isShield ? 'shield' : 'normal';
+  return `<div class="die ${cls} ${extra}">${d.value}</div>`;
+}
+
+function render() {
+  renderBoard();
+  renderPanel();
+}
+
+function renderBoard() {
+  const board = document.getElementById('board');
+  const results = laneResults();
+  const w = countWins();
+
+  document.getElementById('ai-wins').textContent    = w.ai;
+  document.getElementById('human-wins').textContent = w.human;
+
+  board.innerHTML = '';
+  for (let l = 0; l < 3; l++) {
+    const r = results[l];
+    const aiDice    = G.lanes[0][l];
+    const humanDice = G.lanes[1][l];
+
+    const canClick = ['placing','shield-placing'].includes(G.phase) &&
+                     G.lanes[1][l].length < 3;
+
+    // Detect 알치기 possibility (current die matches AI die on this lane)
+    const checkDie = G.phase === 'shield-placing' ? null : G.currentDie;
+    const canAlchigi = checkDie && !G.phase.includes('shield') &&
+                       aiDice.some(d => !d.isShield && d.value === checkDie.value);
+
+    let colClass = 'lane-col';
+    if (canClick) colClass += ' clickable';
+    if (canClick && canAlchigi) colClass += ' alchigi-possible';
+
+    // Status
+    let statusHTML = '';
+    if (r.ai > r.human) statusHTML = `<span style="color:#ff6b6b">AI 우세</span>`;
+    else if (r.human > r.ai) statusHTML = `<span style="color:#74b9ff">내 우세</span>`;
+    else if (r.ai > 0) statusHTML = `<span style="color:#ffd700">동점</span>`;
+
+    // Slots
+    function slots(dice, isAi) {
+      let html = '';
+      for (let i = 0; i < 3; i++) {
+        const d = dice[i];
+        html += `<div class="die-slot">${d ? dieHTML(d) : ''}</div>`;
+      }
+      return html;
+    }
+
+    const col = document.createElement('div');
+    col.className = colClass;
+    if (canClick) col.onclick = () => placeDie(l);
+
+    col.innerHTML = `
+      <div class="lane-label">라인 ${l+1} ${canAlchigi && canClick ? '🎯' : ''}</div>
+      <div class="player-tag">AI</div>
+      <div class="dice-area">${slots(aiDice, true)}</div>
+      <div class="lane-score-area">
+        <div class="score-row">
+          <span class="s-ai">${r.ai}</span>
+          <span class="s-sep">vs</span>
+          <span class="s-human">${r.human}</span>
+        </div>
+        <div class="lane-status">${statusHTML}</div>
+      </div>
+      <div class="dice-area">${slots(humanDice, false)}</div>
+      <div class="player-tag">나</div>
+    `;
+    board.appendChild(col);
+  }
+}
+
+function renderPanel() {
+  // Turn badge
+  const badge = document.getElementById('turn-badge');
+  if (G.phase === 'ai-turn') {
+    badge.textContent = 'AI 턴';
+    badge.className = 'turn-badge turn-ai';
+  } else if (G.phase === 'done') {
+    badge.textContent = '종료';
+    badge.className = 'turn-badge turn-done';
+  } else {
+    badge.textContent = '내 턴';
+    badge.className = 'turn-badge turn-human';
+  }
+
+  // Die display
+  const dd = document.getElementById('die-display');
+  if (G.phase === 'choosing') {
+    dd.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div style="font-size:0.7rem;opacity:0.6">선택하세요</div>
+        <div style="display:flex;gap:8px">
+          <div onclick="chooseDie(0)">${dieHTML(G.currentDie,'large choosable')}</div>
+          <div onclick="chooseDie(1)">${dieHTML(G.secondDie,'large choosable')}</div>
+        </div>
+      </div>`;
+  } else if (G.phase === 'shield-placing') {
+    dd.innerHTML = `
+      <div style="text-align:center">
+        <div style="font-size:0.7rem;opacity:0.6;margin-bottom:4px">실드 주사위</div>
+        ${dieHTML(G.shieldDie,'large')}
+      </div>`;
+  } else if (G.currentDie && G.phase !== 'ai-turn') {
+    dd.innerHTML = dieHTML(G.currentDie, 'large');
+  } else if (G.phase === 'ai-turn') {
+    dd.innerHTML = `<span style="opacity:0.4;font-size:0.78rem">AI 생각 중...</span>`;
+  } else {
+    dd.innerHTML = `<span style="opacity:0.2">—</span>`;
+  }
+
+  // Skills
+  const tazzaBtn = document.getElementById('tazza-btn');
+  const holdBtn  = document.getElementById('hold-btn');
+
+  const tazzaOk = !G.tazzaUsed && G.phase === 'placing';
+  tazzaBtn.disabled = !tazzaOk;
+  tazzaBtn.textContent = G.tazzaUsed ? '🃏 타짜의 손놀림 (사용됨)' : '🃏 타짜의 손놀림';
+
+  const holdOk = !G.holdUsed && ['placing','choosing','init'].includes(G.phase);
+  holdBtn.disabled = !holdOk;
+  holdBtn.textContent = G.holdUsed ? '✋ 홀드 (사용됨)' : '✋ 홀드';
+
+  // Message
+  document.getElementById('msg-box').textContent = G.msg;
+}
+
+// ============================================================
+// START
+// ============================================================
+newGame();
+</script>
+</body>
+</html>

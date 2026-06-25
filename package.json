@@ -1,21 +1,21 @@
 {
-    "name": "omok-online",
-    "version": "1.0.0",
-    "description": "온라인 오목 게임",
-    "main": "server.js",
-    "scripts": {
-          "start": "node server.js",
-          "dev": "nodemon server.js"
-    },
-    "dependencies": {
-          "express": "^4.18.2",
-          "mongoose": "^8.0.0",
-          "socket.io": "^4.7.2"
-    },
-    "devDependencies": {
-          "nodemon": "^3.0.1"
-    },
-    "engines": {
-          "node": ">=18.0.0"
-    }
+  "name": "omok-online",
+  "version": "1.0.0",
+  "description": "온라인 오목 게임",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
