@@ -1388,7 +1388,7 @@
         <span class="tt-auto-dot"></span>
         <span>자동 분석 중 · <span id="tt-auto-time">--</span></span>
       </div>
-      <button class="tt-calib-btn" id="tt-calib-btn" onclick="ttStartCalib()">🎯 보드 위치 설정 (첫 실행 시 필요)</button>
+      <button class="tt-calib-btn" id="tt-calib-btn" onclick="ttStartCalib()" style="display:none;">🎯 보드 위치 재설정</button>
       <!-- 라이브 비디오 + 캘리브레이션 오버레이 -->
       <div style="position:relative;display:none;" id="tt-preview-wrap">
         <video id="tt-preview" autoplay muted playsinline
@@ -1791,7 +1791,6 @@ async function ttStartCapture() {
       // 라이브 피드 패널 표시
       document.getElementById('tt-preview-wrap').style.display = 'block';
       document.getElementById('tt-auto-status').style.display = 'flex';
-      document.getElementById('tt-calib-btn').style.display = 'block';
       ttStartAutoCapture();
     };
     stream.getVideoTracks()[0].addEventListener('ended', () => {
@@ -1824,16 +1823,71 @@ function ttAutoFrame() {
   cvs.width = W; cvs.height = H;
   const ctx = cvs.getContext('2d');
   ctx.drawImage(vid, 0, 0);
-  cvs.style.display = 'block';
   document.getElementById('tt-auto-time').textContent =
     new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+  // 캘리브레이션이 없으면 자동으로 찾기
+  if (!ttCalib) ttAutoCalib(ctx, W, H);
 
   if (ttCalib) {
     const detected   = ttDetectDice(ctx, W, H);
     const currentDie = ttDetectCurrentDie(ctx, W, H);
     if (detected) ttApplyDetection(detected, currentDie);
-    ttDrawDebugOverlay(ctx, detected);
   }
+}
+
+// ── 자동 캘리브레이션 ─────────────────────────────────────
+// 크림색 픽셀 밀도로 주사위 슬롯 영역을 자동 탐지
+function ttAutoCalib(ctx, W, H) {
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const skip = 4; // 성능용 샘플링 간격
+
+  // 행/열별 크림 픽셀 밀도 계산
+  const rowD = new Float32Array(H);
+  const colD = new Float32Array(W);
+  const rowC = new Float32Array(H);
+  const colC = new Float32Array(W);
+
+  for (let y = 0; y < H; y += skip) {
+    for (let x = 0; x < W; x += skip) {
+      const i = (y * W + x) * 4;
+      if (ttIsCream(data[i], data[i+1], data[i+2])) {
+        rowD[y]++; colD[x]++;
+      }
+      rowC[y]++; colC[x]++;
+    }
+  }
+  for (let y = 0; y < H; y++) rowD[y] = rowC[y] ? rowD[y]/rowC[y] : 0;
+  for (let x = 0; x < W; x++) colD[x] = colC[x] ? colD[x]/colC[x] : 0;
+
+  // 크림 밀도가 높은 행 범위 찾기 (주사위 슬롯 영역)
+  const rowTh = 0.05;
+  let y1 = -1, y2 = -1;
+  for (let y = Math.floor(H * 0.1); y < Math.floor(H * 0.92); y++) {
+    if (rowD[y] > rowTh) { if (y1 < 0) y1 = y; y2 = y; }
+  }
+  if (y1 < 0 || (y2 - y1) < H * 0.05) return; // 너무 작으면 무시
+
+  // 크림 밀도가 높은 열 범위 찾기
+  const colTh = 0.03;
+  let x1 = -1, x2 = -1;
+  for (let x = Math.floor(W * 0.03); x < Math.floor(W * 0.97); x++) {
+    if (colD[x] > colTh) { if (x1 < 0) x1 = x; x2 = x; }
+  }
+  if (x1 < 0 || (x2 - x1) < W * 0.1) return;
+
+  // 가운데 점수 영역 찾기 (두 패널 사이 크림 밀도 최저점)
+  const midStart = Math.floor(x1 + (x2 - x1) * 0.3);
+  const midEnd   = Math.floor(x1 + (x2 - x1) * 0.7);
+  let minD = Infinity, splitX = Math.floor((x1 + x2) / 2);
+  for (let x = midStart; x < midEnd; x++) {
+    if (colD[x] < minD) { minD = colD[x]; splitX = x; }
+  }
+
+  ttCalib = { x1: x1 - 4, y1: y1 - 4, x2: x2 + 4, y2: y2 + 4, splitX };
+  // 버튼 텍스트 업데이트
+  const btn = document.getElementById('tt-calib-btn');
+  if (btn) btn.textContent = '🎯 보드 위치 재설정';
 }
 
 // ── 색상 헬퍼 ─────────────────────────────────────────────
@@ -1943,12 +1997,13 @@ function ttDetectCurrentDie(ctx, W, H) {
 // ── 보드 전체 검출 ────────────────────────────────────────
 function ttDetectDice(ctx, W, H) {
   if (!ttCalib) return null;
-  const {x1, y1, x2, y2} = ttCalib;
+  const {x1, y1, x2, y2, splitX} = ttCalib;
   const bW = x2 - x1, bH = y2 - y1;
   const rowH = bH / 3;
-  // 점수 영역(중앙 ~10%) 기준으로 좌(나)/우(상대) 분리
-  const myEnd  = x1 + bW * 0.44;  // 내 패널 우측 끝
-  const oppStart = x1 + bW * 0.56; // 상대 패널 좌측 시작
+  // 자동 탐지된 splitX 또는 중앙 기본값으로 좌(나)/우(상대) 분리
+  const mid = splitX || (x1 + bW * 0.5);
+  const myEnd    = mid - bW * 0.03;
+  const oppStart = mid + bW * 0.03;
   const myDieW  = (myEnd - x1)      / 3;
   const oppDieW = (x2 - oppStart)   / 3;
   const dieH = rowH * 0.72;
@@ -2030,32 +2085,31 @@ function ttStartCalib() {
   const ovl = document.getElementById('tt-calib-overlay');
   ovl.style.display = 'flex';
   document.getElementById('tt-calib-step-txt').textContent = '나(좌측) 첫 번째 주사위 중심';
-  // 비디오 위에서 클릭 받기
-  const vid = document.getElementById('tt-preview');
-  vid.style.cursor = 'crosshair';
-  vid.onclick = ttCalibClick;
+  // 오버레이가 클릭을 가로채므로 오버레이에 핸들러 붙이기
+  ovl.onclick = ttCalibClick;
 }
 
 function ttCalibClick(e) {
+  const ovl = document.getElementById('tt-calib-overlay');
   const vid = document.getElementById('tt-preview');
-  const rect = vid.getBoundingClientRect();
-  // 비디오 화면 좌표 → 실제 비디오 해상도 좌표 변환
+  // 오버레이 크기 = 비디오 크기와 동일 (position:absolute inset:0)
+  const rect = ovl.getBoundingClientRect();
   const scaleX = vid.videoWidth  / rect.width;
   const scaleY = vid.videoHeight / rect.height;
   const vx = (e.clientX - rect.left) * scaleX;
   const vy = (e.clientY - rect.top)  * scaleY;
 
   if (ttCalibStep === 1) {
-    ttCalib = {x1: vx, y1: vy, x2:0, y2:0};
+    ttCalib = {x1: vx, y1: vy, x2: 0, y2: 0};
     ttCalibStep = 2;
     document.getElementById('tt-calib-step-txt').textContent = '상대방(우측) 마지막 주사위 중심';
   } else if (ttCalibStep === 2) {
     ttCalib.x2 = vx;
     ttCalib.y2 = vy;
     ttCalibStep = 0;
-    document.getElementById('tt-calib-overlay').style.display = 'none';
-    vid.style.cursor = '';
-    vid.onclick = null;
+    ovl.style.display = 'none';
+    ovl.onclick = null;
+    // 즉시 분석 실행
     ttAutoFrame();
   }
 }
