@@ -704,6 +704,183 @@
     #hd-side-panel { width:100%; max-width:480px; }
     #holdem-wrap { max-width:100%; }
   }
+
+  /* ── 티카투카 어드바이저 ─────────────────────────────────── */
+  #tikatuka-screen.active { flex-direction:row; align-items:flex-start; gap:20px; flex-wrap:wrap; }
+
+  .tt-board-area {
+    flex:1; min-width:320px;
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .tt-lanes {
+    display:flex; gap:10px;
+  }
+  .tt-lane {
+    flex:1; display:flex; flex-direction:column; gap:6px;
+    background:#1a1220; border:1px solid rgba(255,215,0,0.2);
+    border-radius:12px; padding:10px 8px;
+    transition:all 0.2s;
+  }
+  .tt-lane.tt-best {
+    border-color:#ffd700 !important;
+    box-shadow:0 0 18px rgba(255,215,0,0.35);
+  }
+  .tt-lane.tt-alchigi {
+    border-color:#ff4444 !important;
+    box-shadow:0 0 14px rgba(255,68,68,0.3);
+  }
+  .tt-lane-label {
+    text-align:center; font-size:0.7rem;
+    color:rgba(255,215,0,0.55); letter-spacing:2px;
+  }
+  .tt-player-tag {
+    text-align:center; font-size:0.65rem; color:rgba(255,255,255,0.3); margin:2px 0;
+  }
+  .tt-dice-row {
+    display:flex; flex-direction:column; gap:5px; min-height:108px;
+  }
+  .tt-die-slot {
+    height:34px; border-radius:7px;
+    background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.1);
+    display:flex; align-items:center; justify-content:center; gap:4px;
+  }
+  .tt-die-slot select {
+    width:44px; height:26px; border-radius:5px; border:none;
+    font-size:0.85rem; font-weight:700; text-align:center;
+    background:#fff; color:#222; cursor:pointer;
+  }
+  .tt-die-slot select.shield-die { background:#ffd700; color:#1a0a00; }
+  .tt-shield-btn {
+    width:22px; height:22px; border-radius:4px; border:1px solid rgba(255,215,0,0.4);
+    background:rgba(255,215,0,0.08); color:rgba(255,215,0,0.6);
+    font-size:0.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:all 0.15s;
+  }
+  .tt-shield-btn.on { background:#ffd700; color:#1a0a00; border-color:#ffd700; }
+  .tt-lane-score {
+    text-align:center; border-top:1px solid rgba(255,215,0,0.15);
+    border-bottom:1px solid rgba(255,215,0,0.15); padding:5px 0;
+  }
+  .tt-score-row { font-size:0.95rem; font-weight:700; display:flex; justify-content:center; align-items:center; gap:4px; }
+  .tt-s-opp   { color:#ff6b6b; }
+  .tt-s-me    { color:#74b9ff; }
+  .tt-s-sep   { color:rgba(255,255,255,0.25); font-size:0.7rem; }
+  .tt-lane-status { font-size:0.62rem; margin-top:2px; min-height:12px; text-align:center; }
+
+  .tt-input-row {
+    display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;
+  }
+  .tt-input-box {
+    background:#1a1220; border:1px solid rgba(255,215,0,0.2);
+    border-radius:12px; padding:12px 14px;
+    display:flex; flex-direction:column; gap:8px;
+    flex:1; min-width:140px;
+  }
+  .tt-input-label {
+    font-size:0.68rem; color:rgba(255,215,0,0.55); letter-spacing:2px; text-transform:uppercase;
+  }
+  .tt-die-input-wrap {
+    display:flex; align-items:center; gap:8px;
+  }
+  .tt-die-big {
+    width:46px; height:46px; border-radius:10px; font-size:1.4rem; font-weight:900;
+    display:flex; align-items:center; justify-content:center;
+    background:#fff; color:#222; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+  }
+  .tt-die-big.is-shield { background:#ffd700; color:#1a0a00; }
+  .tt-die-big.empty { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.3); font-size:1rem; }
+
+  .tt-input-box select {
+    padding:4px 8px; border-radius:6px; border:1px solid rgba(255,215,0,0.3);
+    background:#0d0a14; color:#e8d5a3; font-size:0.85rem; font-family:inherit; cursor:pointer;
+  }
+  .tt-input-box label {
+    display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#e8d5a3; cursor:pointer;
+  }
+  .tt-input-box input[type=checkbox] { width:14px; height:14px; cursor:pointer; }
+
+  .tt-side-panel {
+    width:220px; display:flex; flex-direction:column; gap:12px; flex-shrink:0;
+  }
+  .tt-panel-box {
+    background:#1a1220; border:1px solid rgba(255,215,0,0.2);
+    border-radius:12px; padding:14px;
+  }
+  .tt-panel-title {
+    font-size:0.68rem; color:rgba(255,215,0,0.55); letter-spacing:2px;
+    text-transform:uppercase; margin-bottom:10px;
+  }
+
+  .tt-recommend {
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .tt-rec-item {
+    padding:10px 12px; border-radius:8px;
+    border:1px solid rgba(255,255,255,0.1);
+    background:rgba(255,255,255,0.03);
+    cursor:default;
+  }
+  .tt-rec-item.best {
+    border-color:#ffd700; background:rgba(255,215,0,0.08);
+    box-shadow:0 2px 12px rgba(255,215,0,0.15);
+  }
+  .tt-rec-lane { font-size:1rem; font-weight:700; margin-bottom:4px; }
+  .tt-rec-tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
+  .tt-tag {
+    padding:2px 7px; border-radius:10px; font-size:0.65rem; font-weight:700;
+  }
+  .tt-tag-alchigi { background:rgba(255,68,68,0.2); color:#ff6b6b; border:1px solid rgba(255,68,68,0.3); }
+  .tt-tag-flip    { background:rgba(116,185,255,0.2); color:#74b9ff; border:1px solid rgba(116,185,255,0.3); }
+  .tt-tag-score   { background:rgba(100,255,150,0.15); color:#55dd88; border:1px solid rgba(100,255,150,0.2); }
+  .tt-tag-shield  { background:rgba(255,215,0,0.15); color:#ffd700; border:1px solid rgba(255,215,0,0.3); }
+  .tt-rec-score { font-size:0.75rem; color:rgba(255,255,255,0.5); }
+
+  .tt-skill-btn {
+    width:100%; padding:8px 10px; border-radius:8px;
+    border:1px solid rgba(255,215,0,0.35); background:rgba(255,215,0,0.08);
+    color:#ffd700; font-size:0.8rem; font-family:inherit; cursor:pointer;
+    transition:all 0.15s; text-align:left; margin-bottom:6px;
+  }
+  .tt-skill-btn:last-child { margin-bottom:0; }
+  .tt-skill-btn.used { opacity:0.3; cursor:default; }
+  .tt-skill-btn.hold-btn {
+    border-color:rgba(255,107,107,0.35); background:rgba(255,107,107,0.08); color:#ff6b6b;
+  }
+
+  .tt-capture-btn {
+    width:100%; padding:10px; border-radius:8px;
+    border:1px solid rgba(116,185,255,0.35); background:rgba(116,185,255,0.08);
+    color:#74b9ff; font-size:0.82rem; font-family:inherit; cursor:pointer;
+    transition:all 0.15s; margin-bottom:8px;
+  }
+  .tt-capture-btn:hover { background:rgba(116,185,255,0.16); }
+  #tt-preview-wrap { display:none; }
+  #tt-preview { width:100%; border-radius:8px; border:1px solid rgba(255,215,0,0.2); }
+
+  .tt-reset-btn {
+    width:100%; padding:8px; border-radius:8px;
+    border:1px solid rgba(255,255,255,0.15); background:transparent;
+    color:rgba(255,255,255,0.5); font-size:0.78rem; font-family:inherit; cursor:pointer;
+  }
+  .tt-reset-btn:hover { background:rgba(255,255,255,0.06); }
+  .tt-back-btn {
+    background:none; border:none; color:rgba(255,215,0,0.7); font-size:0.82rem;
+    cursor:pointer; font-family:inherit; padding:0;
+  }
+  .tt-back-btn:hover { color:#ffd700; }
+  .tt-win-banner {
+    padding:8px 12px; border-radius:8px; text-align:center;
+    font-size:0.82rem; font-weight:700;
+  }
+  .tt-win-me   { background:rgba(116,185,255,0.15); color:#74b9ff; border:1px solid rgba(116,185,255,0.3); }
+  .tt-win-opp  { background:rgba(255,107,107,0.15); color:#ff6b6b; border:1px solid rgba(255,107,107,0.3); }
+  .tt-win-tie  { background:rgba(255,215,0,0.1);    color:#ffd700;  border:1px solid rgba(255,215,0,0.3); }
+  .tt-win-none { background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.4); border:1px solid rgba(255,255,255,0.1); }
+
+  @media (max-width:800px) {
+    #tikatuka-screen.active { flex-direction:column; align-items:stretch; }
+    .tt-side-panel { width:100%; }
+  }
 </style>
 </head>
 <body>
@@ -799,6 +976,13 @@
         <p class="muted">방을 개설하고 친구를 초대하세요</p>
         <button class="btn-secondary" onclick="openCreateRoomModal()">방 만들기</button>
       </div>
+    </div>
+
+    <div class="card" style="background:linear-gradient(135deg,#1a1220,#0d0a14);border-color:rgba(255,215,0,0.3);">
+      <div class="card-title" style="color:rgba(255,215,0,0.7);">🎲 티카투카</div>
+      <p class="muted" style="color:rgba(255,215,0,0.45);">로스트아크 미니게임 전략 어드바이저</p>
+      <button class="btn-secondary" onclick="showScreen('tikatuka-screen'); ttInit();"
+        style="border-color:rgba(255,215,0,0.4);color:#ffd700;background:rgba(255,215,0,0.08);">어드바이저 열기</button>
     </div>
 
     <div class="card lobby-wide" id="room-list-card">
@@ -1061,6 +1245,99 @@
   </div>
 </div>
 
+<!-- 티카투카 어드바이저 -->
+<div id="tikatuka-screen" class="screen" style="background:#0d0a14; min-height:100vh; padding:20px 16px;">
+  <div class="tt-board-area">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      <button class="tt-back-btn" onclick="showScreen('lobby-screen')">← 로비로</button>
+      <span style="font-size:1.3rem;font-weight:700;color:#ffd700;letter-spacing:3px;">🎲 티카투카 어드바이저</span>
+    </div>
+
+    <!-- 현재 주사위 입력 -->
+    <div class="tt-input-row">
+      <div class="tt-input-box">
+        <div class="tt-input-label">내 주사위</div>
+        <div class="tt-die-input-wrap">
+          <div class="tt-die-big empty" id="tt-cur-die-display">?</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <select id="tt-cur-val" onchange="ttUpdateCurDie()">
+              <option value="0">— 없음</option>
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+              <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            </select>
+            <label><input type="checkbox" id="tt-cur-shield" onchange="ttUpdateCurDie()"> 🛡 실드</label>
+          </div>
+        </div>
+      </div>
+      <div class="tt-input-box" id="tt-second-box" style="opacity:0.4;">
+        <div class="tt-input-label">타짜 추가주사위</div>
+        <div class="tt-die-input-wrap">
+          <div class="tt-die-big empty" id="tt-sec-die-display">?</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <select id="tt-sec-val" onchange="ttUpdateSecDie()" disabled>
+              <option value="0">— 없음</option>
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+              <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            </select>
+            <label style="opacity:0.5;"><input type="checkbox" id="tt-sec-shield" onchange="ttUpdateSecDie()" disabled> 🛡 실드</label>
+          </div>
+        </div>
+      </div>
+      <div class="tt-input-box">
+        <div class="tt-input-label">스킬 상태</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#e8d5a3;cursor:pointer;">
+          <input type="checkbox" id="tt-tazza-cb" onchange="ttUpdateSkills()" checked> 🃏 타짜의 손놀림 사용가능
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#e8d5a3;cursor:pointer;margin-top:4px;">
+          <input type="checkbox" id="tt-hold-cb" onchange="ttUpdateSkills()" checked> ✋ 홀드 사용가능
+        </label>
+      </div>
+    </div>
+
+    <!-- 3라인 보드 -->
+    <div class="tt-lanes" id="tt-lanes-container">
+      <!-- JS로 렌더링 -->
+    </div>
+
+    <button class="tt-reset-btn" onclick="ttReset()">🔄 초기화</button>
+  </div>
+
+  <!-- 사이드 패널 -->
+  <div class="tt-side-panel">
+    <!-- 화면 캡처 -->
+    <div class="tt-panel-box">
+      <div class="tt-panel-title">📺 화면 참조</div>
+      <button class="tt-capture-btn" onclick="ttStartCapture()">🖥 화면 공유 시작</button>
+      <div id="tt-preview-wrap">
+        <video id="tt-preview" autoplay muted playsinline></video>
+      </div>
+    </div>
+
+    <!-- 현황 -->
+    <div class="tt-panel-box">
+      <div class="tt-panel-title">현재 현황</div>
+      <div id="tt-status-area" style="display:flex;flex-direction:column;gap:6px;">
+        <div class="tt-win-none" id="tt-win-status">분석 대기 중...</div>
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-top:2px;" id="tt-wins-detail"></div>
+      </div>
+    </div>
+
+    <!-- 추천 -->
+    <div class="tt-panel-box">
+      <div class="tt-panel-title">🎯 최적 수 추천</div>
+      <div class="tt-recommend" id="tt-recommend-area">
+        <div style="color:rgba(255,255,255,0.3);font-size:0.8rem;">주사위를 입력하면<br>최적 수를 분석합니다</div>
+      </div>
+    </div>
+
+    <!-- 홀드 조언 -->
+    <div class="tt-panel-box" id="tt-hold-advice" style="display:none;">
+      <div class="tt-panel-title">✋ 홀드 조언</div>
+      <div id="tt-hold-text" style="font-size:0.8rem;color:#e8d5a3;line-height:1.5;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 홀덤 게임오버 -->
 <div id="hd-gameover-overlay">
   <div id="hd-gameover-box">
@@ -1072,6 +1349,346 @@
 </div>
 
 <script>
+// ══════════════════════════════════════════════════════════
+// 티카투카 어드바이저
+// ══════════════════════════════════════════════════════════
+const TT = {
+  // lanes[l] = { opp:[{v,s},...], me:[{v,s},...] }  v=0 means empty
+  lanes: [
+    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+  ],
+  cur:  { v:0, s:false },
+  sec:  { v:0, s:false },
+  tazzaAvail: true,
+  holdAvail: true,
+  captureStream: null,
+};
+
+function ttInit() {
+  ttRenderBoard();
+  ttAnalyze();
+}
+
+function ttReset() {
+  TT.lanes = [
+    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+  ];
+  TT.cur = { v:0, s:false };
+  TT.sec = { v:0, s:false };
+  TT.tazzaAvail = true;
+  TT.holdAvail  = true;
+  document.getElementById('tt-cur-val').value = '0';
+  document.getElementById('tt-cur-shield').checked = false;
+  document.getElementById('tt-sec-val').value = '0';
+  document.getElementById('tt-sec-shield').checked = false;
+  document.getElementById('tt-tazza-cb').checked = true;
+  document.getElementById('tt-hold-cb').checked = true;
+  ttUpdateCurDie();
+  ttUpdateSecDie();
+  ttRenderBoard();
+  ttAnalyze();
+}
+
+function ttUpdateCurDie() {
+  TT.cur.v = parseInt(document.getElementById('tt-cur-val').value) || 0;
+  TT.cur.s = document.getElementById('tt-cur-shield').checked;
+  const el = document.getElementById('tt-cur-die-display');
+  if (TT.cur.v === 0) { el.textContent = '?'; el.className = 'tt-die-big empty'; }
+  else { el.textContent = TT.cur.v; el.className = 'tt-die-big' + (TT.cur.s ? ' is-shield' : ''); }
+  ttAnalyze();
+}
+
+function ttUpdateSecDie() {
+  TT.sec.v = parseInt(document.getElementById('tt-sec-val').value) || 0;
+  TT.sec.s = document.getElementById('tt-sec-shield').checked;
+  const el = document.getElementById('tt-sec-die-display');
+  if (TT.sec.v === 0) { el.textContent = '?'; el.className = 'tt-die-big empty'; }
+  else { el.textContent = TT.sec.v; el.className = 'tt-die-big' + (TT.sec.s ? ' is-shield' : ''); }
+  ttAnalyze();
+}
+
+function ttUpdateSkills() {
+  TT.tazzaAvail = document.getElementById('tt-tazza-cb').checked;
+  TT.holdAvail  = document.getElementById('tt-hold-cb').checked;
+  const secBox = document.getElementById('tt-second-box');
+  const secSel = document.getElementById('tt-sec-val');
+  const secShield = document.getElementById('tt-sec-shield');
+  if (TT.tazzaAvail) {
+    secBox.style.opacity = '1';
+    secSel.disabled = false;
+    secShield.disabled = false;
+  } else {
+    secBox.style.opacity = '0.4';
+    secSel.disabled = true;
+    secShield.disabled = true;
+    TT.sec = { v:0, s:false };
+    secSel.value = '0';
+    document.getElementById('tt-sec-die-display').textContent = '?';
+    document.getElementById('tt-sec-die-display').className = 'tt-die-big empty';
+  }
+  ttAnalyze();
+}
+
+// ── 점수 계산 ─────────────────────────────────────────────
+function ttLaneScore(dice) {
+  const cnt = {};
+  dice.filter(d => d.v > 0).forEach(d => cnt[d.v] = (cnt[d.v] || 0) + 1);
+  return Object.entries(cnt).reduce((s, [v, n]) => s + Number(v) * (2 * n - 1), 0);
+}
+
+function ttLaneResults() {
+  return TT.lanes.map(lane => ({
+    opp: ttLaneScore(lane.opp),
+    me:  ttLaneScore(lane.me),
+  }));
+}
+
+// ── 수 평가 ────────────────────────────────────────────────
+function ttEvalMove(die, laneIdx) {
+  const lane = TT.lanes[laneIdx];
+  const myFilled   = lane.me.filter(d => d.v > 0).length;
+  if (myFilled >= 3) return null; // 라인 가득
+
+  const oppFilled  = lane.opp.filter(d => d.v > 0);
+  const myFilled_d = lane.me.filter(d => d.v > 0);
+
+  // 알치기 체크
+  const alchigiTargets = oppFilled.filter(d => !d.s && d.v === die.v);
+  const canAlchigi = alchigiTargets.length > 0 && !die.s && die.v > 0;
+
+  // 내 점수 변화
+  const myBefore = ttLaneScore(lane.me);
+  const myAfter  = ttLaneScore([...lane.me, die]);
+  const myGain   = myAfter - myBefore;
+
+  // 상대 점수 변화 (알치기 시)
+  let oppLoss = 0;
+  if (canAlchigi) {
+    const oppBefore = ttLaneScore(lane.opp);
+    const oppAfter  = ttLaneScore(lane.opp.filter(d => d.s || d.v !== die.v));
+    oppLoss = oppBefore - oppAfter;
+  }
+
+  // 라인 역전 여부
+  const r = ttLaneResults()[laneIdx];
+  const myFinal  = r.me  + myGain;
+  const oppFinal = r.opp - oppLoss;
+  const wasLosing = r.me <= r.opp;
+  const willWin   = myFinal > oppFinal;
+  const laneFlip  = wasLosing && willWin;
+
+  // 종합 점수 (전략 우선순위)
+  let priority = myGain + oppLoss;
+  if (canAlchigi) priority += 30;
+  if (laneFlip)   priority += 40;
+  if (!wasLosing && willWin) priority += 10; // 계속 이기는 라인 강화
+
+  return { laneIdx, canAlchigi, myGain, oppLoss, laneFlip, myFinal, oppFinal, priority, die };
+}
+
+// ── 분석 & 렌더 ────────────────────────────────────────────
+function ttAnalyze() {
+  ttRenderBoard();
+
+  const results = ttLaneResults();
+  const myWins  = results.filter(r => r.me  > r.opp).length;
+  const oppWins = results.filter(r => r.opp > r.me ).length;
+
+  // 현황 배너
+  const statusEl  = document.getElementById('tt-win-status');
+  const detailEl  = document.getElementById('tt-wins-detail');
+  const marginsMy  = results.filter(r => r.me  > r.opp).map(r => r.me  - r.opp);
+  const marginsOpp = results.filter(r => r.opp > r.me ).map(r => r.opp - r.me );
+  const myMaxMargin  = marginsMy.length  ? Math.max(...marginsMy)  : 0;
+  const oppMaxMargin = marginsOpp.length ? Math.max(...marginsOpp) : 0;
+
+  if (myWins >= 2)  { statusEl.className = 'tt-win-banner tt-win-me';  statusEl.textContent = '✨ 승리 중!'; }
+  else if (oppWins >= 2) { statusEl.className = 'tt-win-banner tt-win-opp'; statusEl.textContent = '⚠️ 패배 위기'; }
+  else if (myWins === 1 && oppWins === 1) {
+    statusEl.className = 'tt-win-banner tt-win-tie';
+    const myAdv = myMaxMargin > oppMaxMargin;
+    statusEl.textContent = '🤝 무승부 분기 — ' + (myAdv ? '내가 유리' : oppMaxMargin > myMaxMargin ? '상대 유리' : '동률');
+    detailEl.textContent = `내 마진 ${myMaxMargin} vs 상대 마진 ${oppMaxMargin}`;
+  } else {
+    statusEl.className = 'tt-win-banner tt-win-none';
+    statusEl.textContent = `내 ${myWins}라인 vs 상대 ${oppWins}라인`;
+    detailEl.textContent = '';
+  }
+
+  // 주사위 없으면 추천 생략
+  if (TT.cur.v === 0) {
+    document.getElementById('tt-recommend-area').innerHTML =
+      '<div style="color:rgba(255,255,255,0.3);font-size:0.8rem;">현재 주사위를 입력하면<br>최적 수를 분석합니다</div>';
+    document.getElementById('tt-hold-advice').style.display = 'none';
+    return;
+  }
+
+  // 각 주사위(현재/타짜)에 대해 모든 라인 평가
+  const dies = [TT.cur];
+  if (TT.tazzaAvail && TT.sec.v > 0) dies.push(TT.sec);
+
+  let allMoves = [];
+  for (const die of dies) {
+    for (let l = 0; l < 3; l++) {
+      const m = ttEvalMove(die, l);
+      if (m) { m.isSecond = die === TT.sec; allMoves.push(m); }
+    }
+  }
+
+  allMoves.sort((a, b) => b.priority - a.priority);
+
+  // 추천 렌더
+  const recArea = document.getElementById('tt-recommend-area');
+  if (allMoves.length === 0) {
+    recArea.innerHTML = '<div style="color:rgba(255,107,107,0.8);font-size:0.8rem;">모든 라인이 가득 찼습니다!</div>';
+  } else {
+    recArea.innerHTML = allMoves.slice(0, 3).map((m, i) => {
+      const tags = [];
+      if (m.canAlchigi) tags.push('<span class="tt-tag tt-tag-alchigi">🎯 알치기</span>');
+      if (m.laneFlip)   tags.push('<span class="tt-tag tt-tag-flip">↑ 라인역전</span>');
+      if (m.myGain > 0) tags.push(`<span class="tt-tag tt-tag-score">+${m.myGain}점</span>`);
+      if (m.oppLoss > 0) tags.push(`<span class="tt-tag tt-tag-alchigi">-${m.oppLoss}pts</span>`);
+      if (m.isSecond)   tags.push('<span class="tt-tag tt-tag-shield">🃏 타짜</span>');
+      const dieStr = m.isSecond ? `[${m.die.v}${m.die.s?'🛡':''}]` : `[${m.die.v}${m.die.s?'🛡':''}]`;
+      return `<div class="tt-rec-item ${i===0?'best':''}">
+        <div class="tt-rec-lane">${i===0?'★ ':''}${m.laneIdx+1}번 라인 ${dieStr}</div>
+        <div class="tt-rec-tags">${tags.join('')||'<span class="tt-tag" style="background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4);">일반 배치</span>'}</div>
+        <div class="tt-rec-score">배치 후: 내 ${m.myFinal} vs 상대 ${m.oppFinal}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // 홀드 조언
+  const holdBox = document.getElementById('tt-hold-advice');
+  if (TT.holdAvail) {
+    holdBox.style.display = '';
+    const txt = document.getElementById('tt-hold-text');
+    if (myWins >= 2) {
+      txt.innerHTML = '✅ <strong>홀드 추천!</strong> 2라인 이상 이기고 있어요. 지금 홀드하면 상대가 추격하기 어렵습니다.';
+    } else if (myWins <= 0 && oppWins >= 2) {
+      txt.innerHTML = '❌ <strong>홀드 비추천.</strong> 크게 지고 있어요. 계속 주사위를 던져 역전을 노리세요.';
+    } else {
+      txt.innerHTML = '⏸ 아직 홀드하기 이른 상황입니다. 라인을 2개 확보한 후 홀드를 고려하세요.';
+    }
+  } else {
+    holdBox.style.display = 'none';
+  }
+
+  // 라인 하이라이트 업데이트
+  const bestMove = allMoves[0];
+  document.querySelectorAll('.tt-lane').forEach((el, i) => {
+    el.classList.remove('tt-best','tt-alchigi');
+    if (bestMove && bestMove.laneIdx === i) {
+      el.classList.add(bestMove.canAlchigi ? 'tt-alchigi' : 'tt-best');
+    }
+  });
+}
+
+// ── 보드 렌더 ─────────────────────────────────────────────
+function ttRenderBoard() {
+  const results = ttLaneResults();
+  const container = document.getElementById('tt-lanes-container');
+  container.innerHTML = '';
+
+  for (let l = 0; l < 3; l++) {
+    const lane = TT.lanes[l];
+    const r    = results[l];
+
+    const col = document.createElement('div');
+    col.className = 'tt-lane';
+
+    let statusHTML = '';
+    if (r.me > r.opp)       statusHTML = '<span style="color:#74b9ff">내 우세</span>';
+    else if (r.opp > r.me)  statusHTML = '<span style="color:#ff6b6b">상대 우세</span>';
+    else if (r.me > 0)       statusHTML = '<span style="color:#ffd700">동점</span>';
+
+    col.innerHTML = `
+      <div class="tt-lane-label">라인 ${l+1}</div>
+      <div class="tt-player-tag">상대</div>
+      <div class="tt-dice-row">${[0,1,2].map(i => ttDieSlotHTML(l,'opp',i)).join('')}</div>
+      <div class="tt-lane-score">
+        <div class="tt-score-row">
+          <span class="tt-s-opp">${r.opp}</span>
+          <span class="tt-s-sep">vs</span>
+          <span class="tt-s-me">${r.me}</span>
+        </div>
+        <div class="tt-lane-status">${statusHTML}</div>
+      </div>
+      <div class="tt-dice-row">${[0,1,2].map(i => ttDieSlotHTML(l,'me',i)).join('')}</div>
+      <div class="tt-player-tag">나</div>
+    `;
+
+    container.appendChild(col);
+  }
+
+  // 이벤트 위임 (select/button changes)
+  container.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      const { lane, side, idx } = e.target.dataset;
+      TT.lanes[lane][side][idx].v = parseInt(e.target.value) || 0;
+      ttUpdateSlotStyle(e.target);
+      ttAnalyze();
+    });
+  });
+  container.querySelectorAll('.tt-shield-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const { lane, side, idx } = e.target.dataset;
+      TT.lanes[lane][side][idx].s = !TT.lanes[lane][side][idx].s;
+      e.target.classList.toggle('on', TT.lanes[lane][side][idx].s);
+      e.target.textContent = TT.lanes[lane][side][idx].s ? '🛡' : '○';
+      ttUpdateSlotStyle(e.target.previousElementSibling);
+      ttAnalyze();
+    });
+  });
+}
+
+function ttDieSlotHTML(l, side, i) {
+  const d = TT.lanes[l][side][i];
+  const selClass = d.s ? 'shield-die' : '';
+  const btnClass = d.s ? 'on' : '';
+  return `<div class="tt-die-slot">
+    <select class="${selClass}" data-lane="${l}" data-side="${side}" data-idx="${i}">
+      <option value="0"${d.v===0?' selected':''}>-</option>
+      ${[1,2,3,4,5,6].map(v=>`<option value="${v}"${d.v===v?' selected':''}>${v}</option>`).join('')}
+    </select>
+    <button class="tt-shield-btn ${btnClass}" data-lane="${l}" data-side="${side}" data-idx="${i}">${d.s?'🛡':'○'}</button>
+  </div>`;
+}
+
+function ttUpdateSlotStyle(sel) {
+  if (!sel || !sel.dataset) return;
+  const { lane, side, idx } = sel.dataset;
+  sel.className = TT.lanes[lane][side][idx].s ? 'shield-die' : '';
+}
+
+// ── 화면 캡처 ─────────────────────────────────────────────
+async function ttStartCapture() {
+  try {
+    if (TT.captureStream) {
+      TT.captureStream.getTracks().forEach(t => t.stop());
+      TT.captureStream = null;
+    }
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false });
+    TT.captureStream = stream;
+    const vid = document.getElementById('tt-preview');
+    vid.srcObject = stream;
+    document.getElementById('tt-preview-wrap').style.display = 'block';
+    stream.getVideoTracks()[0].addEventListener('ended', () => {
+      document.getElementById('tt-preview-wrap').style.display = 'none';
+      TT.captureStream = null;
+    });
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') alert('화면 캡처 실패: ' + e.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// 기존 오목 코드
+// ══════════════════════════════════════════════════════════
 const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
