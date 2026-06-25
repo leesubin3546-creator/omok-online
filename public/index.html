@@ -1855,74 +1855,73 @@ function ttAutoFrame() {
 }
 
 // ── 자동 캘리브레이션 ─────────────────────────────────────
-// "크림색 픽셀이 어두운 나무색(갈색) 옆에 있는" 픽셀만 카운트
-// → 게임 보드에만 존재하는 패턴, 브라우저 UI와 구분됨
+// 전략: 1920x1080 기준 팝업은 항상 화면 중앙에 뜸 → 중앙 크롭 후 초록 패널로 보드 위치 확정
 function ttAutoCalib(ctx, W, H) {
+  // 화면 해상도 비율 계산 (1920x1080 기준)
+  const scaleX = W / 1920;
+  const scaleY = H / 1080;
+
+  // 중앙 크롭 범위: 팝업이 항상 이 안에 존재
+  const scanX1 = Math.round(W * 0.28);
+  const scanX2 = Math.round(W * 0.78);
+  const scanY1 = Math.round(H * 0.08);
+  const scanY2 = Math.round(H * 0.82);
+
   const data = ctx.getImageData(0, 0, W, H).data;
-  const skip = 4;
+  const skip = 2;
 
-  // 어두운 나무색 (게임 보드 배경)
-  const isWood = (r,g,b) => r>40 && r<135 && g>22 && g<90 && b>8 && b<60 && r>g && g>=b;
+  // 내 영역(좌측) 초록 패널 색상
+  const isGreenPanel = (r,g,b) =>
+    g > 90 && g > r * 1.25 && g > b * 1.15 &&
+    r > 35 && r < 165 && b < 140 && g < 210;
 
-  const rowD = new Float32Array(H);
-  const colD = new Float32Array(W);
-  let hits = 0;
+  // 초록 패널 bounding box 탐색
+  let gxMin = scanX2, gxMax = scanX1;
+  let gyMin = scanY2, gyMax = scanY1;
+  let greenHits = 0;
 
-  for (let y = skip; y < H - skip; y += skip) {
-    for (let x = skip; x < W - skip; x += skip) {
+  for (let y = scanY1; y < scanY2; y += skip) {
+    for (let x = scanX1; x < scanX2; x += skip) {
       const i = (y * W + x) * 4;
-      if (!ttIsCream(data[i], data[i+1], data[i+2])) continue;
-
-      // 상하좌우 이웃 중 나무색이 하나라도 있으면 게임 보드 Die 슬롯으로 판단
-      const up    = ((y-skip)*W + x) * 4;
-      const down  = ((y+skip)*W + x) * 4;
-      const left  = (y*W + (x-skip)) * 4;
-      const right = (y*W + (x+skip)) * 4;
-
-      if (isWood(data[up],data[up+1],data[up+2])     ||
-          isWood(data[down],data[down+1],data[down+2])||
-          isWood(data[left],data[left+1],data[left+2])||
-          isWood(data[right],data[right+1],data[right+2])) {
-        rowD[y]++;
-        colD[x]++;
-        hits++;
+      if (isGreenPanel(data[i], data[i+1], data[i+2])) {
+        if (x < gxMin) gxMin = x;
+        if (x > gxMax) gxMax = x;
+        if (y < gyMin) gyMin = y;
+        if (y > gyMax) gyMax = y;
+        greenHits++;
       }
     }
   }
 
-  if (hits < 30) return; // 게임 보드가 화면에 없음
+  if (greenHits < 40 || (gxMax - gxMin) < 60 || (gyMax - gyMin) < 50) return;
 
-  // 최대값 기준 상대 임계치로 범위 결정
-  const maxRow = Math.max(...rowD);
-  const maxCol = Math.max(...colD);
-  if (maxRow === 0 || maxCol === 0) return;
+  // 초록 패널 = 내 보드 영역
+  const myX1 = gxMin;
+  const myX2 = gxMax;
+  const boardY1 = gyMin;
+  const boardY2 = gyMax;
+  const myPanelW = myX2 - myX1;
 
-  const rowTh = maxRow * 0.18;
-  const colTh = maxCol * 0.12;
+  // 점수열 너비 ≈ 내 패널 너비의 약 13%
+  // 상대 보드 ≈ 내 보드와 동일한 너비
+  const scoreColW = Math.round(myPanelW * 0.13);
+  const oppX1 = myX2 + scoreColW;
+  const oppX2 = oppX1 + myPanelW;
+  const splitX = myX2 + Math.round(scoreColW * 0.5);
 
-  let y1=-1, y2=-1;
-  for (let y=0; y<H; y++) {
-    if (rowD[y] > rowTh) { if (y1<0) y1=y; y2=y; }
-  }
-  let x1=-1, x2=-1;
-  for (let x=0; x<W; x++) {
-    if (colD[x] > colTh) { if (x1<0) x1=x; x2=x; }
-  }
-  if (y1<0 || x1<0 || (y2-y1)<30 || (x2-x1)<60) return;
+  // 굴린 주사위는 내 패널 왼쪽에 있음
+  const dieAreaX1 = Math.max(0, myX1 - Math.round(myPanelW * 0.55));
 
-  // 점수 영역 = 두 패널 사이 colD 최소 지점
-  const midStart = Math.floor(x1 + (x2-x1)*0.3);
-  const midEnd   = Math.floor(x1 + (x2-x1)*0.7);
-  let minD=Infinity, splitX=Math.floor((x1+x2)/2);
-  for (let x=midStart; x<midEnd; x++) {
-    if (colD[x]<minD) { minD=colD[x]; splitX=x; }
-  }
-
-  ttCalib      = { x1:x1-6, y1:y1-6, x2:x2+6, y2:y2+6, splitX };
+  ttCalib = {
+    x1: myX1, y1: boardY1, x2: oppX2, y2: boardY2,
+    splitX,
+    myX1, myX2, oppX1, oppX2,
+    gameX1: dieAreaX1
+  };
   ttCalibFails = 0;
   document.getElementById('tt-calib-notice').style.display = 'none';
   const btn = document.getElementById('tt-calib-btn');
-  if (btn) { btn.textContent='🎯 보드 위치 재설정'; btn.style.display='block'; }
+  if (btn) { btn.textContent = '🎯 보드 위치 재설정'; btn.style.display = 'block'; }
 }
 
 // ── 색상 헬퍼 ─────────────────────────────────────────────
@@ -1952,7 +1951,7 @@ function ttReadDie(ctx, cx, cy, dw, dh, side) {
     if (ttIsCream(data[i], data[i+1], data[i+2])) cream++;
     if (isPip(data[i], data[i+1], data[i+2]))     pipTotal++;
   }
-  if (cream / total < 0.22) return {v:0, s:false}; // 빈 슬롯 (어두운 나무 배경)
+  if (cream / total < 0.14) return {v:0, s:false}; // 빈 슬롯 (어두운 나무 배경)
 
   // 5x5 패치로 눈금 위치 샘플링
   const sp = (rx, ry) => {
@@ -2008,22 +2007,29 @@ function ttReadDie(ctx, cx, cy, dw, dh, side) {
   return {v: val, s: isShield};
 }
 
-// ── 굴린 주사위 감지 (보드 좌측 밖 영역) ──────────────────
+// ── 굴린 주사위 감지 (내 보드 좌측 영역) ──────────────────
 function ttDetectCurrentDie(ctx, W, H) {
   if (!ttCalib) return null;
-  const {x1, y1, y2} = ttCalib;
-  const bH = y2 - y1;
-  const dieSize = bH / 3 * 0.65;
-  // 보드 왼쪽 여백 중간 스캔 (x: 0~x1*0.85, y: 각 row 중심)
-  const searchRegions = [
-    {x: x1 * 0.45, y: y1 + bH * 0.5},  // 중단
-    {x: x1 * 0.45, y: y1 + bH * 0.25}, // 상단
-    {x: x1 * 0.45, y: y1 + bH * 0.75}, // 하단
-    {x: x1 * 0.25, y: y1 + bH * 0.5},
+  const {myX1, gameX1, y1, y2} = ttCalib;
+  const bH   = y2 - y1;
+  const rowH = bH / 3;
+
+  // 굴린 주사위 영역: myX1 왼쪽 ~ gameX1 사이
+  const areaW   = myX1 - gameX1;
+  const dieSize = Math.min(rowH * 0.72, areaW * 0.8);
+  const cx      = gameX1 + areaW * 0.5;
+
+  if (cx < 10 || cx > W - 10 || dieSize < 10) return null;
+
+  // 세 row 순서로 탐색, 가운데 row 우선
+  const searchY = [
+    y1 + rowH * 1.5,  // 2번째 row (가운데) 우선
+    y1 + rowH * 0.5,
+    y1 + rowH * 2.5,
   ];
-  for (const {x, y} of searchRegions) {
-    if (x < 10 || x > W-10) continue;
-    const die = ttReadDie(ctx, x, y, dieSize, dieSize, 'me');
+
+  for (const sy of searchY) {
+    const die = ttReadDie(ctx, cx, sy, dieSize, dieSize, 'me');
     if (die.v > 0) return die;
   }
   return null;
@@ -2032,15 +2038,11 @@ function ttDetectCurrentDie(ctx, W, H) {
 // ── 보드 전체 검출 ────────────────────────────────────────
 function ttDetectDice(ctx, W, H) {
   if (!ttCalib) return null;
-  const {x1, y1, x2, y2, splitX} = ttCalib;
-  const bW = x2 - x1, bH = y2 - y1;
+  const {myX1, myX2, oppX1, oppX2, y1, y2} = ttCalib;
+  const bH   = y2 - y1;
   const rowH = bH / 3;
-  // 자동 탐지된 splitX 또는 중앙 기본값으로 좌(나)/우(상대) 분리
-  const mid = splitX || (x1 + bW * 0.5);
-  const myEnd    = mid - bW * 0.03;
-  const oppStart = mid + bW * 0.03;
-  const myDieW  = (myEnd - x1)      / 3;
-  const oppDieW = (x2 - oppStart)   / 3;
+  const myDieW  = (myX2 - myX1) / 3;
+  const oppDieW = (oppX2 - oppX1) / 3;
   const dieH = rowH * 0.72;
 
   const result = [];
@@ -2048,8 +2050,8 @@ function ttDetectDice(ctx, W, H) {
     const cy = y1 + rowH * row + rowH * 0.5;
     const me = [], opp = [];
     for (let d = 0; d < 3; d++) {
-      me.push(ttReadDie(ctx,  x1       + myDieW  * (d+0.5), cy, myDieW  * 0.85, dieH, 'me'));
-      opp.push(ttReadDie(ctx, oppStart + oppDieW * (d+0.5), cy, oppDieW * 0.85, dieH, 'opp'));
+      me.push(ttReadDie(ctx,  myX1  + myDieW  * (d + 0.5), cy, myDieW  * 0.85, dieH, 'me'));
+      opp.push(ttReadDie(ctx, oppX1 + oppDieW * (d + 0.5), cy, oppDieW * 0.85, dieH, 'opp'));
     }
     result.push({me, opp});
   }
@@ -2139,9 +2141,10 @@ function ttCalibClick(e) {
     ttCalibStep = 2;
     document.getElementById('tt-calib-step-txt').textContent = '상대방(우측) 마지막 주사위 중심';
   } else if (ttCalibStep === 2) {
-    ttCalib.x2  = vx;
-    ttCalib.y2  = vy;
-    ttCalib.splitX = (ttCalib.x1 + vx) / 2; // 수동: 중앙을 splitX로
+    ttCalib.x2     = vx;
+    ttCalib.y2     = vy;
+    ttCalib.splitX = (ttCalib.x1 + vx) / 2;
+    ttCalib.gameX1 = 0; // 수동: 전체 화면 기준
     ttCalibStep = 0;
     ttCalibFails = 0;
     document.getElementById('tt-calib-notice').style.display = 'none';
