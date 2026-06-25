@@ -1861,11 +1861,12 @@ function ttAutoCalib(ctx, W, H) {
   const scaleX = W / 1920;
   const scaleY = H / 1080;
 
-  // 중앙 크롭 범위: 팝업이 항상 이 안에 존재
-  const scanX1 = Math.round(W * 0.28);
-  const scanX2 = Math.round(W * 0.78);
+  // Y만 크롭 (UI 상하단 제외), X는 전체 스캔
+  // → 듀얼 모니터 등 게임 위치 무관하게 초록 패널 탐지
+  const scanX1 = 0;
+  const scanX2 = W;
   const scanY1 = Math.round(H * 0.08);
-  const scanY2 = Math.round(H * 0.82);
+  const scanY2 = Math.round(H * 0.88);
 
   const data = ctx.getImageData(0, 0, W, H).data;
   const skip = 2;
