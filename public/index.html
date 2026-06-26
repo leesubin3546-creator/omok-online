@@ -726,24 +726,34 @@
   .tt-lanes { display:flex; flex-direction:column; gap:8px; }
 
   .tt-lane {
-    display:flex; align-items:center; gap:8px;
-    background:#1a1220; border:1px solid rgba(255,215,0,0.18);
-    border-radius:12px; padding:8px 10px;
-    transition:all 0.2s;
+    display:flex; align-items:center; gap:10px;
+    background:linear-gradient(135deg,#1a1228 0%,#161024 100%);
+    border:1px solid rgba(255,215,0,0.15);
+    border-radius:14px; padding:10px 12px;
+    transition:all 0.25s;
   }
   .tt-lane.tt-best {
     border-color:#ffd700 !important;
-    box-shadow:0 0 16px rgba(255,215,0,0.3);
+    background:linear-gradient(135deg,#1e1530 0%,#1a1028 100%) !important;
+    box-shadow:0 0 20px rgba(255,215,0,0.25), inset 0 1px 0 rgba(255,215,0,0.1);
   }
   .tt-lane.tt-alchigi {
     border-color:#ff4444 !important;
-    box-shadow:0 0 14px rgba(255,68,68,0.3);
+    background:linear-gradient(135deg,#221020 0%,#1a0818 100%) !important;
+    box-shadow:0 0 18px rgba(255,68,68,0.25), inset 0 1px 0 rgba(255,68,68,0.1);
+  }
+  .tt-lane.winning-me {
+    border-left:3px solid rgba(116,185,255,0.6) !important;
+  }
+  .tt-lane.winning-opp {
+    border-right:3px solid rgba(255,107,107,0.6) !important;
   }
 
   /* 라인 번호 뱃지 */
   .tt-lane-num {
-    width:28px; flex-shrink:0; text-align:center;
-    font-size:0.65rem; color:rgba(255,215,0,0.45); letter-spacing:1px;
+    width:30px; flex-shrink:0; text-align:center;
+    font-size:0.75rem; font-weight:700; color:rgba(255,215,0,0.5);
+    letter-spacing:0; line-height:1.3;
   }
 
   /* 주사위 3개 가로 나열 */
@@ -754,26 +764,20 @@
   .tt-dice-row.me  { justify-content:flex-start; }
 
   .tt-die-slot {
-    width:52px; border-radius:8px;
-    background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.1);
-    display:flex; flex-direction:column; align-items:center;
-    justify-content:center; gap:3px; padding:4px 2px;
+    width:58px; height:58px; border-radius:10px;
+    cursor:pointer; position:relative;
+    transition:transform 0.1s, box-shadow 0.15s;
+    user-select:none; flex-shrink:0;
   }
-  .tt-die-slot select {
-    width:46px; height:26px; border-radius:5px; border:none;
-    font-size:0.85rem; font-weight:700; text-align:center;
-    background:#fff; color:#222; cursor:pointer;
+  .tt-die-slot:hover { transform:scale(1.1); }
+  .tt-die-slot:active { transform:scale(0.93); }
+  .tt-die-slot.has-val { box-shadow:0 2px 10px rgba(0,0,0,0.45); }
+  .tt-die-slot.is-shield { box-shadow:0 0 14px rgba(255,215,0,0.6); }
+  .tt-shield-badge {
+    position:absolute; bottom:-5px; right:-5px;
+    font-size:13px; line-height:1; pointer-events:none;
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,0.8));
   }
-  .tt-die-slot select.shield-die { background:#ffd700; color:#1a0a00; }
-  .tt-shield-btn {
-    width:46px; height:20px; border-radius:4px;
-    border:1px solid rgba(255,215,0,0.35);
-    background:rgba(255,215,0,0.06); color:rgba(255,215,0,0.5);
-    font-size:0.62rem; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    transition:all 0.15s;
-  }
-  .tt-shield-btn.on { background:#ffd700; color:#1a0a00; border-color:#ffd700; }
 
   /* 가운데 점수 영역 */
   .tt-lane-score {
@@ -782,11 +786,11 @@
     border-right:1px solid rgba(255,215,0,0.1);
     padding:0 8px;
   }
-  .tt-score-row { font-size:1rem; font-weight:700; display:flex; justify-content:center; align-items:center; gap:5px; }
-  .tt-s-opp   { color:#ff6b6b; }
-  .tt-s-me    { color:#74b9ff; }
-  .tt-s-sep   { color:rgba(255,255,255,0.2); font-size:0.7rem; }
-  .tt-lane-status { font-size:0.6rem; margin-top:2px; min-height:12px; text-align:center; }
+  .tt-score-row { font-size:1.15rem; font-weight:800; display:flex; justify-content:center; align-items:center; gap:6px; }
+  .tt-s-opp   { color:#ff6b6b; text-shadow:0 0 8px rgba(255,107,107,0.4); }
+  .tt-s-me    { color:#74b9ff; text-shadow:0 0 8px rgba(116,185,255,0.4); }
+  .tt-s-sep   { color:rgba(255,255,255,0.25); font-size:0.75rem; }
+  .tt-lane-status { font-size:0.65rem; margin-top:3px; min-height:14px; text-align:center; font-weight:600; letter-spacing:0.5px; }
 
   .tt-input-row {
     display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;
@@ -1710,12 +1714,14 @@ function ttRenderBoard() {
     const r = results[l];
 
     const row = document.createElement('div');
-    row.className = 'tt-lane';
+    const laneClass = r.me > r.opp ? 'tt-lane winning-me'
+                    : r.opp > r.me ? 'tt-lane winning-opp' : 'tt-lane';
+    row.className = laneClass;
 
     let statusHTML = '';
-    if (r.me > r.opp)       statusHTML = '<span style="color:#74b9ff;font-size:0.58rem">내 우세</span>';
-    else if (r.opp > r.me)  statusHTML = '<span style="color:#ff6b6b;font-size:0.58rem">상대 우세</span>';
-    else if (r.me > 0)       statusHTML = '<span style="color:#ffd700;font-size:0.58rem">동점</span>';
+    if (r.me > r.opp)       statusHTML = '<span style="color:#74b9ff;">▲ 내 우세</span>';
+    else if (r.opp > r.me)  statusHTML = '<span style="color:#ff6b6b;">▼ 상대 우세</span>';
+    else if (r.me > 0)       statusHTML = '<span style="color:#ffd700;">= 동점</span>';
 
     row.innerHTML = `
       <div class="tt-lane-num">라인<br>${l+1}</div>
@@ -1735,44 +1741,75 @@ function ttRenderBoard() {
   }
   container.appendChild(lanesWrap);
 
-  // 이벤트 위임
-  container.querySelectorAll('select').forEach(sel => {
-    sel.addEventListener('change', e => {
-      const { lane, side, idx } = e.target.dataset;
-      TT.lanes[lane][side][idx].v = parseInt(e.target.value) || 0;
-      ttUpdateSlotStyle(e.target);
-      ttAnalyze();
-    });
+  // 이벤트 위임 — 클릭: 값 변경, 우클릭: 방어막 토글
+  container.addEventListener('click', e => {
+    const slot = e.target.closest('.tt-die-slot');
+    if (!slot) return;
+    const { lane, side, idx } = slot.dataset;
+    const d = TT.lanes[lane][side][idx];
+    d.v = d.v >= 6 ? 0 : d.v + 1;
+    ttRefreshSlot(slot);
+    ttAnalyze();
   });
-  container.querySelectorAll('.tt-shield-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const { lane, side, idx } = e.target.dataset;
-      TT.lanes[lane][side][idx].s = !TT.lanes[lane][side][idx].s;
-      e.target.classList.toggle('on', TT.lanes[lane][side][idx].s);
-      e.target.textContent = TT.lanes[lane][side][idx].s ? '🛡' : '○';
-      ttUpdateSlotStyle(e.target.previousElementSibling);
-      ttAnalyze();
-    });
+  container.addEventListener('contextmenu', e => {
+    const slot = e.target.closest('.tt-die-slot');
+    if (!slot) return;
+    e.preventDefault();
+    const { lane, side, idx } = slot.dataset;
+    TT.lanes[lane][side][idx].s = !TT.lanes[lane][side][idx].s;
+    ttRefreshSlot(slot);
+    ttAnalyze();
   });
+}
+
+// ── SVG 주사위 눈 렌더러 ──────────────────────────────────────
+const TT_PIP_POS = {
+  1: [[25,25]],
+  2: [[35,15],[15,35]],
+  3: [[35,15],[25,25],[15,35]],
+  4: [[15,15],[35,15],[15,35],[35,35]],
+  5: [[15,15],[35,15],[25,25],[15,35],[35,35]],
+  6: [[15,15],[35,15],[15,25],[35,25],[15,35],[35,35]]
+};
+
+function ttDieFaceSVG(v, isShield, side) {
+  const bg    = isShield ? '#ffd700'
+              : v === 0  ? (side==='me' ? 'rgba(30,50,80,0.6)' : 'rgba(80,20,20,0.5)')
+              : '#f0e6d0';
+  const pip   = isShield ? '#1a0a00'
+              : (side==='me' ? '#1a5fb4' : '#c0392b');
+  const stroke = isShield ? '#e6b800'
+               : v === 0 ? (side==='me' ? 'rgba(116,185,255,0.3)' : 'rgba(255,107,107,0.3)')
+               : (side==='me' ? 'rgba(116,185,255,0.8)' : 'rgba(255,107,107,0.8)');
+
+  const pips = v > 0 && TT_PIP_POS[v]
+    ? TT_PIP_POS[v].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="4.5" fill="${pip}"/>`).join('')
+    : '';
+  const qmark = v === 0
+    ? `<text x="25" y="31" text-anchor="middle" font-size="17" font-weight="700"
+        fill="${side==='me'?'rgba(116,185,255,0.35)':'rgba(255,107,107,0.35)'}">?</text>`
+    : '';
+
+  return `<svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;border-radius:9px">
+    <rect x="2" y="2" width="46" height="46" rx="9" fill="${bg}" stroke="${stroke}" stroke-width="2"/>
+    ${pips}${qmark}
+  </svg>`;
 }
 
 function ttDieSlotHTML(l, side, i) {
   const d = TT.lanes[l][side][i];
-  const selClass = d.s ? 'shield-die' : '';
-  const btnClass = d.s ? 'on' : '';
-  return `<div class="tt-die-slot">
-    <select class="${selClass}" data-lane="${l}" data-side="${side}" data-idx="${i}">
-      <option value="0"${d.v===0?' selected':''}>-</option>
-      ${[1,2,3,4,5,6].map(v=>`<option value="${v}"${d.v===v?' selected':''}>${v}</option>`).join('')}
-    </select>
-    <button class="tt-shield-btn ${btnClass}" data-lane="${l}" data-side="${side}" data-idx="${i}">${d.s?'🛡':'○'}</button>
+  const cls = ['tt-die-slot', d.v > 0 ? 'has-val' : '', d.s ? 'is-shield' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}" data-lane="${l}" data-side="${side}" data-idx="${i}" title="클릭: 값 변경 | 우클릭: 방어막">
+    ${ttDieFaceSVG(d.v, d.s, side)}
+    ${d.s ? '<div class="tt-shield-badge">🛡</div>' : ''}
   </div>`;
 }
 
-function ttUpdateSlotStyle(sel) {
-  if (!sel || !sel.dataset) return;
-  const { lane, side, idx } = sel.dataset;
-  sel.className = TT.lanes[lane][side][idx].s ? 'shield-die' : '';
+function ttRefreshSlot(slot) {
+  const { lane, side, idx } = slot.dataset;
+  const d = TT.lanes[lane][side][idx];
+  slot.className = ['tt-die-slot', d.v > 0 ? 'has-val' : '', d.s ? 'is-shield' : ''].filter(Boolean).join(' ');
+  slot.innerHTML = ttDieFaceSVG(d.v, d.s, side) + (d.s ? '<div class="tt-shield-badge">🛡</div>' : '');
 }
 
 // ── 화면 캡처 + 자동 분석 ──────────────────────────────────
