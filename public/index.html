@@ -706,7 +706,7 @@
   }
 
   /* ── 티카투카 어드바이저 ─────────────────────────────────── */
-  #tikatuka-screen.active { flex-direction:row; align-items:flex-start; gap:20px; flex-wrap:wrap; }
+  #tikatuka-screen.active { flex-direction:row; align-items:flex-start; gap:16px; flex-wrap:wrap; }
 
   .tt-board-area {
     flex:1; min-width:500px;
@@ -727,32 +727,33 @@
 
   .tt-lane {
     display:flex; align-items:center; gap:10px;
-    background:linear-gradient(135deg,#1a1228 0%,#161024 100%);
-    border:1px solid rgba(255,215,0,0.15);
+    background:var(--surface);
+    border:1px solid var(--border);
     border-radius:14px; padding:10px 12px;
     transition:all 0.25s;
+    box-shadow:0 2px 6px rgba(100,60,10,0.08);
   }
   .tt-lane.tt-best {
-    border-color:#ffd700 !important;
-    background:linear-gradient(135deg,#1e1530 0%,#1a1028 100%) !important;
-    box-shadow:0 0 20px rgba(255,215,0,0.25), inset 0 1px 0 rgba(255,215,0,0.1);
+    border-color:var(--accent2) !important;
+    background:linear-gradient(135deg,#fdf5e4 0%,#f5e8c8 100%) !important;
+    box-shadow:0 0 16px rgba(200,136,26,0.25), 0 2px 6px rgba(100,60,10,0.1);
   }
   .tt-lane.tt-alchigi {
-    border-color:#ff4444 !important;
-    background:linear-gradient(135deg,#221020 0%,#1a0818 100%) !important;
-    box-shadow:0 0 18px rgba(255,68,68,0.25), inset 0 1px 0 rgba(255,68,68,0.1);
+    border-color:#c0392b !important;
+    background:linear-gradient(135deg,#fdf0ee 0%,#f5ddd8 100%) !important;
+    box-shadow:0 0 14px rgba(192,57,43,0.2), 0 2px 6px rgba(100,60,10,0.1);
   }
   .tt-lane.winning-me {
-    border-left:3px solid rgba(116,185,255,0.6) !important;
+    border-left:3px solid #1a5fb4 !important;
   }
   .tt-lane.winning-opp {
-    border-right:3px solid rgba(255,107,107,0.6) !important;
+    border-right:3px solid #c0392b !important;
   }
 
   /* 라인 번호 뱃지 */
   .tt-lane-num {
     width:30px; flex-shrink:0; text-align:center;
-    font-size:0.75rem; font-weight:700; color:rgba(255,215,0,0.5);
+    font-size:0.75rem; font-weight:700; color:var(--text2);
     letter-spacing:0; line-height:1.3;
   }
 
@@ -771,8 +772,14 @@
   }
   .tt-die-slot:hover { transform:scale(1.1); }
   .tt-die-slot:active { transform:scale(0.93); }
-  .tt-die-slot.has-val { box-shadow:0 2px 10px rgba(0,0,0,0.45); }
-  .tt-die-slot.is-shield { box-shadow:0 0 14px rgba(255,215,0,0.6); }
+  .tt-die-slot.has-val { box-shadow:0 2px 8px rgba(100,60,10,0.25); }
+  .tt-die-slot.is-shield { box-shadow:0 0 12px rgba(200,136,26,0.5); }
+  .tt-die-slot.is-blown { opacity:0.6; }
+  .tt-blown-x {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:1.5rem; font-weight:900; color:#c0392b; pointer-events:none;
+    text-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
   .tt-shield-badge {
     position:absolute; bottom:-5px; right:-5px;
     font-size:13px; line-height:1; pointer-events:none;
@@ -782,89 +789,100 @@
   /* 가운데 점수 영역 */
   .tt-lane-score {
     width:110px; flex-shrink:0; text-align:center;
-    border-left:1px solid rgba(255,215,0,0.1);
-    border-right:1px solid rgba(255,215,0,0.1);
+    border-left:1px solid var(--border);
+    border-right:1px solid var(--border);
     padding:0 8px;
   }
   .tt-score-row { font-size:1.15rem; font-weight:800; display:flex; justify-content:center; align-items:center; gap:6px; }
-  .tt-s-opp   { color:#ff6b6b; text-shadow:0 0 8px rgba(255,107,107,0.4); }
-  .tt-s-me    { color:#74b9ff; text-shadow:0 0 8px rgba(116,185,255,0.4); }
-  .tt-s-sep   { color:rgba(255,255,255,0.25); font-size:0.75rem; }
-  .tt-lane-status { font-size:0.65rem; margin-top:3px; min-height:14px; text-align:center; font-weight:600; letter-spacing:0.5px; }
+  .tt-s-opp   { color:#c0392b; }
+  .tt-s-me    { color:#1a5fb4; }
+  .tt-s-sep   { color:var(--border); font-size:0.75rem; }
+  .tt-lane-status { font-size:0.65rem; margin-top:3px; min-height:14px; text-align:center; font-weight:600; color:var(--text2); }
 
   .tt-input-row {
     display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start;
   }
   .tt-input-box {
-    background:#1a1220; border:1px solid rgba(255,215,0,0.2);
+    background:var(--surface); border:1px solid var(--border);
     border-radius:12px; padding:12px 14px;
     display:flex; flex-direction:column; gap:8px;
     flex:1; min-width:140px;
+    box-shadow:0 2px 6px rgba(100,60,10,0.07);
   }
   .tt-input-label {
-    font-size:0.68rem; color:rgba(255,215,0,0.55); letter-spacing:2px; text-transform:uppercase;
+    font-size:0.68rem; color:var(--text2); letter-spacing:2px; text-transform:uppercase; font-weight:700;
   }
   .tt-die-input-wrap {
     display:flex; align-items:center; gap:8px;
   }
   .tt-die-big {
-    width:46px; height:46px; border-radius:10px; font-size:1.4rem; font-weight:900;
+    width:58px; height:58px; border-radius:10px; font-size:1.4rem; font-weight:900;
     display:flex; align-items:center; justify-content:center;
-    background:#fff; color:#222; box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    background:var(--card); color:var(--text); box-shadow:0 2px 6px rgba(100,60,10,0.15);
+    cursor:pointer; user-select:none; position:relative; overflow:hidden;
   }
-  .tt-die-big.is-shield { background:#ffd700; color:#1a0a00; }
-  .tt-die-big.empty { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.3); font-size:1rem; }
+  .tt-die-big.is-shield { background:var(--accent2); color:#fff5e8; }
+  .tt-die-big.empty { background:var(--card); color:var(--text2); font-size:1rem; }
 
   .tt-input-box select {
-    padding:4px 8px; border-radius:6px; border:1px solid rgba(255,215,0,0.3);
-    background:#0d0a14; color:#e8d5a3; font-size:0.85rem; font-family:inherit; cursor:pointer;
+    padding:4px 8px; border-radius:6px; border:1px solid var(--border);
+    background:var(--card); color:var(--text); font-size:0.85rem; font-family:inherit; cursor:pointer;
   }
   .tt-input-box label {
-    display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#e8d5a3; cursor:pointer;
+    display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text); cursor:pointer;
   }
   .tt-input-box input[type=checkbox] { width:14px; height:14px; cursor:pointer; }
 
   .tt-side-panel {
-    width:220px; display:flex; flex-direction:column; gap:12px; flex-shrink:0;
+    width:230px; display:flex; flex-direction:column; gap:12px; flex-shrink:0;
   }
   .tt-panel-box {
-    background:#1a1220; border:1px solid rgba(255,215,0,0.2);
+    background:var(--surface); border:1px solid var(--border);
     border-radius:12px; padding:14px;
+    box-shadow:0 2px 6px rgba(100,60,10,0.07);
   }
   .tt-panel-title {
-    font-size:0.68rem; color:rgba(255,215,0,0.55); letter-spacing:2px;
-    text-transform:uppercase; margin-bottom:10px;
+    font-size:0.68rem; color:var(--text2); letter-spacing:2px;
+    text-transform:uppercase; margin-bottom:10px; font-weight:700;
   }
 
+  /* 최적수 추천 — 보드 하단 배치 */
+  .tt-recommend-section {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:14px; padding:14px 16px;
+    box-shadow:0 2px 6px rgba(100,60,10,0.07);
+  }
   .tt-recommend {
-    display:flex; flex-direction:column; gap:8px;
+    display:flex; flex-direction:row; gap:8px; flex-wrap:wrap;
   }
   .tt-rec-item {
-    padding:10px 12px; border-radius:8px;
-    border:1px solid rgba(255,255,255,0.1);
-    background:rgba(255,255,255,0.03);
+    flex:1; min-width:160px;
+    padding:10px 12px; border-radius:10px;
+    border:1px solid var(--border);
+    background:var(--card);
     cursor:pointer;
     transition:all 0.15s;
     user-select:none;
   }
   .tt-rec-item:hover {
-    border-color:rgba(255,215,0,0.5);
-    background:rgba(255,215,0,0.06);
-    transform:translateY(-1px);
+    border-color:var(--accent2);
+    background:linear-gradient(135deg,#fdf5e4,#f5e8c8);
+    transform:translateY(-2px);
+    box-shadow:0 4px 12px rgba(100,60,10,0.15);
   }
   .tt-rec-item:active { transform:translateY(0); }
   .tt-rec-item.best {
-    border-color:#ffd700; background:rgba(255,215,0,0.08);
-    box-shadow:0 2px 12px rgba(255,215,0,0.15);
+    border-color:var(--accent2); background:linear-gradient(135deg,#fdf5e4,#f5e8c8);
+    box-shadow:0 2px 10px rgba(200,136,26,0.2);
   }
   .tt-rec-item::after {
     content:'↵ 클릭해서 배치';
-    display:block; font-size:0.6rem; color:rgba(255,215,0,0.4);
+    display:block; font-size:0.6rem; color:var(--text2);
     margin-top:4px; opacity:0; transition:opacity 0.15s;
   }
   .tt-rec-item:hover::after { opacity:1; }
   .tt-rec-item.placed {
-    border-color:#00b894 !important; background:rgba(0,184,148,0.12) !important;
+    border-color:#2a6e2a !important; background:rgba(42,110,42,0.08) !important;
     animation:placePulse 0.35s ease;
   }
   @keyframes placePulse {
@@ -874,26 +892,26 @@
   }
   .tt-auto-status {
     display:none; margin-top:8px; padding:6px 10px;
-    border-radius:8px; background:rgba(0,184,148,0.1);
-    border:1px solid rgba(0,184,148,0.3);
-    font-size:0.72rem; color:#00b894;
+    border-radius:8px; background:rgba(42,110,42,0.1);
+    border:1px solid rgba(42,110,42,0.3);
+    font-size:0.72rem; color:#2a6e2a;
     display:none; align-items:center; gap:6px;
   }
   .tt-auto-dot {
-    width:7px; height:7px; border-radius:50%; background:#00b894;
+    width:7px; height:7px; border-radius:50%; background:#2a6e2a;
     animation:autoPulse 1.5s infinite;
   }
   @keyframes autoPulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .tt-calib-btn {
     width:100%; padding:6px; border-radius:8px; margin-top:6px;
-    border:1px solid rgba(255,215,0,0.3); background:rgba(255,215,0,0.06);
-    color:rgba(255,215,0,0.7); font-size:0.72rem; cursor:pointer;
+    border:1px solid var(--border); background:var(--card);
+    color:var(--text2); font-size:0.72rem; cursor:pointer;
     font-family:inherit; display:none;
   }
-  .tt-calib-btn:hover { background:rgba(255,215,0,0.12); }
+  .tt-calib-btn:hover { background:var(--surface); }
   #tt-snapshot-canvas {
     width:100%; border-radius:8px; margin-top:8px;
-    display:none; border:1px solid rgba(255,255,255,0.08);
+    display:none; border:1px solid var(--border);
     cursor:crosshair;
   }
   .tt-calib-overlay {
@@ -905,57 +923,59 @@
   .tt-rec-place-hint {
     font-size:0.6rem; color:rgba(255,215,0,0.45); margin-top:4px;
   }
-  .tt-rec-lane { font-size:1rem; font-weight:700; margin-bottom:4px; }
+  .tt-rec-lane { font-size:1rem; font-weight:700; margin-bottom:4px; color:var(--text); }
   .tt-rec-tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
   .tt-tag {
     padding:2px 7px; border-radius:10px; font-size:0.65rem; font-weight:700;
   }
-  .tt-tag-alchigi { background:rgba(255,68,68,0.2); color:#ff6b6b; border:1px solid rgba(255,68,68,0.3); }
-  .tt-tag-flip    { background:rgba(116,185,255,0.2); color:#74b9ff; border:1px solid rgba(116,185,255,0.3); }
-  .tt-tag-score   { background:rgba(100,255,150,0.15); color:#55dd88; border:1px solid rgba(100,255,150,0.2); }
-  .tt-tag-shield  { background:rgba(255,215,0,0.15); color:#ffd700; border:1px solid rgba(255,215,0,0.3); }
-  .tt-rec-score { font-size:0.75rem; color:rgba(255,255,255,0.5); }
+  .tt-tag-alchigi { background:rgba(192,57,43,0.12); color:#c0392b; border:1px solid rgba(192,57,43,0.3); }
+  .tt-tag-flip    { background:rgba(26,95,180,0.12); color:#1a5fb4; border:1px solid rgba(26,95,180,0.3); }
+  .tt-tag-score   { background:rgba(42,110,42,0.12); color:#2a6e2a; border:1px solid rgba(42,110,42,0.3); }
+  .tt-tag-shield  { background:rgba(200,136,26,0.15); color:#7a4a15; border:1px solid rgba(200,136,26,0.4); }
+  .tt-rec-score { font-size:0.75rem; color:var(--text2); }
 
   .tt-skill-btn {
     width:100%; padding:8px 10px; border-radius:8px;
-    border:1px solid rgba(255,215,0,0.35); background:rgba(255,215,0,0.08);
-    color:#ffd700; font-size:0.8rem; font-family:inherit; cursor:pointer;
+    border:1px solid var(--border); background:var(--card);
+    color:var(--text); font-size:0.8rem; font-family:inherit; cursor:pointer;
     transition:all 0.15s; text-align:left; margin-bottom:6px;
   }
   .tt-skill-btn:last-child { margin-bottom:0; }
   .tt-skill-btn.used { opacity:0.3; cursor:default; }
   .tt-skill-btn.hold-btn {
-    border-color:rgba(255,107,107,0.35); background:rgba(255,107,107,0.08); color:#ff6b6b;
+    border-color:rgba(192,57,43,0.3); background:rgba(192,57,43,0.06); color:#c0392b;
   }
 
   .tt-capture-btn {
     width:100%; padding:10px; border-radius:8px;
-    border:1px solid rgba(116,185,255,0.35); background:rgba(116,185,255,0.08);
-    color:#74b9ff; font-size:0.82rem; font-family:inherit; cursor:pointer;
-    transition:all 0.15s; margin-bottom:8px;
+    border:1px solid rgba(26,95,180,0.35); background:rgba(26,95,180,0.08);
+    color:#1a5fb4; font-size:0.82rem; font-family:inherit; cursor:pointer;
+    transition:all 0.15s; margin-bottom:8px; font-weight:700;
   }
-  .tt-capture-btn:hover { background:rgba(116,185,255,0.16); }
-  #tt-preview { width:100%; border-radius:8px; border:1px solid rgba(255,215,0,0.2); }
+  .tt-capture-btn:hover { background:rgba(26,95,180,0.14); }
+  #tt-preview { width:100%; border-radius:8px; border:1px solid var(--border); }
 
   .tt-reset-btn {
     width:100%; padding:8px; border-radius:8px;
-    border:1px solid rgba(255,255,255,0.15); background:transparent;
-    color:rgba(255,255,255,0.5); font-size:0.78rem; font-family:inherit; cursor:pointer;
+    border:1px solid var(--border); background:transparent;
+    color:var(--text2); font-size:0.78rem; font-family:inherit; cursor:pointer;
   }
-  .tt-reset-btn:hover { background:rgba(255,255,255,0.06); }
+  .tt-reset-btn:hover { background:var(--card); }
   .tt-back-btn {
-    background:none; border:none; color:rgba(255,215,0,0.7); font-size:0.82rem;
+    background:none; border:none; color:var(--text2); font-size:0.82rem;
     cursor:pointer; font-family:inherit; padding:0;
   }
-  .tt-back-btn:hover { color:#ffd700; }
+  .tt-back-btn:hover { color:var(--text); }
   .tt-win-banner {
     padding:8px 12px; border-radius:8px; text-align:center;
     font-size:0.82rem; font-weight:700;
   }
-  .tt-win-me   { background:rgba(116,185,255,0.15); color:#74b9ff; border:1px solid rgba(116,185,255,0.3); }
-  .tt-win-opp  { background:rgba(255,107,107,0.15); color:#ff6b6b; border:1px solid rgba(255,107,107,0.3); }
-  .tt-win-tie  { background:rgba(255,215,0,0.1);    color:#ffd700;  border:1px solid rgba(255,215,0,0.3); }
-  .tt-win-none { background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.4); border:1px solid rgba(255,255,255,0.1); }
+  .tt-win-me   { background:rgba(26,95,180,0.1); color:#1a5fb4; border:1px solid rgba(26,95,180,0.3); }
+  .tt-win-opp  { background:rgba(192,57,43,0.1); color:#c0392b; border:1px solid rgba(192,57,43,0.3); }
+  .tt-win-tie  { background:rgba(200,136,26,0.1); color:#7a4a15; border:1px solid rgba(200,136,26,0.3); }
+  .tt-win-none { background:var(--card); color:var(--text2); border:1px solid var(--border); }
+  .tt-header-opp { flex:1; text-align:center; font-size:0.72rem; color:#c0392b; letter-spacing:2px; font-weight:700; }
+  .tt-header-me  { flex:1; text-align:center; font-size:0.72rem; color:#1a5fb4; letter-spacing:2px; font-weight:700; }
 
   @media (max-width:800px) {
     #tikatuka-screen.active { flex-direction:column; align-items:stretch; }
@@ -1326,7 +1346,7 @@
 </div>
 
 <!-- 티카투카 어드바이저 -->
-<div id="tikatuka-screen" class="screen" style="background:#0d0a14; min-height:100vh; padding:20px 16px;">
+<div id="tikatuka-screen" class="screen" style="padding:20px 16px;">
   <div class="tt-board-area">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
       <button class="tt-back-btn" onclick="showScreen('lobby-screen')">← 로비로</button>
@@ -1379,6 +1399,20 @@
       <!-- JS로 렌더링 -->
     </div>
 
+    <!-- 최적수 추천 (보드 하단) -->
+    <div class="tt-recommend-section">
+      <div class="tt-panel-title">🎯 최적 수 추천
+        <span id="tt-wins-detail" style="font-weight:400;float:right;letter-spacing:0;text-transform:none;"></span>
+      </div>
+      <div class="tt-recommend" id="tt-recommend-area">
+        <div style="color:var(--text2);font-size:0.85rem;">주사위를 입력하면 최적 수를 분석합니다</div>
+      </div>
+      <div id="tt-hold-advice" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--card);border:1px solid var(--border);">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text2);margin-bottom:4px;">✋ 홀드 조언</div>
+        <div id="tt-hold-text" style="font-size:0.82rem;color:var(--text);line-height:1.5;"></div>
+      </div>
+    </div>
+
     <button class="tt-reset-btn" onclick="ttReset()">🔄 초기화</button>
   </div>
 
@@ -1388,21 +1422,19 @@
     <div class="tt-panel-box">
       <div class="tt-panel-title">📺 화면 참조</div>
       <button class="tt-capture-btn" onclick="ttStartCapture()">🖥 화면 공유 시작</button>
-      <div style="font-size:0.65rem;color:rgba(255,215,0,0.5);margin-top:4px;line-height:1.4;">
-        ⚠ 공유 창 선택 시 <strong style="color:rgba(255,215,0,0.8);">전체 화면 말고 게임 창</strong>을 선택하세요
+      <div style="font-size:0.65rem;color:var(--text2);margin-top:4px;line-height:1.4;">
+        ⚠ 공유 창 선택 시 <strong>전체 화면 말고 게임 창</strong>을 선택하세요
       </div>
       <div class="tt-auto-status" id="tt-auto-status">
         <span class="tt-auto-dot"></span>
         <span>자동 분석 중 · <span id="tt-auto-time">--</span></span>
       </div>
-      <div id="tt-calib-notice" style="display:none;font-size:0.68rem;color:#ff6b6b;margin-top:4px;line-height:1.4;">
+      <div id="tt-calib-notice" style="display:none;font-size:0.68rem;color:#c0392b;margin-top:4px;line-height:1.4;">
         ⚠ 보드를 자동으로 찾지 못했어요.<br>아래 버튼으로 수동 설정하세요.
       </div>
       <button class="tt-calib-btn" id="tt-calib-btn" onclick="ttStartCalib()" style="display:none;">🎯 보드 위치 직접 설정</button>
-      <!-- 라이브 비디오 + 캘리브레이션 오버레이 -->
       <div style="position:relative;display:none;" id="tt-preview-wrap">
-        <video id="tt-preview" autoplay muted playsinline
-          style="width:100%;border-radius:8px;border:1px solid rgba(255,215,0,0.2);display:block;"></video>
+        <video id="tt-preview" autoplay muted playsinline style="width:100%;border-radius:8px;display:block;"></video>
         <div id="tt-calib-overlay"
           style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.55);
                  border-radius:8px;cursor:crosshair;align-items:center;justify-content:center;
@@ -1410,7 +1442,6 @@
           보드 <strong id="tt-calib-step-txt">좌상단 첫 번째 주사위 중심</strong>을<br>클릭하세요
         </div>
       </div>
-      <!-- 분석 캔버스 (디버그 오버레이 포함) -->
       <canvas id="tt-snapshot-canvas" style="display:block;"></canvas>
     </div>
 
@@ -1418,23 +1449,8 @@
     <div class="tt-panel-box">
       <div class="tt-panel-title">현재 현황</div>
       <div id="tt-status-area" style="display:flex;flex-direction:column;gap:6px;">
-        <div class="tt-win-none" id="tt-win-status">분석 대기 중...</div>
-        <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-top:2px;" id="tt-wins-detail"></div>
+        <div class="tt-win-none tt-win-banner" id="tt-win-status">분석 대기 중...</div>
       </div>
-    </div>
-
-    <!-- 추천 -->
-    <div class="tt-panel-box">
-      <div class="tt-panel-title">🎯 최적 수 추천</div>
-      <div class="tt-recommend" id="tt-recommend-area">
-        <div style="color:rgba(255,255,255,0.3);font-size:0.8rem;">주사위를 입력하면<br>최적 수를 분석합니다</div>
-      </div>
-    </div>
-
-    <!-- 홀드 조언 -->
-    <div class="tt-panel-box" id="tt-hold-advice" style="display:none;">
-      <div class="tt-panel-title">✋ 홀드 조언</div>
-      <div id="tt-hold-text" style="font-size:0.8rem;color:#e8d5a3;line-height:1.5;"></div>
     </div>
   </div>
 </div>
@@ -1453,12 +1469,14 @@
 // ══════════════════════════════════════════════════════════
 // 티카투카 어드바이저
 // ══════════════════════════════════════════════════════════
+const TT_EMPTY_DIE = () => ({v:0, s:false, blown:false});
+const TT_EMPTY_ROW = () => [TT_EMPTY_DIE(), TT_EMPTY_DIE(), TT_EMPTY_DIE()];
 const TT = {
-  // lanes[l] = { opp:[{v,s},...], me:[{v,s},...] }  v=0 means empty
+  // lanes[l] = { opp:[{v,s,blown},...], me:[{v,s,blown},...] }
   lanes: [
-    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
-    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
-    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+    { opp:TT_EMPTY_ROW(), me:TT_EMPTY_ROW() },
+    { opp:TT_EMPTY_ROW(), me:TT_EMPTY_ROW() },
+    { opp:TT_EMPTY_ROW(), me:TT_EMPTY_ROW() },
   ],
   cur:  { v:0, s:false },
   sec:  { v:0, s:false },
@@ -1474,9 +1492,9 @@ function ttInit() {
 
 function ttReset() {
   TT.lanes = [
-    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
-    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
-    { opp:[{v:0,s:false},{v:0,s:false},{v:0,s:false}], me:[{v:0,s:false},{v:0,s:false},{v:0,s:false}] },
+    { opp:TT_EMPTY_ROW(), me:TT_EMPTY_ROW() },
+    { opp:TT_EMPTY_ROW(), me:TT_EMPTY_ROW() },
+    { opp:TT_EMPTY_ROW(), me:TT_EMPTY_ROW() },
   ];
   TT.cur = { v:0, s:false };
   TT.sec = { v:0, s:false };
@@ -1537,7 +1555,8 @@ function ttUpdateSkills() {
 // ── 점수 계산 ─────────────────────────────────────────────
 function ttLaneScore(dice) {
   const cnt = {};
-  dice.filter(d => d.v > 0).forEach(d => cnt[d.v] = (cnt[d.v] || 0) + 1);
+  // blown(날아간) 주사위는 점수 제외
+  dice.filter(d => d.v > 0 && !d.blown).forEach(d => cnt[d.v] = (cnt[d.v] || 0) + 1);
   return Object.entries(cnt).reduce((s, [v, n]) => s + Number(v) * (2 * n - 1), 0);
 }
 
@@ -1741,13 +1760,24 @@ function ttRenderBoard() {
   }
   container.appendChild(lanesWrap);
 
-  // 이벤트 위임 — 클릭: 값 변경, 우클릭: 방어막 토글
+  // 이벤트 위임 — 클릭: 값 변경, 우클릭: 방어막, 더블클릭: 날아간(blown) 토글
   container.addEventListener('click', e => {
     const slot = e.target.closest('.tt-die-slot');
     if (!slot) return;
     const { lane, side, idx } = slot.dataset;
     const d = TT.lanes[lane][side][idx];
-    d.v = d.v >= 6 ? 0 : d.v + 1;
+    if (d.blown) { d.blown = false; d.v = 0; }
+    else { d.v = d.v >= 6 ? 0 : d.v + 1; }
+    ttRefreshSlot(slot);
+    ttAnalyze();
+  });
+  container.addEventListener('dblclick', e => {
+    const slot = e.target.closest('.tt-die-slot');
+    if (!slot) return;
+    e.stopPropagation();
+    const { lane, side, idx } = slot.dataset;
+    const d = TT.lanes[lane][side][idx];
+    if (d.v > 0) { d.blown = !d.blown; }
     ttRefreshSlot(slot);
     ttAnalyze();
   });
@@ -1772,22 +1802,24 @@ const TT_PIP_POS = {
   6: [[15,15],[35,15],[15,25],[35,25],[15,35],[35,35]]
 };
 
-function ttDieFaceSVG(v, isShield, side) {
-  const bg    = isShield ? '#ffd700'
-              : v === 0  ? (side==='me' ? 'rgba(30,50,80,0.6)' : 'rgba(80,20,20,0.5)')
-              : '#f0e6d0';
-  const pip   = isShield ? '#1a0a00'
-              : (side==='me' ? '#1a5fb4' : '#c0392b');
-  const stroke = isShield ? '#e6b800'
-               : v === 0 ? (side==='me' ? 'rgba(116,185,255,0.3)' : 'rgba(255,107,107,0.3)')
-               : (side==='me' ? 'rgba(116,185,255,0.8)' : 'rgba(255,107,107,0.8)');
+function ttDieFaceSVG(v, isShield, side, isBlown) {
+  // 따뜻한 베이지 테마 (사이트 배경 통일)
+  const bg     = isShield ? '#c8881a'
+               : v === 0  ? '#ede0cc'
+               : '#f4ead8';
+  const pip    = isShield ? '#fff5e8'
+               : isBlown  ? 'rgba(100,60,10,0.3)'
+               : (side==='me' ? '#1a5fb4' : '#c0392b');
+  const stroke = isShield ? '#a06010'
+               : v === 0  ? 'rgba(140,100,50,0.3)'
+               : (side==='me' ? 'rgba(26,95,180,0.7)' : 'rgba(192,57,43,0.7)');
 
   const pips = v > 0 && TT_PIP_POS[v]
     ? TT_PIP_POS[v].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="4.5" fill="${pip}"/>`).join('')
     : '';
   const qmark = v === 0
     ? `<text x="25" y="31" text-anchor="middle" font-size="17" font-weight="700"
-        fill="${side==='me'?'rgba(116,185,255,0.35)':'rgba(255,107,107,0.35)'}">?</text>`
+        fill="rgba(140,100,50,0.4)">?</text>`
     : '';
 
   return `<svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;border-radius:9px">
@@ -1798,18 +1830,30 @@ function ttDieFaceSVG(v, isShield, side) {
 
 function ttDieSlotHTML(l, side, i) {
   const d = TT.lanes[l][side][i];
-  const cls = ['tt-die-slot', d.v > 0 ? 'has-val' : '', d.s ? 'is-shield' : ''].filter(Boolean).join(' ');
-  return `<div class="${cls}" data-lane="${l}" data-side="${side}" data-idx="${i}" title="클릭: 값 변경 | 우클릭: 방어막">
-    ${ttDieFaceSVG(d.v, d.s, side)}
+  const cls = ['tt-die-slot',
+    d.v > 0 ? 'has-val' : '',
+    d.s ? 'is-shield' : '',
+    d.blown ? 'is-blown' : ''
+  ].filter(Boolean).join(' ');
+  return `<div class="${cls}" data-lane="${l}" data-side="${side}" data-idx="${i}"
+    title="클릭: 값 변경 | 우클릭: 방어막 | 더블클릭: 날아간 주사위">
+    ${ttDieFaceSVG(d.v, d.s, side, d.blown)}
     ${d.s ? '<div class="tt-shield-badge">🛡</div>' : ''}
+    ${d.blown ? '<div class="tt-blown-x">✕</div>' : ''}
   </div>`;
 }
 
 function ttRefreshSlot(slot) {
   const { lane, side, idx } = slot.dataset;
   const d = TT.lanes[lane][side][idx];
-  slot.className = ['tt-die-slot', d.v > 0 ? 'has-val' : '', d.s ? 'is-shield' : ''].filter(Boolean).join(' ');
-  slot.innerHTML = ttDieFaceSVG(d.v, d.s, side) + (d.s ? '<div class="tt-shield-badge">🛡</div>' : '');
+  slot.className = ['tt-die-slot',
+    d.v > 0 ? 'has-val' : '',
+    d.s ? 'is-shield' : '',
+    d.blown ? 'is-blown' : ''
+  ].filter(Boolean).join(' ');
+  slot.innerHTML = ttDieFaceSVG(d.v, d.s, side, d.blown)
+    + (d.s ? '<div class="tt-shield-badge">🛡</div>' : '')
+    + (d.blown ? '<div class="tt-blown-x">✕</div>' : '');
 }
 
 // ── 화면 캡처 + 자동 분석 ──────────────────────────────────
