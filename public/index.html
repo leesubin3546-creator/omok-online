@@ -1576,13 +1576,19 @@ function ttEvalMove(die, laneIdx) {
   const oppFilled  = lane.opp.filter(d => d.v > 0);
   const myFilled_d = lane.me.filter(d => d.v > 0);
 
-  // 알치기 체크
+  // 알치기 체크 — 실드 주사위도 알치기 가능
   const alchigiTargets = oppFilled.filter(d => !d.s && d.v === die.v);
-  const canAlchigi = alchigiTargets.length > 0 && !die.s && die.v > 0;
+  const canAlchigi = alchigiTargets.length > 0 && die.v > 0;
 
-  // 내 점수 변화
+  // 상대 실드에 부딪히는지 체크 — 내 비실드 주사위가 상대 실드와 같은 값이면 내 주사위 날아감
+  const oppShieldSameVal = oppFilled.some(d => d.s && d.v === die.v);
+  const hitsShield = oppShieldSameVal && !die.s && die.v > 0;
+
+  // 내 점수 변화 (실드에 부딪히면 내 주사위 날아가므로 득점 없음)
   const myBefore = ttLaneScore(lane.me);
-  const myAfter  = ttLaneScore([...lane.me, die]);
+  const myAfter  = hitsShield
+    ? myBefore  // 내 주사위 날아감 → 점수 변화 없음
+    : ttLaneScore([...lane.me, die]);
   const myGain   = myAfter - myBefore;
 
   // 상대 점수 변화 (알치기 시)
@@ -1603,11 +1609,12 @@ function ttEvalMove(die, laneIdx) {
 
   // 종합 점수 (전략 우선순위)
   let priority = myGain + oppLoss;
-  if (canAlchigi) priority += 30;
-  if (laneFlip)   priority += 40;
-  if (!wasLosing && willWin) priority += 10; // 계속 이기는 라인 강화
+  if (canAlchigi)  priority += 30;
+  if (laneFlip)    priority += 40;
+  if (hitsShield)  priority -= 50; // 상대 실드에 내 주사위 날아감 — 최악
+  if (!wasLosing && willWin) priority += 10;
 
-  return { laneIdx, canAlchigi, myGain, oppLoss, laneFlip, myFinal, oppFinal, priority, die };
+  return { laneIdx, canAlchigi, hitsShield, myGain, oppLoss, laneFlip, myFinal, oppFinal, priority, die };
 }
 
 // ── 분석 & 렌더 ────────────────────────────────────────────
@@ -1668,11 +1675,12 @@ function ttAnalyze() {
   } else {
     recArea.innerHTML = allMoves.slice(0, 3).map((m, i) => {
       const tags = [];
-      if (m.canAlchigi) tags.push('<span class="tt-tag tt-tag-alchigi">🎯 알치기</span>');
-      if (m.laneFlip)   tags.push('<span class="tt-tag tt-tag-flip">↑ 라인역전</span>');
-      if (m.myGain > 0) tags.push(`<span class="tt-tag tt-tag-score">+${m.myGain}점</span>`);
+      if (m.hitsShield)  tags.push('<span class="tt-tag tt-tag-alchigi">🛡 실드충돌</span>');
+      if (m.canAlchigi)  tags.push('<span class="tt-tag tt-tag-alchigi">🎯 알치기</span>');
+      if (m.laneFlip)    tags.push('<span class="tt-tag tt-tag-flip">↑ 라인역전</span>');
+      if (m.myGain > 0)  tags.push(`<span class="tt-tag tt-tag-score">+${m.myGain}점</span>`);
       if (m.oppLoss > 0) tags.push(`<span class="tt-tag tt-tag-alchigi">-${m.oppLoss}pts</span>`);
-      if (m.isSecond)   tags.push('<span class="tt-tag tt-tag-shield">🃏 타짜</span>');
+      if (m.isSecond)    tags.push('<span class="tt-tag tt-tag-shield">🃏 타짜</span>');
       const dieStr = m.isSecond ? `[${m.die.v}${m.die.s?'🛡':''}]` : `[${m.die.v}${m.die.s?'🛡':''}]`;
       return `<div class="tt-rec-item ${i===0?'best':''}" onclick="ttPlaceFromRec(this,${m.laneIdx},${m.die.v},${m.die.s},${!!m.isSecond})">
         <div class="tt-rec-lane">${i===0?'★ ':''}${m.laneIdx+1}번 라인 ${dieStr}</div>
@@ -1954,7 +1962,7 @@ function ttAutoCalib(ctx, W, H) {
   const boardY1 = Math.round(437 * sy);
   const boardY2 = Math.round(780 * sy);
   // 굴린 주사위 위치 (내 보드 왼쪽)
-  const dieX1   = Math.round(360 * sx);
+  const dieX1   = Math.round(461 * sx);
   const splitX  = Math.round(951 * sx);
   // ─────────────────────────────────────────────────────────
 
@@ -2004,14 +2012,14 @@ function ttReadDie(ctx, cx, cy, dw, dh, side) {
     const sx = Math.min(w-1, Math.round(rx*w));
     const sy = Math.min(h-1, Math.round(ry*h));
     let cnt = 0, tot = 0;
-    for (let dy=-2; dy<=2; dy++) for (let dx=-2; dx<=2; dx++) {
+    for (let dy=-3; dy<=3; dy++) for (let dx=-3; dx<=3; dx++) {
       const px=sx+dx, py=sy+dy;
       if (px<0||py<0||px>=w||py>=h) continue;
       const i=(py*w+px)*4;
       tot++;
       if (isPip(data[i], data[i+1], data[i+2])) cnt++;
     }
-    return cnt/tot > 0.25;
+    return cnt/tot > 0.18;
   };
 
   const TL=sp(0.25,0.25), TR=sp(0.75,0.25);
