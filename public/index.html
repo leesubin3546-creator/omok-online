@@ -1937,10 +1937,10 @@ function ttAutoFrame() {
   }
 
   if (ttCalib) {
-    const detected   = ttDetectDice(ctx, W, H);
-    const currentDie = ttDetectCurrentDie(ctx, W, H);
-    ttDrawDebugOverlay(ctx, detected);   // ← 항상 오버레이 그림 (좌표 확인용)
-    if (detected) ttApplyDetection(detected, currentDie);
+    const detected    = ttDetectDice(ctx, W, H);
+    const currentDice = ttDetectCurrentDie(ctx, W, H);
+    ttDrawDebugOverlay(ctx, detected, currentDice);
+    if (detected) ttApplyDetection(detected, currentDice);
   }
 }
 
@@ -2062,31 +2062,36 @@ function ttReadDie(ctx, cx, cy, dw, dh, side) {
 }
 
 // ── 굴린 주사위 감지 (내 보드 좌측 영역) ──────────────────
+// 굴린 주사위 감지 — 최대 2개 반환 (타짜의 손놀림 지원)
 function ttDetectCurrentDie(ctx, W, H) {
-  if (!ttCalib) return null;
+  if (!ttCalib) return [];
   const {myX1, gameX1, y1, y2} = ttCalib;
   const bH   = y2 - y1;
   const rowH = bH / 3;
 
-  // 굴린 주사위 영역: myX1 왼쪽 ~ gameX1 사이
   const areaW   = myX1 - gameX1;
   const dieSize = Math.min(rowH * 0.72, areaW * 0.8);
   const cx      = gameX1 + areaW * 0.5;
 
-  if (cx < 10 || cx > W - 10 || dieSize < 10) return null;
+  if (cx < 10 || cx > W - 10 || dieSize < 10) return [];
 
-  // 세 row 순서로 탐색, 가운데 row 우선
+  // 세 row 위치 모두 스캔
   const searchY = [
-    y1 + rowH * 1.5,  // 2번째 row (가운데) 우선
     y1 + rowH * 0.5,
+    y1 + rowH * 1.5,
     y1 + rowH * 2.5,
   ];
 
+  const found = [];
   for (const sy of searchY) {
     const die = ttReadDie(ctx, cx, sy, dieSize, dieSize, 'me');
-    if (die.v > 0) return die;
+    if (die.v > 0) {
+      // 이미 같은 값 있으면 중복 제외
+      if (!found.some(d => d.v === die.v && d.s === die.s)) found.push(die);
+      if (found.length >= 2) break;
+    }
   }
-  return null;
+  return found; // [] | [cur] | [cur, sec]
 }
 
 // ── 보드 전체 검출 ────────────────────────────────────────
@@ -2104,16 +2109,17 @@ function ttDetectDice(ctx, W, H) {
     const cy = y1 + rowH * row + rowH * 0.5;
     const me = [], opp = [];
     for (let d = 0; d < 3; d++) {
-      me.push(ttReadDie(ctx,  myX1  + myDieW  * (d + 0.5), cy, myDieW  * 0.85, dieH, 'me'));
-      opp.push(ttReadDie(ctx, oppX1 + oppDieW * (d + 0.5), cy, oppDieW * 0.85, dieH, 'opp'));
+      me.push(ttReadDie(ctx,  myX1  + myDieW  * (d + 0.5), cy, myDieW  * 0.95, dieH, 'me'));
+      opp.push(ttReadDie(ctx, oppX1 + oppDieW * (d + 0.5), cy, oppDieW * 0.95, dieH, 'opp'));
     }
     result.push({me, opp});
   }
   return result;
 }
 
-function ttApplyDetection(detected, currentDie) {
+function ttApplyDetection(detected, currentDice) {
   let changed = false;
+  const [curDie, secDie] = currentDice || [];
 
   // 보드 상태 반영
   for (let l = 0; l < 3; l++) {
@@ -2129,12 +2135,25 @@ function ttApplyDetection(detected, currentDie) {
     }
   }
 
-  // 굴린 주사위 반영 (값이 있고 아직 입력 안 된 경우만)
-  if (currentDie && currentDie.v > 0 && TT.cur.v !== currentDie.v) {
-    TT.cur = {...currentDie};
-    document.getElementById('tt-cur-val').value = currentDie.v;
-    document.getElementById('tt-cur-shield').checked = currentDie.s;
+  // 현재 주사위 반영
+  if (curDie && curDie.v > 0 && TT.cur.v !== curDie.v) {
+    TT.cur = {...curDie};
+    document.getElementById('tt-cur-val').value = curDie.v;
+    document.getElementById('tt-cur-shield').checked = curDie.s;
     ttUpdateCurDie();
+    changed = true;
+  }
+
+  // 타짜의 손놀림 — 두번째 주사위 자동 반영
+  if (secDie && secDie.v > 0 && TT.sec.v !== secDie.v) {
+    TT.sec = {...secDie};
+    const secVal = document.getElementById('tt-sec-val');
+    const secShield = document.getElementById('tt-sec-shield');
+    if (secVal) { secVal.value = secDie.v; secVal.disabled = false; }
+    if (secShield) { secShield.checked = secDie.s; secShield.disabled = false; }
+    const secBox = document.querySelector('.tt-sec-box');
+    if (secBox) secBox.style.opacity = '1';
+    ttUpdateSecDie();
     changed = true;
   }
 
@@ -2145,7 +2164,7 @@ function ttApplyDetection(detected, currentDie) {
 }
 
 // 검출 영역 디버그 오버레이 (캔버스에 직접 그림)
-function ttDrawDebugOverlay(ctx, detected) {
+function ttDrawDebugOverlay(ctx, detected, currentDice) {
   if (!ttCalib) return;
   const {myX1, myX2, oppX1, oppX2, y1, y2, gameX1} = ttCalib;
   const bH = y2 - y1, rowH = bH / 3;
