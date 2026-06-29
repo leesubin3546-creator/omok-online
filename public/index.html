@@ -1352,7 +1352,7 @@
         <select id="tt-ai-provider" style="padding:2px 6px;border-radius:6px;border:1px solid var(--border);
           background:var(--card);color:var(--text);font-size:0.72rem;font-family:inherit;cursor:pointer;">
           <option value="claude">Claude Opus</option>
-          <option value="gpt">GPT-4o</option>
+          <option value="gpt">GPT-5.5</option>
         </select>
         <button id="tt-ai-btn" onclick="ttAskClaude()"
           style="padding:3px 10px;border-radius:8px;border:1px solid var(--accent2);
@@ -1494,12 +1494,13 @@ function ttRenderChipRow(cid, dieState, isSecond) {
   const side   = isSecond ? 'opp' : (TT.turn==='me' ? 'me' : 'opp');
   el.innerHTML = [1,2,3,4,5,6].map(v =>
     `<div class="tt-die-chip ${state.v===v ? selCls : ''}" onclick="ttSelectDie(${v},${isSecond})">
-      ${ttDieFaceSVG(v, state.v===v || bonusMode, side, false)}
+      ${ttDieFaceSVG(v, bonusMode || (state.v===v && state.s), side, false)}
     </div>`
   ).join('');
 }
 
 // ── 주사위 선택 / 실드 / 스킬 ──────────────────────────
+let _ttAiTimer = null;
 function ttSelectDie(v, isSecond) {
   // 알치기 보너스 모드 → 보너스 실드 주사위 값 선택
   if (TT.alchigiBonus) {
@@ -1509,6 +1510,12 @@ function ttSelectDie(v, isSecond) {
   if (isSecond) { TT.sec.v = TT.sec.v===v ? 0 : v; if (!TT.sec.v) TT.sec.s=false; }
   else          { TT.cur.v = TT.cur.v===v ? 0 : v; if (!TT.cur.v) TT.cur.s=false; }
   ttRenderChips(); ttRenderBoard(); ttAnalyze();
+
+  // 내 차례 + 주사위 선택됐을 때 자동 AI 호출 (800ms 디바운스)
+  if (!isSecond && TT.turn==='me' && TT.cur.v>0) {
+    clearTimeout(_ttAiTimer);
+    _ttAiTimer = setTimeout(ttAskClaude, 800);
+  }
 }
 function ttToggleShield(isSecond) {
   if (isSecond) TT.sec.s = !TT.sec.s;
@@ -1575,10 +1582,6 @@ function ttPlaceDie(laneIdx, side, slotIdx) {
       TT.alchigiBonus = {v:0, s:true};
       didAlchigi = true;
     }
-    // 실드 충돌: 비실드 주사위가 상대 실드와 같은 값 → 내 주사위 날아감 (양쪽 차례 모두)
-    if (!didAlchigi && lane[oppSide].some(d => d.s && d.v===die.v)) {
-      lane[side][slotIdx].blown = true;
-    }
   }
 
   if (TT.tazzaMode) { TT.sec={v:0,s:false}; TT.tazzaMode=false; TT.tazzaAvail=false; }
@@ -1608,11 +1611,8 @@ function ttEvalMove(die, laneIdx) {
 
   // 알치기: 실드 주사위는 알치기 불가
   const canAlchigi = !die.s && die.v>0 && lane[opp].some(d=>d.v>0&&!d.s&&d.v===die.v);
-  // 실드 충돌
-  const hitsShield = !die.s && die.v>0 && lane[opp].some(d=>d.s&&d.v===die.v);
-
   const myBefore = ttLaneScore(lane[side]);
-  const myAfter  = hitsShield ? myBefore : ttLaneScore([...lane[side], die]);
+  const myAfter  = ttLaneScore([...lane[side], die]);
   const myGain   = myAfter - myBefore;
 
   let oppLoss = 0;
@@ -1631,9 +1631,8 @@ function ttEvalMove(die, laneIdx) {
   let priority = myGain + oppLoss;
   if (canAlchigi) priority += 30;
   if (laneFlip)   priority += 40;
-  if (hitsShield) priority -= 50;
 
-  return { laneIdx, canAlchigi, hitsShield, myGain, oppLoss, laneFlip, myFinal, oppFinal, priority, die };
+  return { laneIdx, canAlchigi, myGain, oppLoss, laneFlip, myFinal, oppFinal, priority, die };
 }
 
 // ── 분석 & 추천 렌더 ─────────────────────────────────────
@@ -1683,7 +1682,6 @@ function ttAnalyze() {
   } else {
     recArea.innerHTML = allMoves.slice(0,3).map((m,i) => {
       const tags=[];
-      if(m.hitsShield) tags.push('<span class="tt-tag tt-tag-alchigi">🛡 실드충돌</span>');
       if(m.canAlchigi) tags.push('<span class="tt-tag tt-tag-alchigi">🎯 알치기</span>');
       if(m.laneFlip)   tags.push('<span class="tt-tag tt-tag-flip">↑ 라인역전</span>');
       if(m.myGain>0)   tags.push(`<span class="tt-tag tt-tag-score">+${m.myGain}점</span>`);
@@ -1720,20 +1718,26 @@ async function ttAskClaude() {
     const res = await fetch('/api/tikatuka-analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lanes: TT.lanes, cur: die, turn: TT.turn,
-        provider: document.getElementById('tt-ai-provider').value }),
+      body: JSON.stringify({
+        lanes: TT.lanes, cur: die, turn: TT.turn,
+        provider: document.getElementById('tt-ai-provider').value,
+        skills: { tazzaAvail: TT.tazzaAvail, holdAvail: TT.holdAvail },
+      }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    const laneNames = ['상단', '중단', '하단'];
+    const laneNames  = ['상단', '중단', '하단'];
     const provider   = document.getElementById('tt-ai-provider').value;
-    const provLabel  = provider === 'gpt' ? '🤖 GPT-4o' : '✨ Claude Opus';
+    const provLabel  = provider === 'gpt' ? '🤖 GPT-5.5' : '✨ Claude Opus';
     const alchigiTag = data.alchigi ? ' 🎯 <b>알치기!</b>' : '';
     const warnTag    = data.warning  ? ` ⚠️ ${data.warning}` : '';
+    const actionMap  = { tazza:'🃏 <b>타짜 먼저 쓰세요!</b>', hold:'⏸ <b>홀드 권장!</b>' };
+    const actionTag  = data.action && data.action !== 'place'
+      ? `<div style="margin-top:5px;color:#c8881a">${actionMap[data.action]||''} ${data.action_reason||''}</div>` : '';
     resultEl.innerHTML =
       `<b>${provLabel} 추천: ${laneNames[data.best]} (${data.best+1}번)</b>${alchigiTag}${warnTag}<br>
-       <span style="color:var(--text2)">${data.reason}</span>`;
+       <span style="color:var(--text2)">${data.reason}</span>${actionTag}`;
     resultEl.style.display = '';
 
     // 해당 라인 강조
@@ -1788,11 +1792,6 @@ function ttInitBoardEvents() {
     const activeDie  = TT.tazzaMode ? TT.sec : TT.cur;
     if (TT.alchigiBonus && d.v===0)                                 { ttPlaceDie(l,side,i); return; }
     if (d.v===0 && side===activeSide && activeDie && activeDie.v>0) { ttPlaceDie(l,side,i); return; }
-    // 수동 편집
-    ttPushHistory();
-    if (d.blown) { d.blown=false; d.v=0; d.s=false; }
-    else { d.v = d.v>=6 ? 0 : d.v+1; if(!d.v) d.s=false; }
-    ttRefreshSlot(slot); ttAnalyze();
   });
   container.addEventListener('dblclick', e => {
     const slot=e.target.closest('.tt-die-slot'); if(!slot) return;

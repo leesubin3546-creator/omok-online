@@ -140,8 +140,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── 티카투카 AI 분석 프록시 (Claude / GPT 선택) ────────────────
-function buildPrompt(lanes, cur, turn) {
-  const sideLabel = turn === 'me' ? '나' : '상대';
+function buildPrompt(lanes, cur, skills) {
   const laneNames = ['상단', '중단', '하단'];
   const fmtDie = d => d.v === 0 ? '빈슬롯' : `${d.v}${d.s?'(실드)':''}${d.blown?'(날아감)':''}`;
   const laneScore = dice => {
@@ -149,39 +148,55 @@ function buildPrompt(lanes, cur, turn) {
     dice.filter(d=>d.v>0&&!d.blown).forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
     return Object.entries(cnt).reduce((s,[v,n])=>s+Number(v)*(2*n-1),0);
   };
-  const boardText  = lanes.map((l,i)=>`${laneNames[i]}: 내필드=[${l.me.map(fmtDie).join(', ')}] 상대필드=[${l.opp.map(fmtDie).join(', ')}]`).join('\n');
-  const scoreText  = lanes.map((l,i)=>`${laneNames[i]}: 나 ${laneScore(l.me)}점 vs 상대 ${laneScore(l.opp)}점`).join(', ');
+  const scores    = lanes.map(l=>({ me:laneScore(l.me), opp:laneScore(l.opp) }));
+  const myWins    = scores.filter(s=>s.me>s.opp).length;
+  const oppWins   = scores.filter(s=>s.opp>s.me).length;
+  const boardText = lanes.map((l,i)=>
+    `${laneNames[i]}(나${scores[i].me}:상대${scores[i].opp}): 내=[${l.me.map(fmtDie)}] 상대=[${l.opp.map(fmtDie)}]`
+  ).join('\n');
+  const skillText = [
+    skills.tazzaAvail ? '타짜(손놀림) 사용가능: 추가 주사위를 1개 더 굴려 이번 턴에 2개 배치 가능' : '타짜: 사용불가',
+    skills.holdAvail  ? '홀드 사용가능: 이번 턴을 그냥 종료 (주사위 배치 없이 차례 넘김)' : '홀드: 사용불가',
+  ].join('\n');
 
-  return `당신은 로스트아크 미니게임 "티카투카" 전문 전략가입니다.
+  return `당신은 로스트아크 미니게임 "티카투카" 전문 전략가입니다. 현재 내 차례입니다.
 
 ## 게임 규칙
-- 3×3 보드: 3개 라인, 각 라인에 내 슬롯 3개 + 상대 슬롯 3개
-- 각 라인 점수: 같은 숫자 1개=그 수, 2개(더블)=그 수×3, 3개(트리플)=그 수×5
-- 승리: 3라인 중 2라인 이상에서 상대보다 높은 점수
-- 알치기: 실드 없는 주사위 배치 시 상대 필드 동일 숫자 비실드 주사위 → 둘 다 사라지고 보너스 실드 주사위 1개 획득
-- 실드 주사위: 알치기 불가(공격 못함), 알치기 당하지 않음(방어)
-- 실드 충돌: 내 비실드 주사위가 상대 실드와 같은 값 → 내 주사위만 날아감
+- 3라인 중 2라인 이상 점수 우세 시 승리
+- 라인 점수: 같은 숫자 1개=면수, 2개(더블)=면수×3, 3개(트리플)=면수×5
+- 알치기: 비실드 주사위끼리 동일 값일 때만 발생 → 둘 다 제거 + 보너스 실드 주사위 1개 획득
+- 실드 관련: 실드가 포함된 경우(내 실드든 상대 실드든) 알치기 발생 안함, 그냥 배치됨
 
-## 현재 상태
-차례: **${sideLabel}**
-굴린 주사위: ${fmtDie(cur)}
-보드:\n${boardText}
-점수: ${scoreText}
+## 현재 보드 (내 ${myWins}라인 우세 / 상대 ${oppWins}라인 우세)
+${boardText}
 
-## 요청
-${sideLabel}가 ${fmtDie(cur)}를 어느 라인에 놓는 것이 최적인지 분석하세요.
-반드시 아래 JSON 형식만 응답하세요:
-{"best":0,"reason":"한줄이유(30자이내)","alchigi":false,"warning":""}
+## 이번 굴린 주사위: ${fmtDie(cur)}
+
+## 사용 가능한 스킬
+${skillText}
+
+## 분석 요청
+다음 세 가지를 종합적으로 판단하세요:
+1. 이 주사위를 어느 라인에 놓는 게 최적인가 (알치기, 더블/트리플 구성, 라인 역전 고려)
+2. 타짜(손놀림)를 써야 하는가? (현재 주사위만으로 승리 가능성이 낮거나, 추가 주사위로 크게 유리해질 때)
+3. 홀드를 써야 하는가? 홀드는 이번 턴을 아무것도 안 하고 넘기는 것이다. 두 경우에만 권장:
+   - 이미 2라인 이상 확정 우세여서 추가 배치가 불필요할 때
+   - 2라인 이상 확정 패배 상태로 역전이 불가능할 때 (시간 단축)
+
+반드시 아래 JSON만 응답:
+{"best":0,"reason":"배치이유(25자이내)","alchigi":false,"warning":"","action":"place","action_reason":"스킬판단이유(25자이내)"}
 - best: 0(상단) 1(중단) 2(하단)
-- alchigi: 알치기 발생 여부
-- warning: 실드충돌 등 주의사항 (없으면 빈 문자열)`;
+- action: "place"(그냥배치) | "tazza"(타짜먼저) | "hold"(홀드)
+- action_reason: 타짜/홀드 권장 시 이유, place면 빈 문자열`;
 }
 
 app.post('/api/tikatuka-analyze', async (req, res) => {
-  const { lanes, cur, turn, provider = 'claude' } = req.body;
+  const { lanes, cur, turn, provider = 'claude', skills = {} } = req.body;
   if (!lanes || !cur) return res.status(400).json({ error: '잘못된 요청' });
+  // 내 차례에만 분석 (상대 차례 요청은 무시)
+  if (turn !== 'me') return res.status(400).json({ error: '내 차례에만 분석 가능' });
 
-  const prompt = buildPrompt(lanes, cur, turn);
+  const prompt = buildPrompt(lanes, cur, skills);
   let text;
 
   try {
@@ -193,7 +208,7 @@ app.post('/api/tikatuka-analyze', async (req, res) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'gpt-5.5',
-          max_tokens: 200,
+          max_tokens: 300,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
