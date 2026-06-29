@@ -139,91 +139,79 @@ const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── 티카투카 Claude API 프록시 ──────────────────────────────────
-app.post('/api/tikatuka-analyze', async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'API 키 미설정' });
-
-  const { lanes, cur, turn } = req.body;
-  if (!lanes || !cur) return res.status(400).json({ error: '잘못된 요청' });
-
-  // 보드 상태 텍스트 변환
+// ── 티카투카 AI 분석 프록시 (Claude / GPT 선택) ────────────────
+function buildPrompt(lanes, cur, turn) {
   const sideLabel = turn === 'me' ? '나' : '상대';
   const laneNames = ['상단', '중단', '하단'];
-  const fmtDie = d => d.v === 0 ? '빈슬롯' : `${d.v}${d.s ? '(실드)' : ''}${d.blown ? '(날아감)' : ''}`;
-  const boardText = lanes.map((l, i) => {
-    const myScore  = l.me.filter(d=>d.v>0&&!d.blown).reduce((s,d,_,a)=>{ const c=a.filter(x=>x.v===d.v).length; return s+d.v*(2*c-1); }, 0) / (lanes[i].me.filter(d=>d.v>0&&!d.blown).length || 1);
-    // 간단히 배열 표시
-    return `${laneNames[i]}: 내필드=[${l.me.map(fmtDie).join(', ')}] 상대필드=[${l.opp.map(fmtDie).join(', ')}]`;
-  }).join('\n');
-
-  // 점수 계산 helper (서버에서도 동일 로직)
-  const laneScore = (dice) => {
+  const fmtDie = d => d.v === 0 ? '빈슬롯' : `${d.v}${d.s?'(실드)':''}${d.blown?'(날아감)':''}`;
+  const laneScore = dice => {
     const cnt = {};
     dice.filter(d=>d.v>0&&!d.blown).forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
     return Object.entries(cnt).reduce((s,[v,n])=>s+Number(v)*(2*n-1),0);
   };
-  const scores = lanes.map(l=>({ me: laneScore(l.me), opp: laneScore(l.opp) }));
-  const scoreText = scores.map((s,i)=>`${laneNames[i]}: 나 ${s.me}점 vs 상대 ${s.opp}점`).join(', ');
+  const boardText  = lanes.map((l,i)=>`${laneNames[i]}: 내필드=[${l.me.map(fmtDie).join(', ')}] 상대필드=[${l.opp.map(fmtDie).join(', ')}]`).join('\n');
+  const scoreText  = lanes.map((l,i)=>`${laneNames[i]}: 나 ${laneScore(l.me)}점 vs 상대 ${laneScore(l.opp)}점`).join(', ');
 
-  const prompt = `당신은 로스트아크 미니게임 "티카투카" 전문 전략가입니다.
+  return `당신은 로스트아크 미니게임 "티카투카" 전문 전략가입니다.
 
 ## 게임 규칙
 - 3×3 보드: 3개 라인, 각 라인에 내 슬롯 3개 + 상대 슬롯 3개
 - 각 라인 점수: 같은 숫자 1개=그 수, 2개(더블)=그 수×3, 3개(트리플)=그 수×5
 - 승리: 3라인 중 2라인 이상에서 상대보다 높은 점수
-- 알치기: 실드 없는 주사위를 놓을 때 상대 필드에 같은 숫자 실드 없는 주사위가 있으면 → 둘 다 사라지고 실드 보너스 주사위 1개 획득
+- 알치기: 실드 없는 주사위 배치 시 상대 필드 동일 숫자 비실드 주사위 → 둘 다 사라지고 보너스 실드 주사위 1개 획득
 - 실드 주사위: 알치기 불가(공격 못함), 알치기 당하지 않음(방어)
-- 실드 충돌: 내 비실드 주사위가 상대 실드 주사위와 같은 값 → 내 주사위만 날아감
+- 실드 충돌: 내 비실드 주사위가 상대 실드와 같은 값 → 내 주사위만 날아감
 
 ## 현재 상태
-지금은 **${sideLabel}**의 차례입니다.
+차례: **${sideLabel}**
 굴린 주사위: ${fmtDie(cur)}
-
-보드:
-${boardText}
-
-현재 점수:
-${scoreText}
+보드:\n${boardText}
+점수: ${scoreText}
 
 ## 요청
-위 상황에서 **${sideLabel}가 ${fmtDie(cur)}를 어느 라인에 놓는 것이 최적인지** 분석해주세요.
-
-응답 형식 (반드시 이 JSON만):
-{
-  "best": 0,
-  "reason": "한줄 이유",
-  "alchigi": false,
-  "warning": ""
-}
-- best: 0(상단), 1(중단), 2(하단) 중 최적 라인 번호
-- reason: 선택 이유 (한국어, 30자 이내)
-- alchigi: 이 수가 알치기를 발생시키면 true
+${sideLabel}가 ${fmtDie(cur)}를 어느 라인에 놓는 것이 최적인지 분석하세요.
+반드시 아래 JSON 형식만 응답하세요:
+{"best":0,"reason":"한줄이유(30자이내)","alchigi":false,"warning":""}
+- best: 0(상단) 1(중단) 2(하단)
+- alchigi: 알치기 발생 여부
 - warning: 실드충돌 등 주의사항 (없으면 빈 문자열)`;
+}
+
+app.post('/api/tikatuka-analyze', async (req, res) => {
+  const { lanes, cur, turn, provider = 'claude' } = req.body;
+  if (!lanes || !cur) return res.status(400).json({ error: '잘못된 요청' });
+
+  const prompt = buildPrompt(lanes, cur, turn);
+  let text;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-4-8',
-        max_tokens: 200,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Claude API error:', err);
-      return res.status(502).json({ error: 'Claude API 오류' });
+    if (provider === 'gpt') {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'OpenAI API 키 미설정' });
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-5.5',
+          max_tokens: 200,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      if (!response.ok) { const e=await response.text(); console.error('GPT error:',e); return res.status(502).json({ error: 'GPT API 오류' }); }
+      const data = await response.json();
+      text = data.choices[0].message.content.trim();
+    } else {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'Claude API 키 미설정' });
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
+      });
+      if (!response.ok) { const e=await response.text(); console.error('Claude error:',e); return res.status(502).json({ error: 'Claude API 오류' }); }
+      const data = await response.json();
+      text = data.content[0].text.trim();
     }
-
-    const data = await response.json();
-    const text = data.content[0].text.trim();
 
     // JSON 파싱
     const jsonMatch = text.match(/\{[\s\S]*\}/);
