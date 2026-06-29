@@ -140,7 +140,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── 티카투카 AI 분석 프록시 (Claude / GPT 선택) ────────────────
-function buildPrompt(lanes, cur, skills) {
+function buildPrompt(lanes, cur, skills, isBonus=false) {
   const laneNames = ['상단', '중단', '하단'];
   const fmtDie = d => d.v === 0 ? '빈슬롯' : `${d.v}${d.s?'(실드)':''}${d.blown?'(날아감)':''}`;
   const laneScore = dice => {
@@ -170,7 +170,7 @@ function buildPrompt(lanes, cur, skills) {
 ## 현재 보드 (내 ${myWins}라인 우세 / 상대 ${oppWins}라인 우세)
 ${boardText}
 
-## 이번 굴린 주사위: ${fmtDie(cur)}
+## 이번 굴린 주사위: ${fmtDie(cur)}${isBonus ? " (알치기 보너스 실드 주사위 — 내 필드 또는 상대 필드 어디든 배치 가능)" : ""}
 
 ## 사용 가능한 스킬
 ${skillText}
@@ -178,25 +178,27 @@ ${skillText}
 ## 분석 요청
 다음 세 가지를 종합적으로 판단하세요:
 1. 이 주사위를 어느 라인에 놓는 게 최적인가 (알치기, 더블/트리플 구성, 라인 역전 고려)
+   ${isBonus ? "1-1. 보너스 실드이므로 내 필드(점수 강화) vs 상대 필드(압박/알치기 방해) 중 어느 쪽이 유리한지도 판단" : ""}
 2. 타짜(손놀림)를 써야 하는가? (현재 주사위만으로 승리 가능성이 낮거나, 추가 주사위로 크게 유리해질 때)
 3. 홀드를 써야 하는가? 홀드는 이번 턴을 아무것도 안 하고 넘기는 것이다. 두 경우에만 권장:
    - 이미 2라인 이상 확정 우세여서 추가 배치가 불필요할 때
    - 2라인 이상 확정 패배 상태로 역전이 불가능할 때 (시간 단축)
 
 반드시 아래 JSON만 응답:
-{"best":0,"reason":"배치이유(25자이내)","alchigi":false,"warning":"","action":"place","action_reason":"스킬판단이유(25자이내)"}
+{"best":0,"reason":"배치이유(25자이내)","side":"me","alchigi":false,"warning":"","action":"place","action_reason":"스킬판단이유(25자이내)"}
 - best: 0(상단) 1(중단) 2(하단)
+- side: "me"(내 필드) | "opp"(상대 필드) — 보너스 실드일 때만 의미있음, 일반 배치는 "me"
 - action: "place"(그냥배치) | "tazza"(타짜먼저) | "hold"(홀드)
 - action_reason: 타짜/홀드 권장 시 이유, place면 빈 문자열`;
 }
 
 app.post('/api/tikatuka-analyze', async (req, res) => {
-  const { lanes, cur, turn, provider = 'claude', skills = {} } = req.body;
+  const { lanes, cur, turn, provider = 'claude', skills = {}, isBonus = false } = req.body;
   if (!lanes || !cur) return res.status(400).json({ error: '잘못된 요청' });
   // 내 차례에만 분석 (상대 차례 요청은 무시)
   if (turn !== 'me') return res.status(400).json({ error: '내 차례에만 분석 가능' });
 
-  const prompt = buildPrompt(lanes, cur, skills);
+  const prompt = buildPrompt(lanes, cur, skills, !!isBonus);
   let text;
 
   try {
