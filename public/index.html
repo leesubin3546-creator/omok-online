@@ -1501,7 +1501,7 @@ function ttRenderChipRow(cid, dieState, isSecond) {
 
 // ── 주사위 선택 / 실드 / 스킬 ──────────────────────────
 let _ttAiTimer = null;
-let _ttAiRec = null; // {laneIdx, side, isBonus}
+let _ttAiRec = null;
 function ttSelectDie(v, isSecond) {
   // 알치기 보너스 모드 → 보너스 실드 주사위 값 선택
   if (TT.alchigiBonus) {
@@ -1660,8 +1660,8 @@ function ttAnalyze() {
   if (TT.alchigiBonus) {
     const bv = TT.alchigiBonus.v;
     document.getElementById('tt-recommend-area').innerHTML = bv
-      ? `<div style="color:#c0392b;font-size:0.85rem;">🛡 실드 [${bv}] — AI 추천 클릭 또는 보드에서 직접 배치하세요</div>`
-      : `<div style="color:#c0392b;font-size:0.85rem;">🎲 위 칩에서 보너스 실드 주사위 값을 선택하세요</div>`;
+      ? `<div style="color:#c0392b;font-size:0.85rem;">AI 추천 클릭 또는 보드에서 직접 배치하세요</div>`
+      : `<div style="color:#c0392b;font-size:0.85rem;">위 칩에서 보너스 실드 주사위 값을 선택하세요</div>`;
     return;
   }
   if (!TT.cur.v) {
@@ -1716,11 +1716,9 @@ async function ttAskClaude() {
     const actionMap  = { tazza:'🃏 <b>타짜 먼저 쓰세요!</b>', hold:'⏸ <b>홀드 권장!</b>' };
     const actionTag  = data.action && data.action !== 'place'
       ? `<div style="margin-top:5px;color:#c8881a">${actionMap[data.action]||''} ${data.action_reason||''}</div>` : '';
-    const sideLabel = data.side === 'opp' ? ' (상대 필드)' : '';
     resultEl.innerHTML =
-      `<b>${provLabel} 추천: ${laneNames[data.best]}${sideLabel} (${data.best+1}번)</b>${alchigiTag}${warnTag}<br>
-       <span style="color:var(--text2)">${data.reason}</span>${actionTag}
-       <div style="margin-top:6px;font-size:0.75rem;color:var(--accent2);opacity:0.8;">👆 클릭하면 이 자리에 배치됩니다</div>`;
+      `<b>${provLabel} 추천: ${laneNames[data.best]} (${data.best+1}번)</b>${alchigiTag}${warnTag}<br>
+       <span style="color:var(--text2)">${data.reason}</span>${actionTag}`;
     resultEl.style.display = '';
     resultEl.style.cursor = 'pointer';
     _ttAiRec = { laneIdx: data.best, side: data.side || 'me', isBonus: !!TT.alchigiBonus };
@@ -1740,19 +1738,18 @@ async function ttAskClaude() {
   }
 }
 
-// ── AI 추천 클릭 → 배치 ────────────────────────────────
+// ── 추천 클릭 → 배치 ─────────────────────────────────────
+// -- AI 추천 클릭 -> 배치
 function ttPlaceFromAI() {
   if (!_ttAiRec) return;
   const { laneIdx, side: aiSide } = _ttAiRec;
   _ttAiRec = null;
   const resultEl = document.getElementById('tt-ai-result');
   if (resultEl) { resultEl.style.cursor = ''; resultEl.onclick = null; }
-
   if (TT.alchigiBonus && TT.alchigiBonus.v > 0) {
-    // 보너스 실드 배치 (내 필드 또는 상대 필드)
     const side = aiSide === 'opp' ? 'opp' : 'me';
     const slotIdx = TT.lanes[laneIdx][side].findIndex(d => d.v === 0);
-    if (slotIdx === -1) { alert('해당 라인에 빈 슬롯이 없습니다'); return; }
+    if (slotIdx === -1) { alert('빈 슬롯 없음'); return; }
     ttPushHistory();
     TT.lanes[laneIdx][side][slotIdx] = {v: TT.alchigiBonus.v, s: true, blown: false};
     TT.alchigiBonus = null;
@@ -1760,15 +1757,14 @@ function ttPlaceFromAI() {
     ttSwitchTurn();
     ttRefreshUI();
   } else {
-    // 일반 배치 — ttPlaceDie 호출
     const side = TT.turn === 'me' ? 'me' : 'opp';
     const slotIdx = TT.lanes[laneIdx][side].findIndex(d => d.v === 0);
-    if (slotIdx === -1) { alert('해당 라인에 빈 슬롯이 없습니다'); return; }
+    if (slotIdx === -1) { alert('빈 슬롯 없음'); return; }
     ttPlaceDie(laneIdx, side, slotIdx);
   }
 }
 
-// ── 추천 클릭 → 배치 ─────────────────────────────────────
+
 function ttPlaceFromRec(laneIdx, dieV, dieS, isSecond) {
   const side = TT.turn==='me' ? 'me' : 'opp';
   const slotIdx = TT.lanes[laneIdx][side].findIndex(d=>d.v===0);
@@ -1780,9 +1776,9 @@ function ttPlaceFromRec(laneIdx, dieV, dieS, isSecond) {
   if (!dieS) {
     const hits = TT.lanes[laneIdx][opp].filter(d=>d.v>0&&!d.s&&d.v===dieV);
     if (hits.length) {
-      TT.lanes[laneIdx][side][slotIdx].blown = true;
+      TT.lanes[laneIdx][side][slotIdx].blown = true; // 공격 주사위도 사라짐
       TT.lanes[laneIdx][opp].forEach(d=>{if(d.v>0&&!d.s&&d.v===dieV)d.blown=true;});
-      TT.alchigiBonus = {v:0, s:true};
+      TT.alchigiBonus = {v:0, s:true}; // 새 실드 주사위 대기
       didAlchigi = true;
     }
   }
@@ -4378,4 +4374,87 @@ function hdStartTimer(seconds) {
     fill.style.width = `${Math.max(0, (remaining / seconds) * 100)}%`;
     if (remaining <= 5) fill.style.background = '#d9534f';
     else fill.style.background = '';
- 
+    if (remaining <= 0) hdClearTimer();
+  }, 1000);
+}
+
+function hdClearTimer() {
+  clearInterval(hdTimerInterval);
+  hdTimerInterval = null;
+  document.getElementById('hd-timer-wrap').classList.remove('show');
+  const fill = document.getElementById('hd-timer-fill');
+  fill.style.width = '100%';
+  fill.style.background = '';
+}
+
+function hdAddChat(html, isSystem) {
+  const msgs = document.getElementById('hd-chat-messages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  if (isSystem) div.style.color = 'var(--text2)';
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hdSendChat() {
+  const input = document.getElementById('hd-chat-input');
+  const msg = input.value.trim();
+  if (!msg || !currentRoom) return;
+  socket.emit('chat', { roomId: currentRoom, nickname: myNickname, message: msg });
+  input.value = '';
+}
+
+function showHoldemGameOver(winnerNickname, coinsAwarded, results) {
+  hdClearTimer();
+  const isWinner = winnerNickname === myNickname;
+  document.getElementById('hd-gameover-title').textContent = isWinner ? '🏆 우승!' : '토너먼트 종료';
+  document.getElementById('hd-gameover-sub').textContent =
+    `우승자: ${winnerNickname}` + (isWinner ? `  +${(coinsAwarded||0).toLocaleString()} 재화 획득!` : '');
+
+  if (results && results.length) {
+    document.getElementById('hd-gameover-results').innerHTML = results.map((r, i) =>
+      `<div class="hd-result-row">
+        <span>${i+1}위 ${escapeHtml(r.nickname)}</span>
+        <span class="${r.nickname === winnerNickname ? 'hd-result-winner' : ''}">${r.nickname === winnerNickname ? '🏆 우승' : '탈락'}</span>
+      </div>`
+    ).join('');
+  }
+
+  document.getElementById('hd-gameover-overlay').classList.add('show');
+}
+
+function hdGoLobby() {
+  hdClearTimer();
+  holdemState = null;
+  hdRaisePending = false;
+  document.getElementById('hd-gameover-overlay').classList.remove('show');
+  document.getElementById('hd-chat-messages').innerHTML = '';
+  document.getElementById('hd-raise-row').style.display = 'none';
+  document.getElementById('hd-status-bar').textContent = '대기 중...';
+  document.getElementById('hd-pot-main').textContent = '팟: 0';
+  document.getElementById('hd-community-cards').innerHTML = '';
+  document.getElementById('hd-side-pots-wrap').innerHTML = '';
+  document.getElementById('hd-my-hole-cards').innerHTML = '';
+  document.getElementById('hd-my-hand-name').textContent = '—';
+  document.getElementById('hd-my-chips').textContent = '칩: —';
+  if (currentRoom) {
+    socket.emit('leave_room', { roomId: currentRoom });
+    currentRoom = null;
+  }
+  lobbyState = null;
+  showScreen('lobby-screen');
+  if (socket) {
+    socket.emit('get_room_list');
+    socket.emit('get_coins', { nickname: myNickname });
+  }
+}
+
+document.getElementById('hd-chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') hdSendChat(); });
+
+// ── 시작 ──────────────────────────────────────────────────────
+if (myNickname.length >= 2) { initSocket(); updateHeaderNick(); }
+else showScreen('nick-screen');
+</script>
+</body>
+</html>
