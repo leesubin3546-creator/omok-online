@@ -1351,7 +1351,7 @@
       <span style="float:right;display:flex;gap:6px;align-items:center;margin-right:4px;">
         <select id="tt-ai-provider" style="padding:2px 6px;border-radius:6px;border:1px solid var(--border);
           background:var(--card);color:var(--text);font-size:0.72rem;font-family:inherit;cursor:pointer;">
-          <option value="gpt">GPT-5.5</option>
+          <option value="gpt">GPT-5.4 mini</option>
           <option value="claude">Claude Opus</option>
         </select>
         <button id="tt-ai-btn" onclick="ttAskClaude()"
@@ -1729,7 +1729,7 @@ async function ttAskClaude() {
 
     const laneNames  = ['상단', '중단', '하단'];
     const provider   = document.getElementById('tt-ai-provider').value;
-    const provLabel  = provider === 'gpt' ? '🤖 GPT-5.5' : '✨ Claude Opus';
+    const provLabel  = provider === 'gpt' ? '🤖 GPT-5.4 mini' : '✨ Claude Opus';
     const alchigiTag = data.alchigi ? ' 🎯 <b>알치기!</b>' : '';
     const warnTag    = data.warning  ? ` ⚠️ ${data.warning}` : '';
     const actionMap  = { tazza:'🃏 <b>타짜 먼저 쓰세요!</b>', hold:'⏸ <b>홀드 권장!</b>' };
