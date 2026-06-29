@@ -1576,9 +1576,9 @@ function ttPlaceDie(laneIdx, side, slotIdx) {
   if (!die.s) {
     const alchigiHits = lane[oppSide].filter(d => d.v>0 && !d.s && d.v===die.v);
     if (alchigiHits.length > 0) {
-      // 공격 주사위도 사라지고, 상대 주사위도 사라짐
-      lane[side][slotIdx].blown = true;
-      lane[oppSide].forEach(d => { if (d.v>0 && !d.s && d.v===die.v) d.blown=true; });
+      // 알치기: 양쪽 주사위 모두 슬롯에서 완전히 제거 (빈 슬롯이 됨)
+      lane[side][slotIdx] = TT_EMPTY_DIE();
+      lane[oppSide].forEach((d,i) => { if (d.v>0 && !d.s && d.v===die.v) lane[oppSide][i] = TT_EMPTY_DIE(); });
       // 보너스: 새로운 실드 주사위 굴리기 (값 선택 대기)
       TT.alchigiBonus = {v:0, s:true};
       didAlchigi = true;
