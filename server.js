@@ -215,7 +215,8 @@ app.post('/api/tikatuka-analyze', async (req, res) => {
       });
       if (!response.ok) { const e=await response.json().catch(()=>null)||await response.text(); console.error('GPT error:',JSON.stringify(e)); return res.status(502).json({ error: `GPT API 오류: ${e?.error?.message||JSON.stringify(e)}` }); }
       const data = await response.json();
-      text = data.choices[0].message.content.trim();
+      text = (data.choices[0].message.content || '').trim();
+      console.log('GPT raw:', text.slice(0,200));
     } else {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return res.status(500).json({ error: 'Claude API 키 미설정' });
@@ -231,7 +232,7 @@ app.post('/api/tikatuka-analyze', async (req, res) => {
 
     // JSON 파싱
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(502).json({ error: '응답 파싱 실패' });
+    if (!jsonMatch) return res.status(502).json({ error: `응답 파싱 실패: ${text.slice(0,100)}` });
     const result = JSON.parse(jsonMatch[0]);
     res.json(result);
   } catch (err) {
