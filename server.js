@@ -208,11 +208,11 @@ app.post('/api/tikatuka-analyze', async (req, res) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: 'gpt-5.5',
-          max_tokens: 300,
+          max_completion_tokens: 300,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
-      if (!response.ok) { const e=await response.text(); console.error('GPT error:',e); return res.status(502).json({ error: 'GPT API 오류' }); }
+      if (!response.ok) { const e=await response.json().catch(()=>null)||await response.text(); console.error('GPT error:',JSON.stringify(e)); return res.status(502).json({ error: `GPT API 오류: ${e?.error?.message||JSON.stringify(e)}` }); }
       const data = await response.json();
       text = data.choices[0].message.content.trim();
     } else {
@@ -220,10 +220,10 @@ app.post('/api/tikatuka-analyze', async (req, res) => {
       if (!apiKey) return res.status(500).json({ error: 'Claude API 키 미설정' });
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2024-02-15' },
+        body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
       });
-      if (!response.ok) { const e=await response.text(); console.error('Claude error:',e); return res.status(502).json({ error: 'Claude API 오류' }); }
+      if (!response.ok) { const e=await response.json().catch(()=>null)||await response.text(); console.error('Claude error:',JSON.stringify(e)); return res.status(502).json({ error: `Claude API 오류: ${e?.error?.message||JSON.stringify(e)}` }); }
       const data = await response.json();
       text = data.content[0].text.trim();
     }
