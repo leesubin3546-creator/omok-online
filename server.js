@@ -209,6 +209,7 @@ app.post('/api/tikatuka-analyze', async (req, res) => {
         body: JSON.stringify({
           model: 'gpt-5.5',
           max_completion_tokens: 300,
+          response_format: { type: 'json_object' },
           messages: [{ role: 'user', content: prompt }],
         }),
       });
