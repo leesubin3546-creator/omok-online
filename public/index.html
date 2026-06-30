@@ -1307,10 +1307,39 @@
     <span class="tt-toolbar-title">🎲 티카투카</span>
     <button class="tt-icon-btn" id="tt-undo-btn" onclick="ttUndo()" disabled>↩ 되돌리기</button>
     <button class="tt-icon-btn" onclick="ttReset()">↺ 초기화</button>
+    <button id="tt-battle-btn" class="tt-icon-btn" onclick="ttToggleAiMode()"
+      style="background:rgba(100,180,100,0.12);border-color:rgba(80,160,80,0.5);color:#2e7d32;">
+      🤖 AI 대전
+    </button>
+  </div>
+
+  <!-- 배틀모드 상태 배너 -->
+  <div id="tt-battle-status" style="display:none;margin-bottom:10px;padding:10px 14px;
+    border-radius:10px;background:rgba(46,125,50,0.1);border:1px solid rgba(46,125,50,0.3);
+    font-size:0.9rem;color:#1b5e20;font-weight:500;text-align:center;"></div>
+
+  <!-- 배틀모드 결과 오버레이 -->
+  <div id="tt-battle-overlay" style="display:none;position:fixed;inset:0;z-index:9999;
+    background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border-radius:18px;padding:32px 40px;text-align:center;
+      box-shadow:0 8px 32px rgba(0,0,0,0.3);min-width:280px;">
+      <div id="tt-battle-result-msg" style="font-size:2rem;font-weight:700;margin-bottom:8px;"></div>
+      <div id="tt-battle-result-detail" style="font-size:1rem;color:var(--text2);margin-bottom:20px;"></div>
+      <button onclick="ttToggleAiMode()" style="padding:10px 24px;border-radius:10px;
+        background:rgba(200,136,26,0.15);border:1px solid var(--accent2);color:var(--accent2);
+        font-size:1rem;cursor:pointer;font-family:inherit;font-weight:600;margin-right:8px;">
+        🔄 다시 대전
+      </button>
+      <button onclick="document.getElementById('tt-battle-overlay').style.display='none';TT.aiMode=false;ttToggleBattleUI(false);"
+        style="padding:10px 24px;border-radius:10px;background:rgba(0,0,0,0.06);border:1px solid var(--border);
+        color:var(--text2);font-size:1rem;cursor:pointer;font-family:inherit;">
+        종료
+      </button>
+    </div>
   </div>
 
   <!-- 차례 토글 -->
-  <div class="tt-turn-toggle" style="margin-bottom:12px;">
+  <div id="tt-turn-toggle-area" class="tt-turn-toggle" style="margin-bottom:12px;">
     <button class="tt-turn-btn active-me" id="tt-turn-me" onclick="ttSetTurn('me')">● 내 차례</button>
     <button class="tt-turn-btn" id="tt-turn-opp" onclick="ttSetTurn('opp')">● 상대 차례</button>
   </div>
@@ -1400,6 +1429,7 @@ const TT = {
   holdAvail:  true,
   alchigiBonus: null,
   history: [],
+  aiMode: false,
 };
 
 // ── 히스토리 (되돌리기) ──────────────────────────────────
@@ -1438,7 +1468,9 @@ function ttReset() {
   TT.cur={v:0,s:false}; TT.sec={v:0,s:false}; TT.turn='me';
   TT.tazzaAvail=true; TT.tazzaMode=false; TT.holdAvail=true;
   TT.alchigiBonus=null; TT.history=[];
+  clearTimeout(_ttAiTimer); _ttAiTimer = null;
   document.getElementById('tt-undo-btn').disabled = true;
+  document.getElementById('tt-battle-overlay').style.display = 'none';
   ttRefreshUI();
 }
 function ttRefreshUI() { ttRenderChips(); ttUpdateTurnUI(); ttRenderBoard(); ttAnalyze(); }
@@ -1543,6 +1575,7 @@ function ttSwitchTurn() {
   TT.cur = {v:0, s:false};
   TT.sec = {v:0, s:false};
   TT.tazzaMode = false;
+  if (TT.aiMode) setTimeout(ttBattleNextTurn, 600);
 }
 
 function ttPlaceDie(laneIdx, side, slotIdx) {
@@ -1588,7 +1621,17 @@ function ttPlaceDie(laneIdx, side, slotIdx) {
   if (TT.tazzaMode) { TT.sec={v:0,s:false}; TT.tazzaMode=false; TT.tazzaAvail=false; }
   else              { TT.cur={v:0,s:false}; }
 
-  if (!didAlchigi) ttSwitchTurn(); // 알치기 없으면 즉시 차례 전환
+  if (!didAlchigi) ttSwitchTurn();
+  else if (TT.aiMode && TT.turn === 'opp') {
+    // AI 알치기 보너스 자동 처리
+    clearTimeout(_ttAiTimer);
+    _ttAiTimer = setTimeout(ttAiBattleBonusTurn, 900);
+  } else {
+    // 인간 알치기 보너스 AI 추천
+    clearTimeout(_ttAiTimer);
+    _ttAiTimer = setTimeout(ttAskClaude, 900);
+  }
+  if (TT.aiMode) ttCheckGameOver();
   ttRefreshUI();
 }
 
@@ -1683,10 +1726,40 @@ function ttAnalyze() {
 }
 
 // ── Claude API 최적 수 요청 ───────────────────────────────
+// 보너스 실드 최적값 로컬 계산 (트리플/더블 완성 우선, 없으면 최고 점수 증가)
+function ttBestBonusVal(side='me') {
+  let bestV = 6, bestGain = -1;
+  for (let v = 1; v <= 6; v++) {
+    for (let i = 0; i < 3; i++) {
+      const l = TT.lanes[i];
+      if (!l[side].some(d => d.v === 0)) continue;
+      const live = l[side].filter(d => d.v > 0 && !d.blown);
+      const cnt = {};
+      live.forEach(d => cnt[d.v] = (cnt[d.v]||0)+1);
+      // 트리플 완성 우선 (+v*2 gain), 더블 완성 다음, 단순 배치
+      const after = [...live, {v, s:true, blown:false}];
+      const newCnt = {...cnt, [v]: (cnt[v]||0)+1};
+      const afterScore = Object.entries(newCnt).reduce((s,[k,n])=>s+Number(k)*(2*n-1),0);
+      const curScore   = Object.entries(cnt).reduce((s,[k,n])=>s+Number(k)*(2*n-1),0);
+      const gain = afterScore - curScore;
+      if (gain > bestGain) { bestGain = gain; bestV = v; }
+    }
+  }
+  return bestV;
+}
+
 async function ttAskClaude() {
-  const die = TT.alchigiBonus || TT.cur;
-  if (!die || die.v === 0) {
-    alert('먼저 주사위 값을 선택하세요'); return;
+  let die;
+  if (TT.alchigiBonus) {
+    // 보너스 실드 — 값 미선택 시 최적값 자동 계산 후 칩 선택
+    if (TT.alchigiBonus.v === 0) {
+      TT.alchigiBonus.v = ttBestBonusVal();
+      ttRenderChips();
+    }
+    die = TT.alchigiBonus;
+  } else {
+    die = TT.cur;
+    if (!die || die.v === 0) { alert('먼저 주사위 값을 선택하세요'); return; }
   }
   const btn = document.getElementById('tt-ai-btn');
   const resultEl = document.getElementById('tt-ai-result');
@@ -1776,15 +1849,16 @@ function ttPlaceFromRec(laneIdx, dieV, dieS, isSecond) {
   if (!dieS) {
     const hits = TT.lanes[laneIdx][opp].filter(d=>d.v>0&&!d.s&&d.v===dieV);
     if (hits.length) {
-      TT.lanes[laneIdx][side][slotIdx].blown = true; // 공격 주사위도 사라짐
-      TT.lanes[laneIdx][opp].forEach(d=>{if(d.v>0&&!d.s&&d.v===dieV)d.blown=true;});
-      TT.alchigiBonus = {v:0, s:true}; // 새 실드 주사위 대기
+      TT.lanes[laneIdx][side][slotIdx] = TT_EMPTY_DIE();
+      TT.lanes[laneIdx][opp].forEach((d,i)=>{ if(d.v>0&&!d.s&&d.v===dieV) TT.lanes[laneIdx][opp][i]=TT_EMPTY_DIE(); });
+      TT.alchigiBonus = {v:0, s:true};
       didAlchigi = true;
     }
   }
   if (isSecond) { TT.sec={v:0,s:false}; TT.tazzaMode=false; TT.tazzaAvail=false; }
   else          { TT.cur={v:0,s:false}; }
   if (!didAlchigi) ttSwitchTurn();
+  else { clearTimeout(_ttAiTimer); _ttAiTimer = setTimeout(ttAskClaude, 900); }
   ttRefreshUI();
 }
 
@@ -4455,6 +4529,232 @@ document.getElementById('hd-chat-input').addEventListener('keydown', e => { if (
 // ── 시작 ──────────────────────────────────────────────────────
 if (myNickname.length >= 2) { initSocket(); updateHeaderNick(); }
 else showScreen('nick-screen');
+// ══════════════════════════════════════════════════════════
+// ── AI 대전 모드 ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+
+function ttToggleBattleUI(on) {
+  const turnArea   = document.getElementById('tt-turn-toggle-area');
+  const battleStat = document.getElementById('tt-battle-status');
+  const btn        = document.getElementById('tt-battle-btn');
+  if (on) {
+    turnArea.style.display   = 'none';
+    battleStat.style.display = '';
+    btn.textContent          = '⏹ 대전 종료';
+    btn.style.background     = 'rgba(192,57,43,0.12)';
+    btn.style.borderColor    = 'rgba(192,57,43,0.5)';
+    btn.style.color          = '#c0392b';
+  } else {
+    turnArea.style.display   = '';
+    battleStat.style.display = 'none';
+    btn.textContent          = '🤖 AI 대전';
+    btn.style.background     = 'rgba(100,180,100,0.12)';
+    btn.style.borderColor    = 'rgba(80,160,80,0.5)';
+    btn.style.color          = '#2e7d32';
+  }
+}
+
+function ttToggleAiMode() {
+  const overlay = document.getElementById('tt-battle-overlay');
+  if (TT.aiMode) {
+    // 종료
+    TT.aiMode = false;
+    clearTimeout(_ttAiTimer); _ttAiTimer = null;
+    overlay.style.display = 'none';
+    ttToggleBattleUI(false);
+    ttReset();
+  } else {
+    // 시작
+    TT.aiMode = true;
+    ttReset();          // 보드 초기화 (ttReset 내부에서 aiMode는 건드리지 않음)
+    TT.aiMode = true;   // ttReset 후 복원
+    TT.tazzaAvail = true;
+    TT.holdAvail  = false; // 배틀 모드에서 홀드 비활성
+    ttToggleBattleUI(true);
+    const stat = document.getElementById('tt-battle-status');
+    stat.innerHTML = '🎲 <b>내 차례</b> — 주사위를 선택하고 슬롯에 배치하세요';
+    ttRefreshUI();
+  }
+}
+
+// ── 턴 시작 처리 (ttSwitchTurn에서 호출) ──
+function ttBattleNextTurn() {
+  if (!TT.aiMode) return;
+  if (ttCheckGameOver()) return;
+
+  const stat = document.getElementById('tt-battle-status');
+  if (TT.turn === 'me') {
+    stat.innerHTML = '🎲 <b>내 차례</b> — 주사위를 선택하고 슬롯에 배치하세요';
+    ttRefreshUI();
+  } else {
+    stat.innerHTML = '⏳ <b>AI 주사위 굴리는 중...</b>';
+    // AI 주사위 랜덤 생성
+    const dieVal = Math.ceil(Math.random() * 6);
+    TT.cur = {v: dieVal, s: false};
+    ttRenderChips();
+    setTimeout(() => {
+      stat.innerHTML = `🎲 AI 주사위: <b>${dieVal}</b> — 🤖 분석 중...`;
+      setTimeout(ttAiBattleTurn, 1000);
+    }, 600);
+  }
+}
+
+// ── AI 차례: API 호출 → 자동 배치 ──
+async function ttAiBattleTurn() {
+  if (!TT.aiMode || TT.turn !== 'opp') return;
+  const die    = TT.cur;
+  const stat   = document.getElementById('tt-battle-status');
+  const laneNm = ['상단','중단','하단'];
+
+  // 보드를 AI 시점으로 뒤집기 (me↔opp)
+  const flipped = TT.lanes.map(l => ({
+    me:  l.opp.map(d=>({...d})),
+    opp: l.me.map(d=>({...d})),
+  }));
+
+  try {
+    const res = await fetch('/api/tikatuka-analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        lanes:    flipped,
+        cur:      {v: die.v, s: false, blown: false},
+        turn:     'me',
+        provider: document.getElementById('tt-ai-provider').value,
+        skills:   {tazzaAvail: false, holdAvail: false},
+        isBonus:  false,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    stat.innerHTML = `🤖 AI → <b>${laneNm[data.best]}에 ${die.v} 배치</b> | ${data.reason}`;
+    await new Promise(r => setTimeout(r, 900));
+
+    // 배치
+    const slotIdx = TT.lanes[data.best].opp.findIndex(d => d.v === 0);
+    if (slotIdx !== -1) {
+      ttPlaceDie(data.best, 'opp', slotIdx);
+    } else {
+      ttAiBattleFallback();
+    }
+  } catch(e) {
+    stat.innerHTML = `⚠️ API 오류(${e.message.slice(0,30)}) — 랜덤 배치`;
+    await new Promise(r => setTimeout(r, 600));
+    ttAiBattleFallback();
+  }
+}
+
+// AI 배치 실패 시 fallback (랜덤 빈 슬롯)
+function ttAiBattleFallback() {
+  for (let i = 0; i < 3; i++) {
+    const idx = TT.lanes[i].opp.findIndex(d => d.v === 0);
+    if (idx !== -1) { ttPlaceDie(i, 'opp', idx); return; }
+  }
+}
+
+// ── AI 알치기 보너스 처리 ──
+async function ttAiBattleBonusTurn() {
+  if (!TT.aiMode || !TT.alchigiBonus) return;
+  const stat   = document.getElementById('tt-battle-status');
+  const laneNm = ['상단','중단','하단'];
+
+  // 최적 보너스 값 계산 (opp 시점)
+  const bestV = ttBestBonusVal('opp');
+  TT.alchigiBonus.v = bestV;
+  stat.innerHTML = `🎯 <b>AI 알치기 보너스!</b> 실드 주사위 ${bestV} 배치 중...`;
+  ttRenderChips();
+
+  const flipped = TT.lanes.map(l => ({
+    me:  l.opp.map(d=>({...d})),
+    opp: l.me.map(d=>({...d})),
+  }));
+
+  try {
+    const res = await fetch('/api/tikatuka-analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        lanes:    flipped,
+        cur:      {v: bestV, s: true, blown: false},
+        turn:     'me',
+        provider: document.getElementById('tt-ai-provider').value,
+        skills:   {tazzaAvail: false, holdAvail: false},
+        isBonus:  true,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // side 뒤집기: AI가 'opp'라고 하면 실제 내(me) 필드
+    const targetSide = (data.side === 'opp') ? 'me' : 'opp';
+    const slotIdx = TT.lanes[data.best][targetSide].findIndex(d => d.v === 0);
+
+    stat.innerHTML = `🎯 AI 보너스 실드 ${bestV} → <b>${laneNm[data.best]}(${targetSide==='opp'?'상대':'내'} 필드)</b>`;
+    await new Promise(r => setTimeout(r, 800));
+
+    if (slotIdx !== -1) {
+      ttPushHistory();
+      TT.lanes[data.best][targetSide][slotIdx] = {v: bestV, s: true, blown: false};
+    }
+    TT.alchigiBonus = null;
+    TT.cur = {v:0, s:false};
+    ttSwitchTurn();
+    ttRefreshUI();
+  } catch(e) {
+    // fallback: 가장 유리한 opp 슬롯에 배치
+    ttAiBattleBonusFallback(bestV);
+  }
+}
+
+function ttAiBattleBonusFallback(v) {
+  for (let i = 0; i < 3; i++) {
+    const idx = TT.lanes[i].opp.findIndex(d => d.v === 0);
+    if (idx !== -1) {
+      ttPushHistory();
+      TT.lanes[i].opp[idx] = {v, s: true, blown: false};
+      TT.alchigiBonus = null;
+      TT.cur = {v:0, s:false};
+      ttSwitchTurn();
+      ttRefreshUI();
+      return;
+    }
+  }
+}
+
+// ── 게임 종료 체크 ──
+function ttCheckGameOver() {
+  if (!TT.aiMode) return false;
+  const res    = ttLaneResults();
+  const myW    = res.filter(r => r.me  > r.opp).length;
+  const oppW   = res.filter(r => r.opp > r.me ).length;
+  const allFull= TT.lanes.every(l =>
+    l.me.every(d=>d.v>0) && l.opp.every(d=>d.v>0)
+  );
+
+  if (myW >= 2 || oppW >= 2 || allFull) {
+    let msg;
+    if      (myW  >= 2 && oppW < 2) msg = '🎉 내 승리!';
+    else if (oppW >= 2 && myW  < 2) msg = '🤖 AI 승리...';
+    else if (myW  >  oppW)          msg = '🎉 내 승리! (마감)';
+    else if (oppW >  myW)           msg = '🤖 AI 승리... (마감)';
+    else                            msg = '🤝 무승부';
+
+    const totMe  = res.reduce((a,r)=>a+r.me,0);
+    const totOpp = res.reduce((a,r)=>a+r.opp,0);
+    setTimeout(() => {
+      document.getElementById('tt-battle-result-msg').textContent    = msg;
+      document.getElementById('tt-battle-result-detail').textContent =
+        `라인 ${myW}:${oppW} | 총점 ${totMe}:${totOpp}`;
+      document.getElementById('tt-battle-overlay').style.display = 'flex';
+      TT.aiMode = false;
+    }, 400);
+    return true;
+  }
+  return false;
+}
+// ══════════════════════════════════════════════════════════
+
 </script>
 </body>
 </html>

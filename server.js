@@ -141,69 +141,280 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── 티카투카 AI 분석 프록시 (Claude / GPT 선택) ────────────────
 function buildPrompt(lanes, cur, skills, isBonus=false) {
-  const laneNames = ['상단', '중단', '하단'];
-  const fmtDie = d => d.v === 0 ? '빈슬롯' : `${d.v}${d.s?'(실드)':''}${d.blown?'(날아감)':''}`;
-  const laneScore = dice => {
-    const cnt = {};
+  const N = ['상단','중단','하단'];
+  const fmt = d => d.v===0 ? '□' : `${d.v}${d.s?'🛡':''}`;
+
+  // ── 기본 점수 함수 ──
+  const score = dice => {
+    const cnt={};
     dice.filter(d=>d.v>0&&!d.blown).forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
     return Object.entries(cnt).reduce((s,[v,n])=>s+Number(v)*(2*n-1),0);
   };
-  const scores    = lanes.map(l=>({ me:laneScore(l.me), opp:laneScore(l.opp) }));
-  const myWins    = scores.filter(s=>s.me>s.opp).length;
-  const oppWins   = scores.filter(s=>s.opp>s.me).length;
-  const boardText = lanes.map((l,i)=>
-    `${laneNames[i]}(나${scores[i].me}:상대${scores[i].opp}): 내=[${l.me.map(fmtDie)}] 상대=[${l.opp.map(fmtDie)}]`
-  ).join('\n');
-  const skillText = [
-    skills.tazzaAvail ? '타짜(손놀림) 사용가능: 추가 주사위를 1개 더 굴려 이번 턴에 2개 배치 가능' : '타짜: 사용불가',
-    skills.holdAvail  ? '홀드 사용가능: 이번 턴을 그냥 종료 (주사위 배치 없이 차례 넘김)' : '홀드: 사용불가',
-  ].join('\n');
+  const scoreWith    = (arr,v) => score([...arr.filter(d=>d.v>0&&!d.blown),{v,s:false,blown:false}]);
+  const scoreWithout = (arr,v) => { // 비실드 v 하나 제거
+    let rm=false;
+    return score(arr.filter(d=>{ if(!rm&&d.v===v&&!d.s&&!d.blown){rm=true;return false;} return true; }));
+  };
 
-  // 알치기 기회 감지
-  const alchigiOpps = !cur.s && cur.v > 0
-    ? lanes.map((l, i) => {
-        const hits = l.opp.filter(d => d.v > 0 && !d.s && !d.blown && d.v === cur.v);
-        return hits.length > 0
-          ? `⚡ ${laneNames[i]}(${i}번): 상대 비실드 ${cur.v} 제거 가능 → 알치기 발생! 보너스 실드 주사위 획득`
-          : null;
-      }).filter(Boolean).join('\n')
-    : '';
+  // 남은 슬롯에 최적값 채울 때 최대 점수 (트리플 우선 시도)
+  const maxPotential = arr => {
+    const live = arr.filter(d=>d.v>0&&!d.blown);
+    const empty= arr.filter(d=>d.v===0).length;
+    if(!empty) return score(arr);
+    const cnt={};
+    live.forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
+    const topV = Object.entries(cnt).sort((a,b)=>b[1]-a[1]||Number(b[0])-Number(a[0]))[0];
+    const fillV = topV ? Number(topV[0]) : 6;
+    const fill  = k => score([...live,...Array(empty).fill({v:k,s:false,blown:false})]);
+    return Math.max(fill(fillV), fill(6));
+  };
 
-  return `당신은 로스트아크 미니게임 "티카투카" 전문 전략가입니다. 현재 내 차례입니다.
+  // 상대 다음 수 최선 예측 (그리디: 각 값 1~6 중 최대 득점)
+  const oppBestNext = arr => {
+    const empty = arr.filter(d=>d.v===0).length;
+    if(!empty) return null;
+    const cur0 = score(arr);
+    let best={gain:-1,v:0,note:''};
+    for(let v=1;v<=6;v++){
+      const g=scoreWith(arr,v)-cur0;
+      if(g>best.gain){
+        const live=[...arr.filter(d=>d.v>0&&!d.blown),{v,s:false,blown:false}];
+        const cnt={};live.forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
+        best={gain:g,v,note:cnt[v]===3?`${v}트리플(${v*5}pt)`:cnt[v]===2?`${v}더블(${v*3}pt)`:''};
+      }
+    }
+    return best.v>0?best:null;
+  };
 
-## 게임 규칙
-- 3라인 중 2라인 이상 점수 우세 시 승리
-- 라인 점수: 같은 숫자 1개=면수, 2개(더블)=면수×3, 3개(트리플)=면수×5
-- 알치기: 비실드 주사위끼리 동일 값일 때만 발생 → 둘 다 슬롯에서 완전히 제거(빈 슬롯이 됨) + 보너스 실드 주사위 1개 획득
-- 실드가 포함된 경우(내 실드든 상대 실드든) 알치기 발생 안함, 그냥 배치됨
+  // 이 값을 추가하면 완성되는 콤보
+  const comboEffect=(arr,v)=>{
+    const live=arr.filter(d=>d.v>0&&!d.blown);
+    const cnt={};live.forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
+    const n=cnt[v]||0;
+    if(n===2) return `${v}트리플완성(+${v*2}pt, 확정${v*5}pt)`;
+    if(n===1) return `${v}더블완성(+${v*2}pt → ${v*3}pt)`;
+    return '';
+  };
 
-## 현재 보드 (내 ${myWins}라인 우세 / 상대 ${oppWins}라인 우세)
-${boardText}
+  // 다음 턴 노릴 hot values (내 기존 주사위 기준)
+  const hotValues = arr => {
+    const live=arr.filter(d=>d.v>0&&!d.blown);
+    const cnt={};live.forEach(d=>cnt[d.v]=(cnt[d.v]||0)+1);
+    return Object.entries(cnt)
+      .filter(([,n])=>n<=2)
+      .map(([v,n])=>({v:Number(v),desc:n===2?`→트리플(+${v*2}pt)`:n===1?`→더블(+${v*2}pt)`:''}))
+      .filter(x=>x.desc).sort((a,b)=>b.v-a.v);
+  };
 
-## 이번 굴린 주사위: ${fmtDie(cur)}${isBonus ? " (알치기 보너스 실드 주사위 — 내 필드 또는 상대 필드 어디든 배치 가능)" : ""}
-${alchigiOpps ? `\n⚠️ 알치기 기회 발견:\n${alchigiOpps}\n알치기를 선택하면 해당 슬롯들이 비워지고 보너스 실드 주사위를 얻습니다. 상황에 따라 알치기가 최선일 수 있습니다.` : ''}
-## 사용 가능한 스킬
-${skillText}
+  const S = lanes.map(l=>({me:score(l.me),opp:score(l.opp)}));
+  const myWins  = S.filter(s=>s.me>s.opp).length;
+  const oppWins = S.filter(s=>s.opp>s.me).length;
 
-## 분석 요청
-다음 세 가지를 종합적으로 판단하세요:
-1. 이 주사위를 어느 라인에 놓는 게 최적인가
-   - 알치기 기회가 있다면 적극 고려: 상대 주사위 제거 + 내 슬롯도 비워져 재활용 가능 + 보너스 실드 획득
-   - 더블/트리플 구성, 라인 역전도 고려
-   ${isBonus ? "1-1. 보너스 실드이므로 내 필드(점수 강화) vs 상대 필드(압박/알치기 방해) 중 어느 쪽이 유리한지도 판단" : ""}
-2. 타짜(손놀림)를 써야 하는가? (현재 주사위만으로 승리 가능성이 낮거나, 추가 주사위로 크게 유리해질 때)
-3. 홀드를 써야 하는가? 홀드는 이번 턴을 아무것도 안 하고 넘기는 것이다. 두 경우에만 권장:
-   - 이미 2라인 이상 확정 우세여서 추가 배치가 불필요할 때
-   - 2라인 이상 확정 패배 상태로 역전이 불가능할 때 (시간 단축)
+  // ── 라인별 분석 ──
+  const laneBlocks = lanes.map((l,i)=>{
+    const s  = S[i];
+    const me = l.me, op = l.opp;
+    const myE= me.filter(d=>d.v===0).length;
+    const opE= op.filter(d=>d.v===0).length;
+    const gap= s.me-s.opp;
+    const myMax=maxPotential(me), opMax=maxPotential(op);
 
-반드시 아래 JSON만 응답:
-{"best":0,"reason":"배치이유(25자이내)","side":"me","alchigi":false,"warning":"","action":"place","action_reason":"스킬판단이유(25자이내)"}
-- best: 0(상단) 1(중단) 2(하단)
-- alchigi: true이면 해당 라인에 알치기 발생 (기회가 있을 때만 true)
-- side: "me"(내 필드) | "opp"(상대 필드) — 보너스 실드일 때만 의미있음, 일반 배치는 "me"
-- action: "place"(그냥배치) | "tazza"(타짜먼저) | "hold"(홀드)
-- action_reason: 타짜/홀드 권장 시 이유, place면 빈 문자열`;
+    // 확정 판정
+    let certain;
+    if(gap>0 && s.me>opMax)      certain='✅확정승';
+    else if(gap>0)               certain=`⚠️불안(상대최선${opMax}→역전위협)`;
+    else if(gap<0 && s.opp>myMax)certain='❌확정패';
+    else if(gap<0)               certain=`🔥역전가능(내최선${myMax})`;
+    else                         certain=`동점(내최선${myMax}/상대${opMax})`;
+
+    // 내 콤보
+    const myCnt={};
+    me.filter(d=>d.v>0&&!d.blown).forEach(d=>myCnt[d.v]=(myCnt[d.v]||0)+1);
+    const myComboStr=Object.entries(myCnt)
+      .map(([v,n])=>n>=2?`${v}×${n}${n===3?'트리플':'더블'}(${n===3?v*5:v*3}pt)`:null)
+      .filter(Boolean).join(', ');
+
+    // 상대 위협
+    const opCnt={};
+    op.filter(d=>d.v>0&&!d.blown).forEach(d=>opCnt[d.v]=(opCnt[d.v]||0)+1);
+    const opThreats=Object.entries(opCnt)
+      .map(([v,n])=>{
+        if(n===3)      return `${v}트리플완성(${v*5}pt)`;
+        if(n===2&&opE) return `${v}더블→트리플(완성시${v*5}pt!)`;
+        if(n===2)      return `${v}더블(${v*3}pt,슬롯無)`;
+        return null;
+      }).filter(Boolean);
+
+    // 상대 다음 수 예측
+    const opNext=oppBestNext(op);
+    const opNextNote=opNext
+      ? `상대다음최선: ${opNext.v}배치→+${opNext.gain}pt${opNext.note?' ('+opNext.note+')':''}`
+      : opE===0?`상대슬롯가득`:null;
+
+    // 알치기 분석
+    let alchi='';
+    if(!cur.s&&cur.v>0&&myE>0){
+      const hits=op.filter(d=>!d.s&&!d.blown&&d.v===cur.v);
+      if(hits.length>0){
+        const opAfter=scoreWithout(op,cur.v);
+        const myAfter=s.me; // 내 die도 사라짐
+        const newGap=myAfter-opAfter;
+        const opLoss=s.opp-opAfter;
+        const result=newGap>0?`역전(내${myAfter}:상대${opAfter})`:newGap===0?`동점(${myAfter})`:`열세(내${myAfter}:상대${opAfter})`;
+        // 상대 콤보 파괴?
+        const destroyNote=opCnt[cur.v]>=2
+          ?`💥상대 ${cur.v}${opCnt[cur.v]===3?'트리플':'더블'} 파괴!(${opCnt[cur.v]===3?cur.v*5:cur.v*3}pt 소멸)`
+          :`상대 ${cur.v}×${hits.length} 제거(-${opLoss}pt)`;
+        // 보너스 실드 최적 사용처 계산
+        let bonusBest={gain:-1,desc:'미정'};
+        lanes.forEach((bl,bi)=>{
+          const bE=bl.me.filter(d=>d.v===0).length;
+          if(!bE) return;
+          const bLive=bl.me.filter(d=>d.v>0&&!d.blown);
+          const bS=score(bl.me);
+          // 내 필드: 콤보 완성 우선
+          const bCnt={};bLive.forEach(d=>bCnt[d.v]=(bCnt[d.v]||0)+1);
+          for(let v=6;v>=1;v--){
+            const g=scoreWith(bl.me,v)-bS;
+            const c=bCnt[v]===2?`트리플완성`:bCnt[v]===1?'더블완성':'단순배치';
+            if(g>bonusBest.gain){bonusBest={gain:g,desc:`→${N[bi]}에${v}🛡(${c},+${g}pt)`};}
+          }
+          // 상대 필드 압박 (상대 열세 라인에 실드 die 박기)
+          const bOpS=score(bl.opp);
+          const bOpE=bl.opp.filter(d=>d.v===0).length;
+          if(bOpE>0){
+            for(let v=6;v>=1;v--){
+              const g=scoreWith(bl.opp,v); // 상대 점수 올라가지만 실드로 알치기방어
+              // 내 점수관점에서: 상대 필드에 실드 박으면 그 슬롯 고점수로 점령(상대가 트리플 가기 어렵게)
+              // 단, 상대 필드에 내 실드를 박는 건 점수에 포함되지 않음 (상대 슬롯)
+              // → 전략적 방해만 가능, 실질 득점은 0
+            }
+          }
+        });
+        alchi=[
+          `  ⚡알치기:`,
+          `    ${destroyNote}`,
+          `    → ${result} | 내슬롯회수(+재활용가능)`,
+          `    보너스실드 최적활용: ${bonusBest.desc}`,
+        ].join('\n');
+      }
+    }
+
+    // 일반 배치 시뮬
+    let place='';
+    if(myE>0){
+      const after=scoreWith(me,cur.v);
+      const gain=after-s.me;
+      const newGap=after-s.opp;
+      const flip=gap<=0&&newGap>0?' →✅역전!':gap>0&&newGap>0?' →우세유지':gap>0&&newGap<=0?' →⚠️역전당함!':'';
+      const combo=comboEffect(me,cur.v);
+      const hot=hotValues([...me.filter(d=>d.v>0&&!d.blown),{v:cur.v,s:cur.s,blown:false}]);
+      place=[
+        `  📌배치: +${gain}pt${combo?' ('+combo+')':''}${flip}`,
+        `    → 내${after}:상대${s.opp} | 이후빈슬롯${myE-1}개`,
+        hot.length?`    🎯다음턴노릴값: ${hot.slice(0,3).map(h=>`${h.v}(${h.desc})`).join(', ')}`:'',
+      ].filter(Boolean).join('\n');
+    } else {
+      place=`  📌배치불가(내슬롯가득)`;
+    }
+
+    const mark=gap>0?'▲내':gap<0?'▼상대':'═';
+    const rows=[
+      `【${N[i]}(${i}번)】${mark}우세 ${s.me}:${s.opp} | ${certain} | 빈슬롯내${myE}/상대${opE}`,
+      `  보드: 내[${me.map(fmt)}] 상대[${op.map(fmt)}]`,
+      myComboStr?`  내조합: ${myComboStr}`:'',
+      opThreats.length?`  ⚠️상대위협: ${opThreats.join(' | ')}`:'',
+      opNextNote?`  🔮${opNextNote}`:'',
+      alchi,
+      place,
+    ];
+    return rows.filter(r=>r!=='').join('\n');
+  });
+
+  // ── 전체 컨텍스트 ──
+  const totalSlotMe  = lanes.reduce((a,l)=>a+l.me.filter(d=>d.v===0).length,0);
+  const totalSlotOpp = lanes.reduce((a,l)=>a+l.opp.filter(d=>d.v===0).length,0);
+
+  // 킹 라인 (1:1 접전 시 비어있거나 가장 경합 중인 라인)
+  const kingLane = (()=>{
+    if(myWins!==1||oppWins!==1) return '';
+    const idx=lanes.findIndex((_,i)=>S[i].me===S[i].opp) >= 0
+      ? lanes.findIndex((_,i)=>S[i].me===S[i].opp)
+      : lanes.findIndex((_,i)=>S[i].me!==S[i].opp && i!==lanes.findIndex((_,j)=>S[j].me>S[j].opp) && i!==lanes.findIndex((_,j)=>S[j].opp>S[j].me));
+    return idx>=0?`⚔️킹라인: ${N[idx]}(${idx}번) — 이 라인 승자가 게임 승자`:'';
+  })();
+
+  // 승리 경로
+  const winPath = (()=>{
+    if(myWins>=2) return `✅이미${myWins}라인 — 수비 모드`;
+    const need=2-myWins;
+    const flipable=lanes.map((l,i)=>({i,l})).filter(x=>{
+      if(S[x.i].me>S[x.i].opp) return false; // 이미 이기는 라인은 제외
+      return maxPotential(x.l.me)>S[x.i].opp;
+    });
+    // 알치기로 역전 가능한 라인
+    const alchiFlip=lanes.map((l,i)=>({i,l})).filter(x=>{
+      if(cur.s||cur.v===0) return false;
+      if(!x.l.me.some(d=>d.v===0)) return false;
+      const hits=x.l.opp.filter(d=>!d.s&&!d.blown&&d.v===cur.v);
+      if(!hits.length) return false;
+      const opAfter=scoreWithout(x.l.opp,cur.v);
+      return S[x.i].me>opAfter; // 알치기 후 역전
+    }).map(x=>`${N[x.i]}(알치기)`);
+
+    const parts=[];
+    if(flipable.length>=need) parts.push(`역전가능라인: ${flipable.map(x=>N[x.i]).join(',')} → ${need}개 뒤집으면 승리`);
+    else if(flipable.length>0) parts.push(`역전가능 ${flipable.length}개뿐(${flipable.map(x=>N[x.i]).join(',')}) — 집중투자 필요`);
+    else parts.push(`일반배치 역전경로 없음`);
+    if(alchiFlip.length) parts.push(`알치기역전: ${alchiFlip.join(', ')}`);
+    return parts.join(' | ');
+  })();
+
+  // 타짜 판단
+  const tazzaNote = (()=>{
+    if(!skills.tazzaAvail) return null;
+    if(myWins>=2) return '불필요(이미2라인)';
+    // 현재주사위로 1라인 확보되는지
+    const curFlips=lanes.filter((l,i)=>{
+      if(S[i].me>S[i].opp) return false;
+      if(!l.me.some(d=>d.v===0)) return false;
+      return scoreWith(l.me,cur.v)>S[i].opp;
+    }).length;
+    if(myWins+curFlips>=2) return `불필요(현주사위로 2라인달성)`;
+    return `고려 권장(현주사위1개만으로 2라인 달성 불가)`;
+  })();
+
+  const status=myWins>=2?`✅${myWins}라인우세`:oppWins>=2?`❌상대${oppWins}라인우세`:`접전${myWins}:${oppWins}`;
+  const fmt0=d=>d.v===0?'□':`${d.v}${d.s?'🛡':''}`;
+
+  return `[티카투카 AlphaGo] 내차례 | 승리=3라인중2라인이상우세
+점수: 단일=값, 더블(×2)=값×3, 트리플(×3)=값×5 | 실드=알치기면역 | 알치기=비실드동일값→양쪽제거+보너스실드
+
+■ 전체판세: ${status} | 총빈슬롯 내${totalSlotMe}/상대${totalSlotOpp}
+■ 승리경로: ${winPath}${kingLane?'\n■ '+kingLane:''}
+
+${'─'.repeat(55)}
+${laneBlocks.join('\n\n')}
+${'─'.repeat(55)}
+
+■ 이번주사위: ${fmt0(cur)}${isBonus?' [알치기보너스실드 — 내/상대 어디든 배치가능]':''}
+■ 스킬: ${skills.tazzaAvail?`타짜가능(${tazzaNote})`:'타짜불가'} / ${skills.holdAvail?'홀드가능':'홀드불가'}
+
+■ 결정 기준 (우선순위):
+P1. 즉시 2라인 확보 수 → 반드시 실행
+P2. ✅확정승 라인 생성 (상대가 뒤집을 수 없는 점수차)
+P3. 상대 트리플/더블 완성 저지 (특히 상대가 1개만 더 놓으면 완성하는 경우)
+P4. 알치기로 상대 더블·트리플 파괴 + 역전 or 유리한 결과 시
+P5. 내 트리플/더블 완성으로 라인 확정
+P6. 역전 가능한 열세 라인 추격
+P7. 빈 라인 선점 (높은 점수 방향)
+❌금지: ✅확정승 라인에 추가 배치(낭비) | 알치기 후 여전히 크게 열세인 수
+
+JSON만출력:
+{"best":0,"reason":"이유(20자이내)","side":"me","alchigi":false,"warning":"","action":"place","action_reason":""}
+best:0상단/1중단/2하단 | alchigi:알치기true | side:보너스실드만"opp"가능 | action:"place"/"tazza"/"hold"`;
 }
+
 
 app.post('/api/tikatuka-analyze', async (req, res) => {
   const { lanes, cur, turn, provider = 'claude', skills = {}, isBonus = false } = req.body;
