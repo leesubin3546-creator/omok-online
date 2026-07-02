@@ -1009,6 +1009,7 @@
         <div class="stone-opt" data-style="drop" onclick="selectStoneStyle('drop')"><canvas id="sp-drop" width="72" height="40"></canvas><span>물방울</span></div>
         <div class="stone-opt" data-style="cloud" onclick="selectStoneStyle('cloud')"><canvas id="sp-cloud" width="72" height="40"></canvas><span>구름</span></div>
         <div class="stone-opt" data-style="butterfly" onclick="selectStoneStyle('butterfly')"><canvas id="sp-butterfly" width="72" height="40"></canvas><span>나비</span></div>
+        <div class="stone-opt" data-style="poring" onclick="selectStoneStyle('poring')"><canvas id="sp-poring" width="72" height="40"></canvas><span>포링</span></div>
       </div>
     </div>
 
@@ -1378,11 +1379,6 @@
     <div class="tt-panel-title">🎯 최적 수 추천
       <span id="tt-wins-detail" style="font-weight:400;float:right;letter-spacing:0;text-transform:none;font-size:0.75rem;"></span>
       <span style="float:right;display:flex;gap:6px;align-items:center;margin-right:4px;">
-        <select id="tt-ai-provider" style="padding:2px 6px;border-radius:6px;border:1px solid var(--border);
-          background:var(--card);color:var(--text);font-size:0.72rem;font-family:inherit;cursor:pointer;">
-          <option value="gpt">GPT-5.4 mini</option>
-          <option value="claude">Claude Opus</option>
-        </select>
         <button id="tt-ai-btn" onclick="ttAskClaude()"
           style="padding:3px 10px;border-radius:8px;border:1px solid var(--accent2);
                  background:rgba(200,136,26,0.12);color:var(--accent2);font-size:0.72rem;cursor:pointer;font-family:inherit;">
@@ -1646,6 +1642,264 @@ function ttLaneResults() {
   return TT.lanes.map(l => ({ opp:ttLaneScore(l.opp), me:ttLaneScore(l.me) }));
 }
 
+// ══════════════════════════════════════════════════════════
+// TT_ENGINE — expectimax 탐색 엔진 (로컬, API 불필요)
+//  · 이 앱의 룰 그대로: 알치기 시 공격 주사위도 함께 제거 + 보너스 실드
+//  · 주사위 눈 확률(1/6)을 기대값으로 전개, 상대 최선 응수까지 탐색
+//  · earlyEnd=true면 배틀 모드 룰(2라인 선점 즉시 종료) 반영
+// ══════════════════════════════════════════════════════════
+const TT_ENGINE = (() => {
+  const SIDES = ['me','opp'];
+  const other = s => s==='me' ? 'opp' : 'me';
+
+  // TT.lanes → 엔진 상태 {me:[[{v,s}..]x3], opp:[...], cap:{me:[..],opp:[..]}}
+  // blown 주사위: 슬롯은 차지하지만 점수/알치기 대상에서 제외
+  function fromTT(lanes) {
+    const st = { me:[[],[],[]], opp:[[],[],[]], cap:{me:[0,0,0], opp:[0,0,0]} };
+    for (let l=0; l<3; l++) for (const s of SIDES) {
+      for (const d of lanes[l][s]) {
+        if (d.v > 0) {
+          st.cap[s][l]++;
+          if (!d.blown) st[s][l].push({v:d.v, s:!!d.s});
+        }
+      }
+    }
+    return st;
+  }
+  function clone(st) {
+    return {
+      me:  [st.me[0].slice(),  st.me[1].slice(),  st.me[2].slice()],
+      opp: [st.opp[0].slice(), st.opp[1].slice(), st.opp[2].slice()],
+      cap: { me: st.cap.me.slice(), opp: st.cap.opp.slice() },
+    };
+  }
+  function laneScore(dice) {
+    if (!dice.length) return 0;
+    const c = {};
+    for (const d of dice) c[d.v] = (c[d.v]||0)+1;
+    let s = 0;
+    for (const v in c) s += v * (2*c[v]-1);
+    return s;
+  }
+  function boardFull(st, s) { return st.cap[s].every(c => c >= 3); }
+
+  // 배치 (복사본 반환) — 이 앱 룰: 알치기면 공격 주사위도 놓이지 않고 제거
+  function place(st, side, lane, die) {
+    const st2 = clone(st);
+    const o = other(side);
+    let alchigi = false;
+    if (!die.s && st2[o][lane].some(d => !d.s && d.v === die.v)) {
+      const removed = st2[o][lane].filter(d => !d.s && d.v === die.v).length;
+      st2[o][lane] = st2[o][lane].filter(d => d.s || d.v !== die.v);
+      st2.cap[o][lane] -= removed;
+      alchigi = true;
+    } else {
+      st2[side][lane] = st2[side][lane].concat([{v:die.v, s:!!die.s}]);
+      st2.cap[side][lane]++;
+    }
+    return { st: st2, alchigi };
+  }
+
+  function laneWins(st, persp) {
+    const o = other(persp);
+    let w=0, l=0, tp=0, to=0;
+    for (let i=0; i<3; i++) {
+      const sp = laneScore(st[persp][i]), so = laneScore(st[o][i]);
+      tp += sp; to += so;
+      if (sp > so) w++; else if (so > sp) l++;
+    }
+    return { w, l, tp, to };
+  }
+  function exactResult(st, persp) {
+    const { w, l, tp, to } = laneWins(st, persp);
+    if (w > l) return 1;
+    if (l > w) return 0;
+    if (tp > to) return 1;
+    if (to > tp) return 0;
+    return 0.5;
+  }
+
+  // ── 평가 함수: 남은 슬롯 기대 눈 + 더블/트리플 기대 보너스 - 알치기 취약도 ──
+  function laneProj(dice, empty) {
+    let s = laneScore(dice);
+    const cnt = {};
+    for (const d of dice) cnt[d.v] = (cnt[d.v]||0)+1;
+    for (let k=0; k<empty; k++) {
+      let add = 3.5;
+      for (const v in cnt) add += (1/6) * v * 2 * cnt[v];
+      s += add;
+      for (const v in cnt) cnt[v] += 1/6;
+    }
+    return s;
+  }
+  function vulnerability(st, side, lane) {
+    // 상대가 같은 눈을 굴려 알치기할 위험 (실드는 면역)
+    const c = {};
+    for (const d of st[side][lane]) if (!d.s) c[d.v] = (c[d.v]||0)+1;
+    let risk = 0;
+    for (const v in c) risk += v * (2*c[v]-1) * (1/6);
+    return risk;
+  }
+  const logistic = x => 1 / (1 + Math.exp(-x));
+
+  function evaluate(st, persp) {
+    const o = other(persp);
+    const ps = [];
+    let totDiff = 0;
+    for (let i=0; i<3; i++) {
+      const em = 3 - st.cap[persp][i], eo = 3 - st.cap[o][i];
+      const mp = laneProj(st[persp][i], em) - 0.6 * vulnerability(st, persp, i);
+      const op = laneProj(st[o][i], eo)     - 0.6 * vulnerability(st, o, i);
+      const diff = mp - op;
+      totDiff += diff;
+      const sd = 1.75 * Math.sqrt(em + eo) + 0.6;
+      ps.push(logistic(diff / sd * 1.35));
+    }
+    const [a,b,c] = ps;
+    let P = a*b*c + a*b*(1-c) + a*c*(1-b) + b*c*(1-a);
+    P += 0.06 * (logistic(totDiff/6) - 0.5);  // 동률 시 총점 승부 보정
+    return Math.min(1, Math.max(0, P));
+  }
+
+  // ── 탐색 ──
+  function emptyTotal(st) {
+    let e = 0;
+    for (const s of SIDES) for (let l=0; l<3; l++) e += 3 - st.cap[s][l];
+    return e;
+  }
+  // 남은 칸이 적을수록 깊게 — 종반은 사실상 완전 해석
+  function pickDepth(st, base) {
+    const e = emptyTotal(st);
+    if (e <= 6)  return 12;   // 종반: 사실상 완전 해석 (캐시 필수)
+    return base;
+  }
+  // 국면 캐시 키 (라인 내 주사위 순서 무관 + blown 슬롯 수 반영)
+  function keyOf(st, mover) {
+    let k = mover;
+    for (const s of SIDES) for (let l=0; l<3; l++) {
+      k += '|' + st[s][l].map(d => d.v + (d.s?'s':'')).sort().join('') + ':' + st.cap[s][l];
+    }
+    return k;
+  }
+  function value(st, toMove, persp, depth, budget, earlyEnd) {
+    if (earlyEnd) {
+      const { w, l } = laneWins(st, persp);
+      if (w >= 2) return 1;
+      if (l >= 2) return 0;
+    }
+    const fullA = boardFull(st,'me'), fullB = boardFull(st,'opp');
+    if (fullA && fullB) return exactResult(st, persp);
+    let mover = toMove;
+    if (boardFull(st, mover)) mover = other(mover);
+    if (depth <= 0 || budget.n <= 0) return evaluate(st, persp);
+    const key = budget.memo ? keyOf(st, mover) + '#' + (depth >= 8 ? 'T' : depth) : null;
+    if (key) { const h = budget.memo.get(key); if (h !== undefined) return h; }
+    budget.n--;
+    let sum = 0;
+    for (let v=1; v<=6; v++) sum += moveValue(st, mover, v, persp, depth, budget, earlyEnd);
+    const r = sum / 6;
+    if (key) budget.memo.set(key, r);
+    return r;
+  }
+  function moveValue(st, mover, dv, persp, depth, budget, earlyEnd) {
+    const isMax = mover === persp;
+    let best = null;
+    for (let l=0; l<3; l++) {
+      if (st.cap[mover][l] >= 3) continue;
+      budget.n--;
+      const r = place(st, mover, l, {v:dv, s:false});
+      let val;
+      if (r.alchigi) {
+        // 보너스 실드: 대표 눈 2개(2,5) 샘플 × greedy 배치 후 턴 전환
+        let s2 = 0;
+        for (const sv of [2, 5]) {
+          const st3 = greedyBonus(r.st, mover, sv);
+          s2 += value(st3, other(mover), persp, depth-1, budget, earlyEnd);
+        }
+        val = s2 / 2;
+      } else {
+        val = value(r.st, other(mover), persp, depth-1, budget, earlyEnd);
+      }
+      if (best === null || (isMax ? val > best : val < best)) best = val;
+    }
+    if (best === null) return value(st, other(mover), persp, depth-1, budget, earlyEnd);
+    return best;
+  }
+  function bonusSpots(st) {
+    const out = [];
+    for (const s of SIDES) for (let l=0; l<3; l++)
+      if (st.cap[s][l] < 3) out.push({side:s, lane:l});
+    return out;
+  }
+  function greedyBonus(st, mover, sv) {
+    const spots = bonusSpots(st);
+    if (!spots.length) return st;
+    let bestSt = null, bestE = -Infinity;
+    for (const sp of spots) {
+      const st2 = clone(st);
+      st2[sp.side][sp.lane] = st2[sp.side][sp.lane].concat([{v:sv, s:true}]);
+      st2.cap[sp.side][sp.lane]++;
+      const e = evaluate(st2, mover);
+      if (e > bestE) { bestE = e; bestSt = st2; }
+    }
+    return bestSt;
+  }
+
+  // ── 외부 API ──
+  // side가 die를 들었을 때 라인별 승률
+  function rateMoves(st, side, die, depth, budgetN, earlyEnd, noAdapt) {
+    if (!noAdapt) depth = pickDepth(st, depth);
+    const budget = { n: budgetN, memo: new Map() };
+    const out = [];
+    for (let l=0; l<3; l++) {
+      if (st.cap[side][l] >= 3) { out.push(null); continue; }
+      const r = place(st, side, l, die);
+      let val;
+      if (r.alchigi && !die.s) {
+        let s2 = 0;
+        for (let sv=1; sv<=6; sv++) {
+          const st3 = greedyBonus(r.st, side, sv);
+          s2 += value(st3, other(side), side, depth-1, budget, earlyEnd);
+        }
+        val = s2 / 6;
+      } else {
+        val = value(r.st, other(side), side, depth-1, budget, earlyEnd);
+      }
+      out.push({ lane:l, ev:val, alchigi: r.alchigi && !die.s });
+    }
+    return out;
+  }
+  function bestOf(rated) {
+    let best = null;
+    for (const r of rated) if (r && (best === null || r.ev > best.ev)) best = r;
+    return best;
+  }
+  // 보너스 실드 배치 위치별 승률 (양쪽 필드)
+  function rateBonusSpots(st, side, sv, depth, budgetN, earlyEnd) {
+    depth = pickDepth(st, depth);
+    const budget = { n: budgetN, memo: new Map() };
+    return bonusSpots(st).map(sp => {
+      const st2 = clone(st);
+      st2[sp.side][sp.lane] = st2[sp.side][sp.lane].concat([{v:sv, s:true}]);
+      st2.cap[sp.side][sp.lane]++;
+      return { ...sp, ev: value(st2, other(side), side, depth-1, budget, earlyEnd) };
+    });
+  }
+  // 타짜(리롤) 조언
+  function rerollAdvice(st, side, dv, depth, budgetN) {
+    const evKeep = bestOf(rateMoves(st, side, {v:dv,s:false}, depth, budgetN, false, true))?.ev ?? 0;
+    let s = 0;
+    for (let v=1; v<=6; v++) {
+      const e = bestOf(rateMoves(st, side, {v,s:false}, Math.max(1,depth-1), budgetN/3, false, true))?.ev ?? 0;
+      s += Math.max(evKeep, e);
+    }
+    return { evKeep, evReroll: s/6, recommend: s/6 - evKeep > 0.025 };
+  }
+
+  return { fromTT, place, evaluate, rateMoves, bestOf, rateBonusSpots, rerollAdvice, exactResult };
+})();
+const TT_ENGINE_DEPTH = 3, TT_ENGINE_BUDGET = 140000;
+
 // ── 수 평가 ────────────────────────────────────────────────
 function ttEvalMove(die, laneIdx) {
   const lane  = TT.lanes[laneIdx];
@@ -1702,9 +1956,9 @@ function ttAnalyze() {
 
   if (TT.alchigiBonus) {
     const bv = TT.alchigiBonus.v;
-    document.getElementById('tt-recommend-area').innerHTML = bv
-      ? `<div style="color:#c0392b;font-size:0.85rem;">AI 추천 클릭 또는 보드에서 직접 배치하세요</div>`
-      : `<div style="color:#c0392b;font-size:0.85rem;">위 칩에서 보너스 실드 주사위 값을 선택하세요</div>`;
+    if (bv > 0) ttEngineRecoBonus(bv);
+    else document.getElementById('tt-recommend-area').innerHTML =
+      `<div style="color:#c0392b;font-size:0.85rem;">위 칩에서 보너스 실드 주사위 값을 선택하세요</div>`;
     return;
   }
   if (!TT.cur.v) {
@@ -1712,17 +1966,81 @@ function ttAnalyze() {
     document.querySelectorAll('#tt-lanes-container .tt-lane').forEach(el=>el.classList.remove('tt-best','tt-alchigi'));
     return;
   }
-  document.getElementById('tt-recommend-area').innerHTML = '';
-  const dies = [TT.cur];
-  if (TT.tazzaMode && TT.sec.v>0) dies.push(TT.sec);
-  let allMoves = [];
-  for (const d of dies) for (let l=0;l<3;l++) { const m=ttEvalMove(d,l); if(m){m.isSecond=d===TT.sec;allMoves.push(m);} }
-  allMoves.sort((a,b)=>b.priority-a.priority);
-  const best = allMoves[0];
-  document.querySelectorAll('#tt-lanes-container .tt-lane').forEach((el,i)=>{
-    el.classList.remove('tt-best','tt-alchigi');
-    if(best && best.laneIdx===i) el.classList.add(best.canAlchigi?'tt-alchigi':'tt-best');
-  });
+  ttEngineRecoMain();
+}
+
+// ── 엔진 추천 렌더 (비동기 — UI 블로킹 방지) ─────────────────
+let _ttRecoToken = 0;
+function ttEngineRecoRow(name, ev, isBest, alchigi, extra='') {
+  const pct = (ev*100).toFixed(1);
+  const barCol = isBest ? 'rgba(46,125,50,0.75)' : 'rgba(26,95,180,0.45)';
+  return `<div style="display:grid;grid-template-columns:64px 1fr 74px;align-items:center;gap:8px;font-size:0.8rem;margin:3px 0;">
+    <span style="color:${isBest?'#2e7d32':'var(--text2)'};font-weight:${isBest?'700':'400'};">${name}${isBest?' ★':''}</span>
+    <span style="height:8px;border-radius:5px;background:rgba(0,0,0,0.07);overflow:hidden;display:block;">
+      <span style="display:block;height:100%;width:${pct}%;border-radius:5px;background:${barCol};"></span>
+    </span>
+    <span style="text-align:right;font-weight:700;color:${isBest?'#2e7d32':'var(--text)'};">${pct}%${alchigi?' 🎯':''}${extra}</span>
+  </div>`;
+}
+function ttEngineRecoMain() {
+  const area = document.getElementById('tt-recommend-area');
+  const token = ++_ttRecoToken;
+  // AI 배틀 중 상대 턴이면 엔진이 어차피 자동 배치하므로 스킵
+  if (TT.aiMode && TT.turn === 'opp') { area.innerHTML = ''; return; }
+  area.innerHTML = '<div style="color:var(--text2);font-size:0.82rem;">🧠 계산 중…</div>';
+  setTimeout(() => {
+    if (token !== _ttRecoToken) return;
+    const side = TT.turn === 'me' ? 'me' : 'opp';
+    const laneNames = ['상단','중단','하단'];
+    const st = TT_ENGINE.fromTT(TT.lanes);
+    const dice = [{die:{v:TT.cur.v, s:TT.cur.s}, label:'', isSecond:false}];
+    if (TT.tazzaMode && TT.sec.v > 0) dice.push({die:{v:TT.sec.v, s:TT.sec.s}, label:'(타짜) ', isSecond:true});
+    let html = '', globalBest = null;
+    for (const d of dice) {
+      const rated = TT_ENGINE.rateMoves(st, side, d.die, TT_ENGINE_DEPTH, TT_ENGINE_BUDGET / dice.length, TT.aiMode);
+      const best = TT_ENGINE.bestOf(rated);
+      for (const r of rated) if (r) {
+        const isBest = best && r.lane === best.lane;
+        html += ttEngineRecoRow(d.label + laneNames[r.lane], r.ev, isBest, r.alchigi);
+      }
+      if (best && (!globalBest || best.ev > globalBest.ev)) globalBest = {...best, isSecond:d.isSecond};
+    }
+    // 타짜 리롤 조언 (아직 안 썼고 내 차례일 때)
+    if (side === 'me' && TT.tazzaAvail && !TT.tazzaMode && !TT.cur.s) {
+      const ra = TT_ENGINE.rerollAdvice(st, side, TT.cur.v, 2, TT_ENGINE_BUDGET / 4);
+      if (ra.recommend) html += `<div style="margin-top:6px;font-size:0.78rem;color:#c8881a;">🃏 <b>타짜 추천!</b> 리롤 시 기대승률 +${((ra.evReroll-ra.evKeep)*100).toFixed(1)}%p</div>`;
+    }
+    if (token !== _ttRecoToken) return;
+    area.innerHTML = html || '<div style="color:var(--text2);font-size:0.85rem;">배치 가능한 라인이 없습니다</div>';
+    document.querySelectorAll('#tt-lanes-container .tt-lane').forEach((el,i)=>{
+      el.classList.remove('tt-best','tt-alchigi');
+      if (globalBest && globalBest.lane === i) el.classList.add(globalBest.alchigi ? 'tt-alchigi' : 'tt-best');
+    });
+  }, 20);
+}
+function ttEngineRecoBonus(bv) {
+  const area = document.getElementById('tt-recommend-area');
+  const token = ++_ttRecoToken;
+  area.innerHTML = '<div style="color:var(--text2);font-size:0.82rem;">🧠 계산 중…</div>';
+  setTimeout(() => {
+    if (token !== _ttRecoToken) return;
+    const side = TT.turn === 'me' ? 'me' : 'opp';
+    const laneNames = ['상단','중단','하단'];
+    const st = TT_ENGINE.fromTT(TT.lanes);
+    const spots = TT_ENGINE.rateBonusSpots(st, side, bv, TT_ENGINE_DEPTH, TT_ENGINE_BUDGET, TT.aiMode);
+    if (!spots.length) { area.innerHTML = '<div style="color:#c0392b;font-size:0.85rem;">빈 슬롯이 없습니다</div>'; return; }
+    let sb = spots[0];
+    for (const sp of spots) if (sp.ev > sb.ev) sb = sp;
+    let html = spots.map(sp => ttEngineRecoRow(
+      `${sp.side==='me'?'내':'상대'} ${laneNames[sp.lane]}`, sp.ev, sp === sb, false
+    )).join('');
+    if (token !== _ttRecoToken) return;
+    area.innerHTML = html;
+    document.querySelectorAll('#tt-lanes-container .tt-lane').forEach((el,i)=>{
+      el.classList.remove('tt-best','tt-alchigi');
+      if (sb.lane === i) el.classList.add('tt-best');
+    });
+  }, 20);
 }
 
 // ── Claude API 최적 수 요청 ───────────────────────────────
@@ -1748,6 +2066,40 @@ function ttBestBonusVal(side='me') {
   return bestV;
 }
 
+// ── 로컬 엔진 추천 → API 응답과 동일한 형태로 반환 ────────
+function ttLocalRecommend(die, isBonus) {
+  const side = TT.turn === 'me' ? 'me' : 'opp';
+  const laneNames = ['상단','중단','하단'];
+  const st = TT_ENGINE.fromTT(TT.lanes);
+
+  if (isBonus) {
+    const spots = TT_ENGINE.rateBonusSpots(st, side, die.v, TT_ENGINE_DEPTH, TT_ENGINE_BUDGET, TT.aiMode);
+    if (!spots.length) return null;
+    let sb = spots[0];
+    for (const sp of spots) if (sp.ev > sb.ev) sb = sp;
+    return {
+      best: sb.lane, side: sb.side, alchigi: false,
+      reason: `실드 ${die.v} → ${sb.side==='me'?'내':'상대'} ${laneNames[sb.lane]} (승률 ${(sb.ev*100).toFixed(1)}%) — 3수 깊이 탐색 결과`,
+    };
+  }
+
+  const rated = TT_ENGINE.rateMoves(st, side, {v:die.v, s:!!die.s}, TT_ENGINE_DEPTH, TT_ENGINE_BUDGET, TT.aiMode);
+  const best = TT_ENGINE.bestOf(rated);
+  if (!best) return null;
+  const detail = rated.filter(Boolean).map(r =>
+    `${laneNames[r.lane]} ${(r.ev*100).toFixed(1)}%${r.alchigi?'🎯':''}`).join(' · ');
+  const data = { best: best.lane, side, alchigi: best.alchigi, reason: detail, action: 'place' };
+  // 타짜 조언
+  if (side === 'me' && TT.tazzaAvail && !TT.tazzaMode && !die.s) {
+    const ra = TT_ENGINE.rerollAdvice(st, side, die.v, 2, TT_ENGINE_BUDGET / 4);
+    if (ra.recommend) {
+      data.action = 'tazza';
+      data.action_reason = `리롤 시 기대승률 +${((ra.evReroll-ra.evKeep)*100).toFixed(1)}%p`;
+    }
+  }
+  return data;
+}
+
 async function ttAskClaude() {
   let die;
   if (TT.alchigiBonus) {
@@ -1768,22 +2120,11 @@ async function ttAskClaude() {
   resultEl.style.display = 'none';
 
   try {
-    const res = await fetch('/api/tikatuka-analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lanes: TT.lanes, cur: die, turn: TT.turn,
-        isBonus: !!TT.alchigiBonus,
-        provider: document.getElementById('tt-ai-provider').value,
-        skills: { tazzaAvail: TT.tazzaAvail, holdAvail: TT.holdAvail },
-      }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = ttLocalRecommend(die, !!TT.alchigiBonus);
+    if (!data) throw new Error('배치 가능한 슬롯이 없습니다');
 
     const laneNames  = ['상단', '중단', '하단'];
-    const provider   = document.getElementById('tt-ai-provider').value;
-    const provLabel  = provider === 'gpt' ? '🤖 GPT-5.4 mini' : '✨ Claude Opus';
+    const provLabel  = '🧠 로컬 엔진';
     const alchigiTag = data.alchigi ? ' 🎯 <b>알치기!</b>' : '';
     const warnTag    = data.warning  ? ` ⚠️ ${data.warning}` : '';
     const actionMap  = { tazza:'🃏 <b>타짜 먼저 쓰세요!</b>', hold:'⏸ <b>홀드 권장!</b>' };
@@ -2351,8 +2692,8 @@ const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
 const OTHELLO_CANVAS_SIZE = OTHELLO_CELL * OTHELLO_SIZE + OTHELLO_PADDING * 2;
-const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly'];
-const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비' };
+const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','poring'];
+const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', poring:'포링' };
 
 // ── 급수 시스템 ───────────────────────────────────────────────
 const RANK_THRESHOLDS = [
@@ -2467,7 +2808,20 @@ const STONE_COLORS = {
   drop:      { c1:['#10c0d8','#0880a0','#024060'], c2:['#90e8ff','#40c0f8','#0090d0'] },
   cloud:     { c1:['#4060d0','#1830a0','#080c60'], c2:['#c8b0f8','#a080f0','#6840c8'] },
   butterfly: { c1:['#c040f8','#8010d0','#480080'], c2:['#f870e8','#e030c8','#a00090'] },
+  poring:    { c1:['#ffb0c8','#f0708f','#c03058'], c2:['#a8ccff','#5a95e8','#2255b0'] },
 };
+
+// 포링 돌 이미지 (1=원본 포링, 2=포포링·파랑)
+const PORING_IMGS = { 1: new Image(), 2: new Image() };
+PORING_IMGS[1].src = 'image/poring.png';
+PORING_IMGS[2].src = 'image/poporing.png';
+[1,2].forEach(k => PORING_IMGS[k].onload = () => {
+  try {
+    if (typeof renderStonePreviews === 'function') renderStonePreviews();
+    if (typeof updatePlayerStoneIcons === 'function') updatePlayerStoneIcons();
+    if (typeof ctx !== 'undefined' && ctx) drawBoard();
+  } catch(e) {}
+});
 
 function stonePath(c, x, y, r, style) {
   c.beginPath();
@@ -2542,6 +2896,15 @@ function stonePath(c, x, y, r, style) {
 }
 
 function drawStoneOnCtx(c, x, y, r, color, style) {
+  if (style === 'poring') {
+    const img = PORING_IMGS[color === 1 ? 1 : 2];
+    if (img.complete && img.naturalWidth) {
+      const h = r * 2.3, w = h * (img.naturalWidth / img.naturalHeight);
+      c.drawImage(img, x - w/2, y - h/2 - r*0.05, w, h);
+      return;
+    }
+    // 이미지 미로드 시 아래 폴백 원형 사용
+  }
   const sc = STONE_COLORS[style] || STONE_COLORS.classic;
   const stops = color === 1 ? sc.c1 : sc.c2;
   c.save();
@@ -4023,22 +4386,7 @@ function drawOthelloStone(row, col, color, alpha) {
   const y = OTHELLO_PADDING + row * OTHELLO_CELL + OTHELLO_CELL / 2;
   const r = OTHELLO_CELL * 0.4;
   ctx.save(); ctx.globalAlpha = alpha;
-
-  const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.04, x, y, r);
-  if (color === 1) {
-    g.addColorStop(0, '#505050'); g.addColorStop(0.4, '#222222'); g.addColorStop(1, '#060606');
-  } else {
-    g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#e8e8e8'); g.addColorStop(1, '#c0c0c0');
-  }
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
-  ctx.fillStyle = g; ctx.fill();
-
-  const hl = ctx.createRadialGradient(x - r*0.27, y - r*0.3, 0, x - r*0.1, y - r*0.14, r*0.65);
-  hl.addColorStop(0, color===1 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.92)');
-  hl.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = hl; ctx.fill();
-  if (color === 2) { ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 0.5; ctx.stroke(); }
-
+  drawStoneOnCtx(ctx, x, y, r, color, color === 1 ? p1StoneStyle : p2StoneStyle);
   ctx.restore();
 }
 
@@ -4599,47 +4947,30 @@ function ttBattleNextTurn() {
   }
 }
 
-// ── AI 차례: API 호출 → 자동 배치 ──
+// ── AI 차례: 로컬 엔진 → 자동 배치 ──
 async function ttAiBattleTurn() {
   if (!TT.aiMode || TT.turn !== 'opp') return;
   const die    = TT.cur;
   const stat   = document.getElementById('tt-battle-status');
   const laneNm = ['상단','중단','하단'];
 
-  // 보드를 AI 시점으로 뒤집기 (me↔opp)
-  const flipped = TT.lanes.map(l => ({
-    me:  l.opp.map(d=>({...d})),
-    opp: l.me.map(d=>({...d})),
-  }));
-
   try {
-    const res = await fetch('/api/tikatuka-analyze', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        lanes:    flipped,
-        cur:      {v: die.v, s: false, blown: false},
-        turn:     'me',
-        provider: document.getElementById('tt-ai-provider').value,
-        skills:   {tazzaAvail: false, holdAvail: false},
-        isBonus:  false,
-      }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const st    = TT_ENGINE.fromTT(TT.lanes);
+    const rated = TT_ENGINE.rateMoves(st, 'opp', {v:die.v, s:false}, TT_ENGINE_DEPTH, TT_ENGINE_BUDGET, true);
+    const best  = TT_ENGINE.bestOf(rated);
+    if (!best) { ttAiBattleFallback(); return; }
 
-    stat.innerHTML = `🤖 AI → <b>${laneNm[data.best]}에 ${die.v} 배치</b> | ${data.reason}`;
+    stat.innerHTML = `🤖 AI → <b>${laneNm[best.lane]}에 ${die.v} 배치</b>${best.alchigi ? ' 🎯 알치기!' : ''} (자신감 ${(best.ev*100).toFixed(0)}%)`;
     await new Promise(r => setTimeout(r, 900));
 
-    // 배치
-    const slotIdx = TT.lanes[data.best].opp.findIndex(d => d.v === 0);
+    const slotIdx = TT.lanes[best.lane].opp.findIndex(d => d.v === 0);
     if (slotIdx !== -1) {
-      ttPlaceDie(data.best, 'opp', slotIdx);
+      ttPlaceDie(best.lane, 'opp', slotIdx);
     } else {
       ttAiBattleFallback();
     }
   } catch(e) {
-    stat.innerHTML = `⚠️ API 오류(${e.message.slice(0,30)}) — 랜덤 배치`;
+    stat.innerHTML = `⚠️ 엔진 오류(${e.message.slice(0,30)}) — 랜덤 배치`;
     await new Promise(r => setTimeout(r, 600));
     ttAiBattleFallback();
   }
@@ -4660,42 +4991,26 @@ async function ttAiBattleBonusTurn() {
   const laneNm = ['상단','중단','하단'];
 
   // 최적 보너스 값 계산 (opp 시점)
-  const bestV = ttBestBonusVal('opp');
+  // 실제 게임처럼 보너스 실드 눈은 랜덤 (기존: 최적값 치팅 → 공정하게 변경)
+  const bestV = Math.ceil(Math.random() * 6);
   TT.alchigiBonus.v = bestV;
   stat.innerHTML = `🎯 <b>AI 알치기 보너스!</b> 실드 주사위 ${bestV} 배치 중...`;
   ttRenderChips();
 
-  const flipped = TT.lanes.map(l => ({
-    me:  l.opp.map(d=>({...d})),
-    opp: l.me.map(d=>({...d})),
-  }));
-
   try {
-    const res = await fetch('/api/tikatuka-analyze', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        lanes:    flipped,
-        cur:      {v: bestV, s: true, blown: false},
-        turn:     'me',
-        provider: document.getElementById('tt-ai-provider').value,
-        skills:   {tazzaAvail: false, holdAvail: false},
-        isBonus:  true,
-      }),
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const st    = TT_ENGINE.fromTT(TT.lanes);
+    const spots = TT_ENGINE.rateBonusSpots(st, 'opp', bestV, TT_ENGINE_DEPTH, TT_ENGINE_BUDGET, true);
+    if (!spots.length) { ttAiBattleBonusFallback(bestV); return; }
+    let sb = spots[0];
+    for (const sp of spots) if (sp.ev > sb.ev) sb = sp;
 
-    // side 뒤집기: AI가 'opp'라고 하면 실제 내(me) 필드
-    const targetSide = (data.side === 'opp') ? 'me' : 'opp';
-    const slotIdx = TT.lanes[data.best][targetSide].findIndex(d => d.v === 0);
-
-    stat.innerHTML = `🎯 AI 보너스 실드 ${bestV} → <b>${laneNm[data.best]}(${targetSide==='opp'?'상대':'내'} 필드)</b>`;
+    const slotIdx = TT.lanes[sb.lane][sb.side].findIndex(d => d.v === 0);
+    stat.innerHTML = `🎯 AI 보너스 실드 ${bestV} → <b>${laneNm[sb.lane]}(${sb.side==='opp'?'AI':'내'} 필드)</b>`;
     await new Promise(r => setTimeout(r, 800));
 
     if (slotIdx !== -1) {
       ttPushHistory();
-      TT.lanes[data.best][targetSide][slotIdx] = {v: bestV, s: true, blown: false};
+      TT.lanes[sb.lane][sb.side][slotIdx] = {v: bestV, s: true, blown: false};
     }
     TT.alchigiBonus = null;
     TT.cur = {v:0, s:false};
