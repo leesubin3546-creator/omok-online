@@ -1058,9 +1058,177 @@ function createRoom(roomId, options = {}) {
       bigBlindAmount: blinds.bb,
       actionTimer: null,
     } : null,
+    tt: gameType === 'tikatuka' ? createTikaState() : null,
   };
   rooms.set(roomId, room);
   return room;
+}
+
+// ══════════════════════════════════════════════════════════════
+// 티카투카 PvP — 서버 권한 게임 로직
+// ══════════════════════════════════════════════════════════════
+const TT_EMPTY = () => ({ v: 0, s: false });
+function ttEmptyRow() { return [TT_EMPTY(), TT_EMPTY(), TT_EMPTY()]; }
+function createTikaState() {
+  return {
+    // lanes[laneIdx] = { 1:[3 dice], 2:[3 dice] } (색상별 필드), die = {v,s}
+    lanes: [
+      { 1: ttEmptyRow(), 2: ttEmptyRow() },
+      { 1: ttEmptyRow(), 2: ttEmptyRow() },
+      { 1: ttEmptyRow(), 2: ttEmptyRow() },
+    ],
+    turn: 1,                 // 현재 차례 색상(1/2)
+    startColor: 1,           // 선공 색상
+    firstMoveDone: false,    // 선공자 첫 착수(실드) 완료 여부
+    rerollUsed: { 1: false, 2: false },
+    held: { 1: false, 2: false },
+    cur: null,               // 현재 굴린 주사위 {v,s} (착수 대기)
+    rollOptions: null,       // 리롤 시 [die0, die1] 택1 대기
+    alchigiBonus: null,      // { color, v } 보너스 실드 배치 대기
+    phase: 'place',          // 'place' | 'choose' | 'bonus' | 'over'
+  };
+}
+
+// 라인 점수: 같은 값 n개 → v*(2n-1) (단1·더블3·트리플5배), 합산
+function ttLaneScore(dice) {
+  const cnt = {};
+  dice.filter(d => d.v > 0).forEach(d => { cnt[d.v] = (cnt[d.v] || 0) + 1; });
+  return Object.entries(cnt).reduce((s, [v, n]) => s + Number(v) * (2 * n - 1), 0);
+}
+function ttScores(tt) {
+  const lanes = tt.lanes.map(l => ({ 1: ttLaneScore(l[1]), 2: ttLaneScore(l[2]) }));
+  const laneWins = { 1: 0, 2: 0 }, total = { 1: 0, 2: 0 };
+  lanes.forEach(l => {
+    total[1] += l[1]; total[2] += l[2];
+    if (l[1] > l[2]) laneWins[1]++; else if (l[2] > l[1]) laneWins[2]++;
+  });
+  return { lanes, laneWins, total };
+}
+function ttColorFull(tt, color) {
+  return tt.lanes.every(l => l[color].every(d => d.v > 0));
+}
+function ttDone(tt, color) {
+  return tt.held[color] || ttColorFull(tt, color);
+}
+function ttRoll() { return Math.ceil(Math.random() * 6); }
+function ttFirstEmptySlot(row) { return row.findIndex(d => d.v === 0); }
+
+// 상태를 각 플레이어 시점(me/opp)으로 개인화하여 전송
+function ttEmitState(room, extra = {}) {
+  const tt = room.tt;
+  const sc = ttScores(tt);
+  room.players.forEach(p => {
+    const me = p.color, opp = me === 1 ? 2 : 1;
+    const lanes = tt.lanes.map(l => ({
+      me:  l[me].map(d => ({ ...d })),
+      opp: l[opp].map(d => ({ ...d })),
+    }));
+    io.to(p.socketId).emit('tt:state', {
+      roomId: room.id,
+      lanes,
+      yourColor: me,
+      turn: tt.turn,
+      isMyTurn: tt.turn === me,
+      cur: tt.cur ? { ...tt.cur } : null,
+      rollOptions: tt.rollOptions ? tt.rollOptions.map(d => ({ ...d })) : null,
+      phase: tt.phase,
+      rerollUsed: tt.rerollUsed[me],
+      held: { me: tt.held[me], opp: tt.held[opp] },
+      alchigiBonus: tt.alchigiBonus
+        ? { mine: tt.alchigiBonus.color === me, v: tt.alchigiBonus.v }
+        : null,
+      score: {
+        me:  { lanes: sc.lanes.map(l => l[me]),  wins: sc.laneWins[me],  total: sc.total[me] },
+        opp: { lanes: sc.lanes.map(l => l[opp]), wins: sc.laneWins[opp], total: sc.total[opp] },
+      },
+      ...extra,
+    });
+  });
+  // 관전자: 색상1 시점 고정
+  room.spectators.forEach(spec => {
+    const me = 1, opp = 2;
+    const lanes = tt.lanes.map(l => ({ me: l[me].map(d => ({ ...d })), opp: l[opp].map(d => ({ ...d })) }));
+    io.to(spec.socketId).emit('tt:state', {
+      roomId: room.id, lanes, yourColor: 0, turn: tt.turn, isMyTurn: false,
+      cur: tt.cur ? { ...tt.cur } : null, phase: tt.phase, isSpectator: true,
+      held: { me: tt.held[1], opp: tt.held[2] },
+      score: {
+        me:  { lanes: sc.lanes.map(l => l[1]), wins: sc.laneWins[1], total: sc.total[1] },
+        opp: { lanes: sc.lanes.map(l => l[2]), wins: sc.laneWins[2], total: sc.total[2] },
+      },
+      ...extra,
+    });
+  });
+}
+
+// 다음 차례로 진행: 새 주사위 굴림 or 종료 판정
+function ttAdvance(room) {
+  const tt = room.tt;
+  // 종료: 양쪽 다 (만석 또는 홀드)
+  if (ttDone(tt, 1) && ttDone(tt, 2)) { ttFinish(room); return; }
+
+  const other = tt.turn === 1 ? 2 : 1;
+  // 다음 착수자 결정: 상대가 아직 안 끝났으면 상대, 아니면 나(내가 안 끝났으면)
+  let next;
+  if (!ttDone(tt, other)) next = other;
+  else if (!ttDone(tt, tt.turn)) next = tt.turn;
+  else { ttFinish(room); return; }
+
+  tt.turn = next;
+  tt.cur = { v: ttRoll(), s: false };
+  tt.rollOptions = null;
+  tt.phase = 'place';
+  ttEmitState(room);
+}
+
+async function ttFinish(room) {
+  const tt = room.tt;
+  tt.phase = 'over';
+  const sc = ttScores(tt);
+  let result, winnerNick = null, loserNick = null;
+  const p1 = room.players.find(p => p.color === 1);
+  const p2 = room.players.find(p => p.color === 2);
+  let winColor = 0;
+  if      (sc.laneWins[1] > sc.laneWins[2]) winColor = 1;
+  else if (sc.laneWins[2] > sc.laneWins[1]) winColor = 2;
+  else if (sc.total[1] > sc.total[2]) winColor = 1;
+  else if (sc.total[2] > sc.total[1]) winColor = 2;
+
+  room.status = 'finished';
+  if (winColor === 0) {
+    result = 'draw';
+    await Promise.all(room.players.map(p => addDraw(p.nickname)));
+  } else {
+    result = 'win';
+    const w = winColor === 1 ? p1 : p2;
+    const l = winColor === 1 ? p2 : p1;
+    winnerNick = w ? w.nickname : null;
+    loserNick  = l ? l.nickname : null;
+    if (winnerNick) await addWin(winnerNick);
+    if (loserNick)  await addLose(loserNick);
+  }
+  const records = await Promise.all(room.players.map(async p => ({
+    nickname: p.nickname, record: await getRecord(p.nickname)
+  })));
+  ttEmitState(room);
+  io.to(room.id).emit('game_over', {
+    result, winner: winnerNick, loser: loserNick, records,
+    ttScore: { p1: { wins: sc.laneWins[1], total: sc.total[1] },
+               p2: { wins: sc.laneWins[2], total: sc.total[2] } },
+  });
+  broadcastRoomList();
+}
+
+// 게임 시작: 선공 랜덤, 첫 주사위는 실드
+function startTikaGame(room) {
+  const tt = room.tt;
+  const startColor = Math.random() < 0.5 ? 1 : 2;
+  tt.turn = startColor;
+  tt.startColor = startColor;
+  tt.firstMoveDone = false;
+  tt.cur = { v: ttRoll(), s: true };   // 선공자 첫 주사위 = 실드
+  tt.phase = 'place';
+  ttEmitState(room);
 }
 
 // ── 매칭 큐 처리 ──────────────────────────────────────────────
@@ -1160,7 +1328,7 @@ io.on('connection', (socket) => {
     const room = createRoom(roomId, {
       name: (roomName || `${nickname}의 방`).substring(0, 20),
       password: password || null,
-      useTimer: useTimer !== false,
+      useTimer: gameType === 'tikatuka' ? false : (useTimer !== false),
       hostSocketId: socket.id,
       gameType: gameType || 'gomoku',
       buyIn: buyIn || 1000,
@@ -1355,6 +1523,16 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // ── 티카투카 시작 ─────────────────────────────────────────
+    if (room.gameType === 'tikatuka') {
+      room.status = 'playing';
+      room.readySet.clear();
+      room.tt = createTikaState();
+      await emitGameStart(room);   // 클라 게임 화면 전환 (board=null, gameType 전달)
+      startTikaGame(room);         // 선공 랜덤 + 첫 주사위(실드) tt:state
+      return;
+    }
+
     // ── 기존 오목/오델로 시작 ─────────────────────────────────
     room.status = 'playing';
     room.readySet.clear();
@@ -1536,6 +1714,101 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ══ 티카투카 PvP 핸들러 ══════════════════════════════════════
+  function ttGuard(roomId) {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || room.gameType !== 'tikatuka') return null;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return null;
+    if (room.tt.turn !== player.color) { socket.emit('error', { msg: '당신의 차례가 아닙니다.' }); return null; }
+    return { room, tt: room.tt, color: player.color };
+  }
+
+  // 주사위를 내 필드 lane에 배치
+  socket.on('tt:place', ({ roomId, lane }) => {
+    const g = ttGuard(roomId); if (!g) return;
+    const { room, tt, color } = g;
+    if (tt.phase !== 'place' || !tt.cur || tt.cur.v === 0) return;
+    if (!(lane >= 0 && lane < 3)) return;
+    const myRow = tt.lanes[lane][color];
+    const slot = ttFirstEmptySlot(myRow);
+    if (slot === -1) { socket.emit('error', { msg: '해당 라인이 꽉 찼습니다.' }); return; }
+
+    const die = { v: tt.cur.v, s: tt.cur.s };
+    myRow[slot] = die;
+    tt.firstMoveDone = true;
+
+    // 알치기: 실드가 아닌 주사위가 같은 라인 상대 필드에 같은 값(비실드) 존재 시
+    let didAlchigi = false;
+    if (!die.s) {
+      const oppColor = color === 1 ? 2 : 1;
+      const oppRow = tt.lanes[lane][oppColor];
+      const hits = oppRow.filter(d => d.v > 0 && !d.s && d.v === die.v);
+      if (hits.length > 0) {
+        myRow[slot] = TT_EMPTY();                                   // 내 주사위 제거
+        oppRow.forEach((d, i) => { if (d.v > 0 && !d.s && d.v === die.v) oppRow[i] = TT_EMPTY(); });
+        tt.alchigiBonus = { color, v: ttRoll() };                   // 보상 실드 = 서버가 굴림
+        tt.phase = 'bonus';
+        didAlchigi = true;
+      }
+    }
+
+    tt.cur = null;
+    tt.rollOptions = null;
+    if (didAlchigi) ttEmitState(room, { event: 'alchigi', lane });
+    else ttAdvance(room);
+  });
+
+  // 리롤(타짜): 게임당 1회 — 두 번째 주사위 굴려 택1
+  socket.on('tt:reroll', ({ roomId }) => {
+    const g = ttGuard(roomId); if (!g) return;
+    const { room, tt, color } = g;
+    if (tt.phase !== 'place' || !tt.cur || tt.rerollUsed[color]) return;
+    tt.rerollUsed[color] = true;
+    const second = { v: ttRoll(), s: tt.cur.s };  // 실드 속성 유지(첫 착수 실드 등)
+    tt.rollOptions = [{ ...tt.cur }, second];
+    tt.phase = 'choose';
+    ttEmitState(room);
+  });
+
+  // 리롤 후 택1
+  socket.on('tt:choose', ({ roomId, idx }) => {
+    const g = ttGuard(roomId); if (!g) return;
+    const { room, tt } = g;
+    if (tt.phase !== 'choose' || !tt.rollOptions) return;
+    if (idx !== 0 && idx !== 1) return;
+    tt.cur = { ...tt.rollOptions[idx] };
+    tt.rollOptions = null;
+    tt.phase = 'place';
+    ttEmitState(room);
+  });
+
+  // 홀드: 남은 턴 전체 포기
+  socket.on('tt:hold', ({ roomId }) => {
+    const g = ttGuard(roomId); if (!g) return;
+    const { room, tt, color } = g;
+    if (tt.phase !== 'place') return;
+    tt.held[color] = true;
+    tt.cur = null;
+    tt.rollOptions = null;
+    ttAdvance(room);
+  });
+
+  // 알치기 보상 실드 배치 (내/상대 필드 모두 가능)
+  socket.on('tt:placeBonus', ({ roomId, side, lane }) => {
+    const g = ttGuard(roomId); if (!g) return;
+    const { room, tt, color } = g;
+    if (tt.phase !== 'bonus' || !tt.alchigiBonus || tt.alchigiBonus.color !== color) return;
+    if (!(lane >= 0 && lane < 3)) return;
+    const targetColor = side === 'opp' ? (color === 1 ? 2 : 1) : color;
+    const row = tt.lanes[lane][targetColor];
+    const slot = ttFirstEmptySlot(row);
+    if (slot === -1) { socket.emit('error', { msg: '빈 슬롯이 없습니다.' }); return; }
+    row[slot] = { v: tt.alchigiBonus.v, s: true };
+    tt.alchigiBonus = null;
+    ttAdvance(room);   // 보상 배치 후 차례 전환
+  });
+
   // ── 무르기 ────────────────────────────────────────────────────
   socket.on('undo_request', ({ roomId }) => {
     const room = rooms.get(roomId);
@@ -1640,7 +1913,8 @@ io.on('connection', (socket) => {
     });
     if (room.rematchRequests.size === 2) {
       clearTurnTimer(room);
-      room.board = room.gameType === 'othello' ? createOthelloBoard() : createBoard();
+      room.board = room.gameType === 'othello' ? createOthelloBoard()
+                 : (room.gameType === 'tikatuka' || room.gameType === 'holdem' ? null : createBoard());
       room.turn = 1; room.status = 'playing';
       room.moveCount = 0; room.moveHistory = [];
       room.pendingUndo = null; room.pendingSurrender = null;
@@ -1648,7 +1922,13 @@ io.on('connection', (socket) => {
       room.rematchRequests = new Set();
       room.readySet = new Set();
       room.players.forEach(p => { p.color = p.color === 1 ? 2 : 1; });
-      emitGameStart(room);
+      if (room.gameType === 'tikatuka') {
+        room.tt = createTikaState();
+        emitGameStart(room);
+        startTikaGame(room);
+      } else {
+        emitGameStart(room);
+      }
     }
   });
 
@@ -1806,3 +2086,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`오목 서버 실행 중: http://localhost:${PORT}`);
 });
+// tikatuka PvP wired
+

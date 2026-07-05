@@ -1111,6 +1111,7 @@
       <div class="game-type-picker">
         <label><input type="radio" name="modal-game-type" value="gomoku" checked onchange="onModalGameTypeChange()"> ⚫ 오목 (렌주룰)</label>
         <label><input type="radio" name="modal-game-type" value="othello" onchange="onModalGameTypeChange()"> 🟢 오델로</label>
+        <label><input type="radio" name="modal-game-type" value="tikatuka" onchange="onModalGameTypeChange()"> 🎲 티카투카</label>
         <label><input type="radio" name="modal-game-type" value="holdem" onchange="onModalGameTypeChange()"> 🃏 텍사스 홀덤</label>
       </div>
     </div>
@@ -1297,6 +1298,61 @@
       <!-- JS로 렌더링 -->
     </div>
     <button class="btn-secondary btn-sm" onclick="hdGoLobby()">로비로 나가기</button>
+  </div>
+</div>
+
+<!-- 티카투카 PvP 대전 -->
+<div id="tt-pvp-screen" class="screen" style="padding:20px 16px;">
+  <div class="tt-toolbar" style="margin-bottom:14px;">
+    <button class="tt-back-btn" onclick="ttPvpLeave()">← 나가기</button>
+    <span class="tt-toolbar-title">🎲 티카투카 대전</span>
+    <span id="ttp-reroll-tag" style="font-size:0.72rem;color:var(--text2);"></span>
+  </div>
+
+  <!-- 점수 / 이름 바 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+    padding:8px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--border);">
+    <div style="text-align:left;">
+      <div id="ttp-me-name" style="font-weight:700;color:#1a5fb4;"></div>
+      <div id="ttp-me-score" style="font-size:0.78rem;color:var(--text2);"></div>
+    </div>
+    <div style="font-weight:700;color:var(--text2);">VS</div>
+    <div style="text-align:right;">
+      <div id="ttp-opp-name" style="font-weight:700;color:#c0392b;"></div>
+      <div id="ttp-opp-score" style="font-size:0.78rem;color:var(--text2);"></div>
+    </div>
+  </div>
+
+  <!-- 상태 배너 -->
+  <div id="ttp-status" style="margin-bottom:10px;padding:10px 14px;border-radius:10px;
+    background:rgba(46,125,50,0.1);border:1px solid rgba(46,125,50,0.3);
+    font-size:0.9rem;color:#1b5e20;font-weight:500;text-align:center;">연결 중…</div>
+
+  <!-- 현재 주사위 + 액션 -->
+  <div style="margin-bottom:12px;text-align:center;">
+    <div id="ttp-die-area" style="display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:52px;"></div>
+    <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;">
+      <button class="tt-special-btn" id="ttp-reroll-btn" onclick="ttPvpReroll()">🃏 리롤</button>
+      <button class="tt-special-btn" id="ttp-hold-btn" onclick="ttPvpHold()">✋ 홀드</button>
+    </div>
+  </div>
+
+  <!-- 3라인 보드 -->
+  <div id="ttp-lanes" style="margin-bottom:12px;"></div>
+
+  <!-- 결과 오버레이 -->
+  <div id="ttp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;
+    background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border-radius:18px;padding:32px 40px;text-align:center;
+      box-shadow:0 8px 32px rgba(0,0,0,0.3);min-width:280px;">
+      <div id="ttp-result-msg" style="font-size:2rem;font-weight:700;margin-bottom:8px;"></div>
+      <div id="ttp-result-detail" style="font-size:1rem;color:var(--text2);margin-bottom:20px;"></div>
+      <button id="ttp-rematch-btn" onclick="ttPvpRematch()" style="padding:10px 24px;border-radius:10px;
+        background:rgba(200,136,26,0.15);border:1px solid var(--accent2);color:var(--accent2);
+        font-size:1rem;cursor:pointer;font-family:inherit;font-weight:600;margin-right:8px;">🔄 재대결</button>
+      <button onclick="ttPvpLeave()" style="padding:10px 24px;border-radius:10px;background:rgba(0,0,0,0.06);
+        border:1px solid var(--border);color:var(--text2);font-size:1rem;cursor:pointer;font-family:inherit;">종료</button>
+    </div>
   </div>
 </div>
 
@@ -3132,6 +3188,154 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
+
+// ══ 티카투카 PvP 클라이언트 ══════════════════════════════════
+const TTP = { s: null, roomId: null, meName: '나', oppName: '상대' };
+const TTP_LANE_NM = ['상단', '중단', '하단'];
+
+function ttPvpStart(roomId, players, yourColor) {
+  currentRoom = roomId;
+  TTP.roomId = roomId;
+  const me  = players.find(p => p.color === yourColor);
+  const opp = players.find(p => p.color !== yourColor);
+  TTP.meName  = me  ? me.nickname  : '나';
+  TTP.oppName = opp ? opp.nickname : '상대';
+  document.getElementById('ttp-me-name').textContent  = TTP.meName;
+  document.getElementById('ttp-opp-name').textContent = TTP.oppName;
+  document.getElementById('ttp-overlay').style.display = 'none';
+  document.getElementById('ttp-status').textContent = '게임 시작!';
+  showScreen('tt-pvp-screen');
+}
+
+function ttPvpSlot(d, lane, side, i, s) {
+  const empty = d.v === 0;
+  const myTurn = s.isMyTurn && !s.isSpectator;
+  let canPlace = false;
+  if (s.alchigiBonus && s.alchigiBonus.mine && empty) canPlace = true;
+  else if (myTurn && s.phase === 'place' && s.cur && side === 'me' && empty) canPlace = true;
+  const cls = ['tt-die-slot', d.v > 0 ? 'has-val' : '', d.s ? 'is-shield' : '',
+    canPlace ? 'can-place' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}" data-lane="${lane}" data-side="${side}" data-idx="${i}" style="width:44px;height:44px;">
+    ${ttDieFaceSVG(d.v, d.s, side, false)}
+    ${d.s ? '<div class="tt-shield-badge">🛡</div>' : ''}
+  </div>`;
+}
+
+function ttPvpRender() {
+  const s = TTP.s; if (!s) return;
+  const myTurn = s.isMyTurn && !s.isSpectator;
+
+  document.getElementById('ttp-me-score').textContent  = `라인 ${s.score.me.wins} · 총점 ${s.score.me.total}`;
+  document.getElementById('ttp-opp-score').textContent = `라인 ${s.score.opp.wins} · 총점 ${s.score.opp.total}`;
+  const rtag = document.getElementById('ttp-reroll-tag');
+  if (rtag) rtag.textContent = s.isSpectator ? '' : (s.rerollUsed ? '리롤 사용됨' : '리롤 가능');
+
+  // 라인 보드
+  const lanesEl = document.getElementById('ttp-lanes');
+  let html = '';
+  s.lanes.forEach((lane, li) => {
+    const meScore = s.score.me.lanes[li], oppScore = s.score.opp.lanes[li];
+    const mark = meScore > oppScore ? '🔵' : oppScore > meScore ? '🔴' : '·';
+    html += `<div class="tt-lane" style="margin-bottom:8px;">
+      <div class="tt-lane-num">${TTP_LANE_NM[li]}</div>
+      <div style="flex:1;">
+        <div style="display:flex;gap:6px;justify-content:center;margin-bottom:5px;">
+          ${lane.opp.map((d, i) => ttPvpSlot(d, li, 'opp', i, s)).join('')}
+        </div>
+        <div style="display:flex;gap:6px;justify-content:center;">
+          ${lane.me.map((d, i) => ttPvpSlot(d, li, 'me', i, s)).join('')}
+        </div>
+      </div>
+      <div class="tt-lane-score" style="text-align:center;min-width:34px;">
+        <div style="color:#c0392b;font-weight:700;">${oppScore}</div>
+        <div style="font-size:0.72rem;">${mark}</div>
+        <div style="color:#1a5fb4;font-weight:700;">${meScore}</div>
+      </div>
+    </div>`;
+  });
+  lanesEl.innerHTML = html;
+  lanesEl.querySelectorAll('.tt-die-slot').forEach(el => { el.onclick = () => ttPvpSlotClick(el); });
+
+  // 현재 주사위 영역
+  const dieArea = document.getElementById('ttp-die-area');
+  if (s.phase === 'over') {
+    dieArea.innerHTML = '';
+  } else if (s.alchigiBonus && s.alchigiBonus.mine) {
+    dieArea.innerHTML = `<div style="width:48px;height:48px;">${ttDieFaceSVG(s.alchigiBonus.v, true, 'me', false)}</div>
+      <span style="font-weight:600;color:#c8881a;">🎯 알치기 보너스 실드 [${s.alchigiBonus.v}] — 빈 슬롯 클릭 (내/상대 필드)</span>`;
+  } else if (s.phase === 'choose' && myTurn && s.rollOptions) {
+    dieArea.innerHTML = `<span style="font-weight:600;">리롤 — 하나 선택:</span>` +
+      s.rollOptions.map((d, idx) => `<div class="ttp-choose" data-idx="${idx}" style="width:48px;height:48px;cursor:pointer;">${ttDieFaceSVG(d.v, d.s, 'me', false)}</div>`).join('');
+    dieArea.querySelectorAll('.ttp-choose').forEach(el => {
+      el.onclick = () => socket.emit('tt:choose', { roomId: TTP.roomId, idx: +el.dataset.idx });
+    });
+  } else if (s.cur && myTurn) {
+    dieArea.innerHTML = `<div style="width:48px;height:48px;">${ttDieFaceSVG(s.cur.v, s.cur.s, 'me', false)}</div>
+      <span style="font-weight:600;">굴린 주사위 [${s.cur.v}]${s.cur.s ? ' 🛡' : ''} — 라인 클릭해서 배치</span>`;
+  } else {
+    dieArea.innerHTML = `<span style="color:var(--text2);">${s.cur ? `상대 주사위 [${s.cur.v}] · ` : ''}상대 차례…</span>`;
+  }
+
+  // 버튼
+  const canAct = myTurn && s.phase === 'place';
+  document.getElementById('ttp-reroll-btn').disabled = !(canAct && !s.rerollUsed);
+  document.getElementById('ttp-hold-btn').disabled = !canAct;
+
+  // 상태 배너
+  const st = document.getElementById('ttp-status');
+  if (s.phase === 'over') { /* game_over 오버레이가 처리 */ }
+  else if (s.isSpectator) st.textContent = `관전 중 — ${s.turn === 1 ? TTP.meName : TTP.oppName} 차례`;
+  else if (s.alchigiBonus && s.alchigiBonus.mine) st.innerHTML = '🎯 <b>알치기!</b> 보너스 실드를 배치하세요';
+  else if (myTurn && s.phase === 'choose') st.innerHTML = '🃏 리롤한 두 주사위 중 하나를 고르세요';
+  else if (myTurn) st.innerHTML = '🎲 <b>내 차례</b> — 주사위를 라인에 배치하세요';
+  else { st.innerHTML = `⏳ <b>${TTP.oppName}</b> 차례…`; if (s.held && s.held.me) st.innerHTML += ' (나는 홀드함)'; }
+}
+
+function ttPvpSlotClick(el) {
+  const s = TTP.s; if (!s || s.isSpectator) return;
+  const lane = +el.dataset.lane, side = el.dataset.side;
+  if (s.alchigiBonus && s.alchigiBonus.mine) {
+    socket.emit('tt:placeBonus', { roomId: TTP.roomId, side, lane });
+    return;
+  }
+  if (!s.isMyTurn || s.phase !== 'place' || !s.cur) return;
+  if (side !== 'me') return;               // 일반 배치는 내 필드만
+  socket.emit('tt:place', { roomId: TTP.roomId, lane });
+}
+
+function ttPvpReroll() {
+  const s = TTP.s; if (!s || !s.isMyTurn || s.phase !== 'place' || s.rerollUsed) return;
+  socket.emit('tt:reroll', { roomId: TTP.roomId });
+}
+function ttPvpHold() {
+  const s = TTP.s; if (!s || !s.isMyTurn || s.phase !== 'place') return;
+  if (!confirm('홀드하면 남은 턴을 모두 포기합니다. 계속할까요?')) return;
+  socket.emit('tt:hold', { roomId: TTP.roomId });
+}
+function ttPvpRematch() {
+  socket.emit('rematch_request', { roomId: TTP.roomId });
+  const b = document.getElementById('ttp-rematch-btn');
+  b.textContent = '상대 수락 대기…'; b.disabled = true;
+}
+function ttPvpLeave() {
+  if (TTP.roomId) socket.emit('leave_room', { roomId: TTP.roomId });
+  document.getElementById('ttp-overlay').style.display = 'none';
+  showScreen('lobby-screen');
+  if (socket) socket.emit('get_room_list');
+}
+function ttPvpGameOver(result, winner) {
+  const s = TTP.s;
+  let msg;
+  if (result === 'draw') msg = '🤝 무승부';
+  else if (winner === myNickname) msg = '🎉 승리!';
+  else msg = '😢 패배';
+  document.getElementById('ttp-result-msg').textContent = msg;
+  document.getElementById('ttp-result-detail').textContent =
+    s ? `라인 ${s.score.me.wins} : ${s.score.opp.wins} · 총점 ${s.score.me.total} : ${s.score.opp.total}` : '';
+  const rb = document.getElementById('ttp-rematch-btn');
+  rb.disabled = false; rb.textContent = '🔄 재대결';
+  document.getElementById('ttp-overlay').style.display = 'flex';
+}
 function updateHeaderNick() {
   document.getElementById('header-nick').textContent = myNickname || '-';
 }
@@ -3245,6 +3449,7 @@ function initSocket() {
   });
 
   socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut, gameType: gt }) => {
+    if (gt === 'tikatuka') { gameType = 'tikatuka'; ttPvpStart(roomId, players, yourColor); return; }
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     currentTurn = turn; gameActive = true; isSpectating = false;
@@ -3273,6 +3478,12 @@ function initSocket() {
     addChat('게임 시작!', true);
   });
   socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut, isPaused: paused, spectatorCount: specCnt, gameType: gt }) => {
+    if (gt === 'tikatuka') { gameType = 'tikatuka'; currentRoom = roomId; TTP.roomId = roomId; isSpectating = true;
+      const p1 = players.find(p=>p.color===1), p2 = players.find(p=>p.color===2);
+      TTP.meName = p1?p1.nickname:'P1'; TTP.oppName = p2?p2.nickname:'P2';
+      document.getElementById('ttp-me-name').textContent = TTP.meName;
+      document.getElementById('ttp-opp-name').textContent = TTP.oppName;
+      showScreen('tt-pvp-screen'); return; }
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     gameType = gt || 'gomoku';
@@ -3367,6 +3578,11 @@ function initSocket() {
   });
 
   socket.on('game_over', ({ result, winner, loser, records }) => {
+    if (gameType === 'tikatuka') {
+      if (records) { const me = records.find(r => r.nickname === myNickname); if (me) updateRecordUI(me.record); }
+      ttPvpGameOver(result, winner);
+      return;
+    }
     clearClientTimer();
     document.getElementById('turn-timer-wrap').style.display = 'none';
     document.getElementById('consent-banner').classList.remove('show');
@@ -3399,7 +3615,22 @@ function initSocket() {
       }
     });
   });
+  // 티카투카 PvP 상태 동기화
+  socket.on('tt:state', s => {
+    TTP.s = s;
+    if (s.roomId) TTP.roomId = s.roomId;
+    if (!document.getElementById('tt-pvp-screen').classList.contains('active')) {
+      gameType = 'tikatuka';
+      showScreen('tt-pvp-screen');
+    }
+    ttPvpRender();
+  });
   socket.on('rematch_requested', ({ from }) => {
+    if (gameType === 'tikatuka') {
+      const rb = document.getElementById('ttp-rematch-btn');
+      rb.textContent = '🔄 재대결 수락'; rb.disabled = false;
+      return;
+    }
     addChat(`${from}님이 재대결을 요청했습니다.`, true);
     document.getElementById('rematch-btn').textContent = '재대결 수락';
   });
@@ -3517,7 +3748,8 @@ function onModalGameTypeChange() {
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
   const isHoldem = gt === 'holdem';
   document.getElementById('modal-buyin-row').classList.toggle('show', isHoldem);
-  document.getElementById('modal-timer-row').style.display = isHoldem ? 'none' : '';
+  // 티카투카는 타이머 없음, 홀덤은 타이머 숨김
+  document.getElementById('modal-timer-row').style.display = (isHoldem || gt === 'tikatuka') ? 'none' : '';
 }
 function selectBuyIn(amount) {
   selectedBuyIn = amount;
@@ -3590,6 +3822,8 @@ function updateRoomList(list) {
       gameBadge = `<span class="room-badge room-badge-holdem">🃏 홀덤</span>`;
     } else if (r.gameType === 'othello') {
       gameBadge = `<span class="room-badge room-badge-othello">오델로</span>`;
+    } else if (r.gameType === 'tikatuka') {
+      gameBadge = `<span class="room-badge room-badge-holdem">🎲 티카투카</span>`;
     } else {
       gameBadge = `<span class="room-badge room-badge-gomoku">오목</span>`;
     }
@@ -3631,6 +3865,8 @@ function renderLobbyScreen(state) {
   if (state.gameType === 'holdem') {
     document.getElementById('lobby-room-sub').textContent =
       `🃏 텍사스 홀덤 · 바이인 ${(state.buyIn || 1000).toLocaleString()}`;
+  } else if (state.gameType === 'tikatuka') {
+    document.getElementById('lobby-room-sub').textContent = '🎲 티카투카 대전';
   } else {
     document.getElementById('lobby-room-sub').textContent =
       (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +

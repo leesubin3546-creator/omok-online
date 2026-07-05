@@ -190,3 +190,34 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - 커밋: 보드 전체 덮어쓰기 + 내 트레이 주사위 → TT.cur/턴 자동. AI 대전 중엔 스캔 무시
 - 검증: 기준 스크린샷 20/20, 0.448배 스케일 교차 테스트 19/20(전 칸 정확, 트레이 실드 오탐 → 수정됨)
 - 한계/TODO: 상대 트레이 좌표는 미검증(추정), 타짜 두 번째 주사위 위치 미지원, 알까기 보상 실드 굴림은 수동 입력
+
+---
+
+## 티카투카 PvP — 구현 완료 (2026-07-05)
+
+**구현 위치**
+- server.js: `createTikaState`, `ttLaneScore/ttScores/ttColorFull/ttDone`, `ttEmitState`(개인화 me/opp), `ttAdvance`, `ttFinish`, `startTikaGame`. 핸들러 `tt:place / tt:reroll / tt:choose / tt:hold / tt:placeBonus`. start_game·rematch·create_room·createRoom에 tikatuka 분기, useTimer=false.
+- index.html: 방만들기 모달 라디오 '🎲 티카투카', 전용 화면 `#tt-pvp-screen`, 클라 모듈 `TTP`/`ttPvp*` (렌더러는 기존 `ttDieFaceSVG`·`.tt-*` CSS 재활용, 훈수/화면인식 없음). game_start·spectate_start·game_over·room_list·lobby에 tikatuka 분기, `socket.on('tt:state')`.
+
+**검증 완료**: 점수(단1·더블3·트리플5), 알치기(양측 비실드 동값 제거), 실드 면역(알치기 불가/대상 아님), 종료(양쪽 만석/홀드, 2라인 즉시종료 없음), 홀드(한쪽 홀드→상대 9개까지), 승자(라인수→총점) — 로직 시뮬 21케이스 통과.
+**남은 확인**: 실제 2인 접속 스모크 테스트(`node server.js` 후 두 브라우저), UI 미세조정.
+
+### (원래 스펙) 확정 스코프
+
+### 확정 스코프
+- 훈수(엔진 추천): PvP에서 숨김. 스킬: 리롤 1회 + 홀드 포함. 베팅 없음.
+- **실드(확정)**: 자유 지정 불가. 실드 주사위는 오직 두 경우만 — ① 선공자의 첫 주사위(무조건 실드, 자기 필드만), ② 알치기 보상 주사위. 일반 굴림은 실드 아님. → PvP에선 실드 토글 버튼 제거.
+- **리롤/타짜(확정)**: 게임당 1회. 2개 굴려 택1(원래 눈 + 새 눈 중 선택). tt:reroll→서버가 두 번째 눈 통지→tt:choose(idx 0/1).
+- **타이머(확정)**: 티카투카 PvP는 턴 타이머 없음(useTimer=false, startTurnTimer 미호출).
+
+### 설계
+- `gameType`에 'tikatuka' 추가 (방 만들기 모달 라디오: 오목/오델로/티카투카)
+- **서버 권한**: 주사위 굴림·배치 검증·알까기·보상 실드 굴림 전부 server.js에서 처리
+  - 방 상태: lanes[2][3][] ({v,s}), turn, rerollUsed[2], held[2], phase, 선공 랜덤(첫 주사위 실드·자기 필드만)
+  - 이벤트: tt:state(전체 동기화), tt:place(lane), tt:reroll → tt:choose(idx), tt:hold, tt:placeBonus(side,lane)
+  - 알까기 룰 = 어드바이저와 동일(공격 주사위도 제거 + 보상 실드는 서버가 굴려 값 통지, 양쪽 필드 배치 가능)
+  - 종료(확정): **2라인 선점 즉시종료 없음**. 양쪽 모두 '만석 또는 홀드' 상태가 되면 종료 → 라인 다수 → 동률 시 총점
+  - 홀드(확정): 양쪽 모두 사용 가능. 한쪽이 홀드하면 상대는 홀드하지 않는 한 계속 배치(9개까지). 홀드 = 남은 턴 전체 포기
+  - ※어드바이저 AI배틀의 2라인 즉시종료(earlyEnd)는 인게임과 다름 → PvP에는 적용 금지, 추후 배틀 모드도 인게임 룰로 수정 검토
+- **클라**: 기존 어드바이저 보드 렌더러(ttDieFaceSVG 등) 재활용한 room 내 대전 화면, 훈수/화면인식 패널 숨김, 기존 turnTimer 재활용, 탈주/재접속은 오목 방식 따름
+- 시작 방법: 이 섹션 + '새 세션에서 작업 시작하는 법' 참고
