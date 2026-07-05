@@ -209,6 +209,12 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - **명칭**: '리롤' → '타짜의 손놀림' (버튼·툴바 태그·상태 배너).
 - **확대**: `#ttp-wrap` max-width 920px, PvP 슬롯 68px(모바일 48px), 점수 1.4rem, 굴림 주사위 60px.
 - **채팅**: `#ttp-chat-box` (lanes 아래), `ttpSendChat()` — 기존 `chat` 이벤트 재활용, `addChat`이 tt-pvp-screen 활성 시 `#ttp-chat-messages`로 라우팅. 나가기 시 클리어.
+- **알치기 연출 강화**: 서버 `event:'alchigi'`에 `val`(터진 눈) 추가 (server.js tt:place). 클라: 중앙 토스트 `#ttp-alchigi-toast`("💥 알치기!" + 시점별 문구, 1.6s), 해당 라인 흔들림+빨간 플래시(`.ttp-hit`), 💥 이펙트 확대(2rem·0.9s). `delete s.event`로 재렌더 중복 방지, `ttpResetAnim`에서 토스트 정리.
+
+**판돈(베팅) 시스템 (2026-07-05)** — 원래 스펙 '베팅 없음'에서 변경:
+- 방 만들기 모달: 티카투카 선택 시 판돈 픽커 `#modal-ttbet-row` (무료/1천/5천/1만/5만/10만, `selectedTtBet`). 기존 `selectBuyIn`류 셀렉터를 `#modal-buyin-row` 스코프로 변경 (ttbet 옵션과 충돌 방지).
+- 서버: `room.ttBet`(0~100만 sanitize), 홀덤 바이인식 에스크로 — `ttEscrowBets`(시작/재대결 시 양쪽 차감, 부족 시 환불+취소), `ttSettleBets`(승자 2배 독식/무승부 반환, `ttEscrow` 플래그로 중복 정산 방지), `ttPushCoins`(coins_info 푸시). 정산 지점: ttFinish·handleLeaveRoom(탈주=상대 독식)·resign. 재대결 부족 시 `tt:rematch_failed`.
+- 표시: room_list·lobby_state에 ttBet, 대기실 서브텍스트, PvP 점수바 VS 아래 `#ttp-bet-tag`(tt:state의 `bet`), 결과 오버레이에 ±코인 문구.
 
 ### (원래 스펙) 확정 스코프
 

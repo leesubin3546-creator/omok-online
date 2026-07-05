@@ -677,6 +677,10 @@
   /* Buy-in selector */
   #modal-buyin-row { display:none; }
   #modal-buyin-row.show { display:flex; flex-direction:column; gap:5px; }
+  #modal-ttbet-row { display:none; }
+  #modal-ttbet-row.show { display:flex; flex-direction:column; gap:5px; }
+  #ttbet-opts { flex-wrap:wrap; }
+  #ttbet-opts .buyin-opt { flex:1 1 28%; }
   .buyin-opts { display:flex; gap:8px; }
   .buyin-opt { flex:1; text-align:center; padding:8px 4px; border-radius:9px; border:1.5px solid var(--border); cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text2); background:var(--card); transition:all 0.15s; }
   .buyin-opt.selected { border-color:var(--accent); background:rgba(122,74,21,0.1); color:var(--accent); }
@@ -964,9 +968,36 @@
   .ttp-landed { animation:ttpLand 0.32s ease; }
   @keyframes ttpPop { 0%{transform:scale(0.2);opacity:0} 60%{transform:scale(1.18);opacity:1} 100%{transform:scale(1)} }
   .tt-die-slot.ttp-pop { animation:ttpPop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
-  @keyframes ttpBoomFx { 0%{opacity:1;transform:scale(0.6)} 40%{transform:scale(1.5)} 100%{opacity:0;transform:scale(2.1)} }
+  @keyframes ttpBoomFx { 0%{opacity:1;transform:scale(0.5) rotate(-12deg)} 40%{transform:scale(1.6) rotate(8deg)} 100%{opacity:0;transform:scale(2.3) rotate(0deg)} }
   .ttp-boom-fx { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    font-size:1.6rem; pointer-events:none; animation:ttpBoomFx 0.7s ease forwards; }
+    font-size:2rem; pointer-events:none; animation:ttpBoomFx 0.9s ease forwards; }
+
+  /* 알치기 연출: 라인 흔들림 + 중앙 토스트 */
+  @keyframes ttpLaneShake {
+    0%,100%{transform:translateX(0)} 15%{transform:translateX(-8px)} 30%{transform:translateX(7px)}
+    45%{transform:translateX(-5px)} 60%{transform:translateX(4px)} 75%{transform:translateX(-2px)}
+  }
+  .tt-lane.ttp-hit {
+    animation:ttpLaneShake 0.55s ease;
+    border-color:#c0392b !important;
+    box-shadow:0 0 18px rgba(192,57,43,0.5), 0 2px 6px rgba(100,60,10,0.1) !important;
+  }
+  #ttp-alchigi-toast {
+    display:none; position:fixed; left:50%; top:40%; z-index:600;
+    transform:translate(-50%,-50%); pointer-events:none; text-align:center;
+    background:linear-gradient(135deg,#fdf0ee,#f5ddd8); border:2px solid #c0392b;
+    border-radius:16px; padding:18px 34px; box-shadow:0 8px 32px rgba(120,20,10,0.35);
+  }
+  #ttp-alchigi-toast .tta-main { font-size:2rem; font-weight:900; color:#c0392b; letter-spacing:1px; }
+  #ttp-alchigi-toast .tta-sub { font-size:0.95rem; font-weight:600; color:#7a2318; margin-top:4px; }
+  #ttp-alchigi-toast.show { display:block; animation:ttpToast 1.6s ease forwards; }
+  @keyframes ttpToast {
+    0%   { transform:translate(-50%,-50%) scale(0.35); opacity:0; }
+    12%  { transform:translate(-50%,-50%) scale(1.12); opacity:1; }
+    22%  { transform:translate(-50%,-50%) scale(1); }
+    78%  { transform:translate(-50%,-50%) scale(1); opacity:1; }
+    100% { transform:translate(-50%,-50%) scale(1.05); opacity:0; }
+  }
 
   @media (max-width:600px) {
     .tt-die-slot { width:46px; height:46px; }
@@ -1160,6 +1191,17 @@
         <div class="buyin-opt selected" data-buyin="1000" onclick="selectBuyIn(1000)">1,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 10/20</span></div>
         <div class="buyin-opt" data-buyin="5000" onclick="selectBuyIn(5000)">5,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 50/100</span></div>
         <div class="buyin-opt" data-buyin="10000" onclick="selectBuyIn(10000)">10,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 100/200</span></div>
+      </div>
+    </div>
+    <div id="modal-ttbet-row">
+      <div class="modal-label">💰 판돈 (승자 독식)</div>
+      <div class="buyin-opts" id="ttbet-opts">
+        <div class="buyin-opt selected" data-ttbet="0" onclick="selectTtBet(0)">무료</div>
+        <div class="buyin-opt" data-ttbet="1000" onclick="selectTtBet(1000)">1,000</div>
+        <div class="buyin-opt" data-ttbet="5000" onclick="selectTtBet(5000)">5,000</div>
+        <div class="buyin-opt" data-ttbet="10000" onclick="selectTtBet(10000)">10,000</div>
+        <div class="buyin-opt" data-ttbet="50000" onclick="selectTtBet(50000)">50,000</div>
+        <div class="buyin-opt" data-ttbet="100000" onclick="selectTtBet(100000)">100,000</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;" id="modal-timer-row">
@@ -1356,7 +1398,10 @@
       <div id="ttp-me-name" style="font-weight:700;color:#1a5fb4;"></div>
       <div id="ttp-me-score" style="font-size:0.78rem;color:var(--text2);"></div>
     </div>
-    <div style="font-weight:700;color:var(--text2);">VS</div>
+    <div style="text-align:center;">
+      <div style="font-weight:700;color:var(--text2);">VS</div>
+      <div id="ttp-bet-tag" style="font-size:0.72rem;color:#c8881a;font-weight:700;"></div>
+    </div>
     <div style="text-align:right;">
       <div id="ttp-opp-name" style="font-weight:700;color:#c0392b;"></div>
       <div id="ttp-opp-score" style="font-size:0.78rem;color:var(--text2);"></div>
@@ -1396,6 +1441,12 @@
     </div>
   </div>
   </div><!-- /ttp-wrap -->
+
+  <!-- 알치기 토스트 -->
+  <div id="ttp-alchigi-toast">
+    <div class="tta-main">💥 알치기!</div>
+    <div class="tta-sub" id="ttp-alchigi-sub"></div>
+  </div>
 
   <!-- 결과 오버레이 -->
   <div id="ttp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;
@@ -3255,6 +3306,9 @@ function ttpResetAnim() {
   TTP.rollTimers.forEach(clearInterval);
   TTP.rollTimers = [];
   TTP.snap = null; TTP.rollKey = null; TTP.prevPhase = null; TTP.prevBonus = false;
+  clearTimeout(TTP.toastTimer);
+  const t = document.getElementById('ttp-alchigi-toast');
+  if (t) t.classList.remove('show');
 }
 
 // 주사위 굴림 모션: 눈이 랜덤하게 바뀌며 흔들리다 최종 값에 멈춤
@@ -3320,6 +3374,7 @@ function ttPvpRender() {
 
   document.getElementById('ttp-me-score').textContent  = `라인 ${s.score.me.wins} · 총점 ${s.score.me.total}`;
   document.getElementById('ttp-opp-score').textContent = `라인 ${s.score.opp.wins} · 총점 ${s.score.opp.total}`;
+  document.getElementById('ttp-bet-tag').textContent = s.bet > 0 ? `💰 ${s.bet.toLocaleString()}` : '';
   const rtag = document.getElementById('ttp-reroll-tag');
   if (rtag) rtag.textContent = s.isSpectator ? '' : (s.rerollUsed ? '타짜의 손놀림 사용 완료' : '타짜의 손놀림 1회 가능');
 
@@ -3364,6 +3419,28 @@ function ttPvpRender() {
     else if (pv > 0 && nv === 0) el.insertAdjacentHTML('beforeend', '<div class="ttp-boom-fx">💥</div>');
   });
   TTP.snap = snap;
+
+  // 알치기 연출: 서버 event 신호 → 중앙 토스트 + 해당 라인 흔들림
+  if (s.event === 'alchigi') {
+    delete s.event;  // 같은 상태 재렌더 시 중복 방지
+    const laneEl = lanesEl.children[s.lane];
+    if (laneEl) {
+      laneEl.classList.add('ttp-hit');
+      setTimeout(() => laneEl.classList.remove('ttp-hit'), 700);
+    }
+    const vtxt = s.val ? `[${s.val}] ` : '';
+    document.getElementById('ttp-alchigi-sub').textContent =
+      s.isSpectator ? `${vtxt}주사위 충돌!`
+      : (s.alchigiBonus && s.alchigiBonus.mine)
+        ? `${vtxt}충돌 성공 — 보너스 실드를 배치하세요!`
+        : `${vtxt}내 주사위가 날아갔습니다!`;
+    const toast = document.getElementById('ttp-alchigi-toast');
+    toast.classList.remove('show');
+    void toast.offsetWidth;  // 애니메이션 재시작
+    toast.classList.add('show');
+    clearTimeout(TTP.toastTimer);
+    TTP.toastTimer = setTimeout(() => toast.classList.remove('show'), 1700);
+  }
 
   // 새 굴림 감지 (리롤 선택 직후는 제외)
   const placedCount = snap.reduce((a, l) => a + l.me.filter(v => v > 0).length + l.opp.filter(v => v > 0).length, 0);
@@ -3470,8 +3547,16 @@ function ttPvpGameOver(result, winner) {
   else if (winner === myNickname) msg = '🎉 승리!';
   else msg = '😢 패배';
   document.getElementById('ttp-result-msg').textContent = msg;
-  document.getElementById('ttp-result-detail').textContent =
-    s ? `라인 ${s.score.me.wins} : ${s.score.opp.wins} · 총점 ${s.score.me.total} : ${s.score.opp.total}` : '';
+  let detail = s ? `라인 ${s.score.me.wins} : ${s.score.opp.wins} · 총점 ${s.score.me.total} : ${s.score.opp.total}` : '';
+  const bet = s && s.bet > 0 ? s.bet : 0;
+  if (bet && !isSpectating) {
+    if (result === 'draw') detail += `\n💰 판돈 ${bet.toLocaleString()} 반환`;
+    else if (winner === myNickname) detail += `\n💰 +${bet.toLocaleString()} 코인 획득!`;
+    else detail += `\n💰 -${bet.toLocaleString()} 코인`;
+  }
+  const detEl = document.getElementById('ttp-result-detail');
+  detEl.style.whiteSpace = 'pre-line';
+  detEl.textContent = detail;
   const rb = document.getElementById('ttp-rematch-btn');
   rb.disabled = false; rb.textContent = '🔄 재대결';
   document.getElementById('ttp-overlay').style.display = 'flex';
@@ -3766,6 +3851,12 @@ function initSocket() {
     }
     ttPvpRender();
   });
+  socket.on('tt:rematch_failed', ({ msg }) => {
+    const detEl = document.getElementById('ttp-result-detail');
+    if (detEl) detEl.textContent = `⚠ ${msg}`;
+    const rb = document.getElementById('ttp-rematch-btn');
+    if (rb) { rb.disabled = false; rb.textContent = '🔄 재대결'; }
+  });
   socket.on('rematch_requested', ({ from }) => {
     if (gameType === 'tikatuka') {
       const rb = document.getElementById('ttp-rematch-btn');
@@ -3870,6 +3961,7 @@ function initSocket() {
 
 // ── 방 만들기 모달 ────────────────────────────────────────────
 let selectedBuyIn = 1000;
+let selectedTtBet = 0;
 function openCreateRoomModal() {
   document.getElementById('modal-room-name').value = `${myNickname}의 방`;
   document.getElementById('modal-room-pw').value = '';
@@ -3878,10 +3970,15 @@ function openCreateRoomModal() {
   // reset game type to gomoku
   document.querySelector('input[name="modal-game-type"][value="gomoku"]').checked = true;
   document.getElementById('modal-buyin-row').classList.remove('show');
+  document.getElementById('modal-ttbet-row').classList.remove('show');
   document.getElementById('modal-timer-row').style.display = '';
   selectedBuyIn = 1000;
-  document.querySelectorAll('.buyin-opt').forEach(el => {
+  document.querySelectorAll('#modal-buyin-row .buyin-opt').forEach(el => {
     el.classList.toggle('selected', parseInt(el.dataset.buyin) === 1000);
+  });
+  selectedTtBet = 0;
+  document.querySelectorAll('#ttbet-opts .buyin-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.ttbet) === 0);
   });
   document.getElementById('create-room-modal').classList.add('show');
 }
@@ -3889,13 +3986,20 @@ function onModalGameTypeChange() {
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
   const isHoldem = gt === 'holdem';
   document.getElementById('modal-buyin-row').classList.toggle('show', isHoldem);
+  document.getElementById('modal-ttbet-row').classList.toggle('show', gt === 'tikatuka');
   // 티카투카는 타이머 없음, 홀덤은 타이머 숨김
   document.getElementById('modal-timer-row').style.display = (isHoldem || gt === 'tikatuka') ? 'none' : '';
 }
 function selectBuyIn(amount) {
   selectedBuyIn = amount;
-  document.querySelectorAll('.buyin-opt').forEach(el => {
+  document.querySelectorAll('#modal-buyin-row .buyin-opt').forEach(el => {
     el.classList.toggle('selected', parseInt(el.dataset.buyin) === amount);
+  });
+}
+function selectTtBet(amount) {
+  selectedTtBet = amount;
+  document.querySelectorAll('#ttbet-opts .buyin-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.ttbet) === amount);
   });
 }
 function closeCreateRoomModal() {
@@ -3912,6 +4016,7 @@ function submitCreateRoom() {
     roomName: name, password: password || null, useTimer: timerOn, gameType: gt
   };
   if (gt === 'holdem') payload.buyIn = selectedBuyIn;
+  if (gt === 'tikatuka') payload.ttBet = selectedTtBet;
   socket.emit('create_room', payload);
 }
 
@@ -3972,7 +4077,7 @@ function updateRoomList(list) {
     <div class="room-item" onclick="${onclick}">
       <div class="room-item-info">
         <div class="room-item-name">${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.name)}</div>
-        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · 바이인 ${r.buyIn.toLocaleString()}` : ''}</div>
+        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · 바이인 ${r.buyIn.toLocaleString()}` : ''}${r.ttBet ? ` · 💰 판돈 ${r.ttBet.toLocaleString()}` : ''}</div>
       </div>
       <div class="room-item-badges">
         ${gameBadge}
@@ -4007,7 +4112,8 @@ function renderLobbyScreen(state) {
     document.getElementById('lobby-room-sub').textContent =
       `🃏 텍사스 홀덤 · 바이인 ${(state.buyIn || 1000).toLocaleString()}`;
   } else if (state.gameType === 'tikatuka') {
-    document.getElementById('lobby-room-sub').textContent = '🎲 티카투카 대전';
+    document.getElementById('lobby-room-sub').textContent =
+      '🎲 티카투카 대전' + (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : ' · 무료');
   } else {
     document.getElementById('lobby-room-sub').textContent =
       (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +

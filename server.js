@@ -985,6 +985,7 @@ function broadcastRoomList() {
         useTimer: room.useTimer !== false,
         gameType: room.gameType || 'gomoku',
         buyIn: room.buyIn,
+        ttBet: room.ttBet,
       });
     }
   }
@@ -1011,6 +1012,7 @@ async function broadcastLobbyState(room) {
     hostSocketId: room.hostSocketId,
     gameType: room.gameType || 'gomoku',
     buyIn: room.buyIn,
+    ttBet: room.ttBet,
     maxPlayers: room.gameType === 'holdem' ? 6 : 2,
   });
 }
@@ -1026,6 +1028,8 @@ function createRoom(roomId, options = {}) {
     hostSocketId: options.hostSocketId || null,
     gameType,
     buyIn: gameType === 'holdem' ? buyIn : undefined,
+    ttBet: gameType === 'tikatuka' ? (options.ttBet || 0) : undefined,
+    ttEscrow: false,
     players: [],
     readySet: new Set(),
     board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' ? null : createBoard()),
@@ -1127,6 +1131,7 @@ function ttEmitState(room, extra = {}) {
       roomId: room.id,
       lanes,
       yourColor: me,
+      bet: room.ttBet || 0,
       turn: tt.turn,
       isMyTurn: tt.turn === me,
       cur: tt.cur ? { ...tt.cur } : null,
@@ -1149,7 +1154,7 @@ function ttEmitState(room, extra = {}) {
     const me = 1, opp = 2;
     const lanes = tt.lanes.map(l => ({ me: l[me].map(d => ({ ...d })), opp: l[opp].map(d => ({ ...d })) }));
     io.to(spec.socketId).emit('tt:state', {
-      roomId: room.id, lanes, yourColor: 0, turn: tt.turn, isMyTurn: false,
+      roomId: room.id, lanes, yourColor: 0, bet: room.ttBet || 0, turn: tt.turn, isMyTurn: false,
       cur: tt.cur ? { ...tt.cur } : null, phase: tt.phase, isSpectator: true,
       held: { me: tt.held[1], opp: tt.held[2] },
       score: {
@@ -1181,6 +1186,46 @@ function ttAdvance(room) {
   ttEmitState(room);
 }
 
+// 판돈 에스크로 차감 (시작/재대결 시) — 성공 시 true, 실패 시 차감분 환불 후 false
+async function ttEscrowBets(room) {
+  const bet = room.ttBet || 0;
+  if (bet <= 0) return { ok: true };
+  for (const p of room.players) {
+    const info = await getCoinsInfo(p.nickname);
+    if (info.coins < bet) return { ok: false, poor: p.nickname };
+  }
+  const paid = [];
+  for (const p of room.players) {
+    const ok = await deductCoins(p.nickname, bet);
+    if (!ok) {
+      for (const n of paid) await addCoins(n, bet);
+      return { ok: false, poor: p.nickname };
+    }
+    paid.push(p.nickname);
+  }
+  room.ttEscrow = true;
+  await ttPushCoins(room);
+  return { ok: true };
+}
+// 판돈 정산: 승자 독식(2배) / 무승부 반환. 중복 호출 안전.
+async function ttSettleBets(room, winnerNick, isDraw) {
+  if (!room.ttEscrow || !(room.ttBet > 0)) return;
+  room.ttEscrow = false;
+  if (isDraw) {
+    for (const p of room.players) await addCoins(p.nickname, room.ttBet);
+  } else if (winnerNick) {
+    await addCoins(winnerNick, room.ttBet * 2);
+  }
+  await ttPushCoins(room);
+}
+// 플레이어들에게 갱신된 잔액 통지
+async function ttPushCoins(room) {
+  for (const p of room.players) {
+    const info = await getCoinsInfo(p.nickname);
+    io.to(p.socketId).emit('coins_info', info);
+  }
+}
+
 async function ttFinish(room) {
   const tt = room.tt;
   tt.phase = 'over';
@@ -1207,12 +1252,14 @@ async function ttFinish(room) {
     if (winnerNick) await addWin(winnerNick);
     if (loserNick)  await addLose(loserNick);
   }
+  await ttSettleBets(room, winnerNick, winColor === 0);
   const records = await Promise.all(room.players.map(async p => ({
     nickname: p.nickname, record: await getRecord(p.nickname)
   })));
   ttEmitState(room);
   io.to(room.id).emit('game_over', {
     result, winner: winnerNick, loser: loserNick, records,
+    ttBet: room.ttBet || 0,
     ttScore: { p1: { wins: sc.laneWins[1], total: sc.total[1] },
                p2: { wins: sc.laneWins[2], total: sc.total[2] } },
   });
@@ -1323,7 +1370,7 @@ io.on('connection', (socket) => {
   });
 
   // ── 방 생성 ──────────────────────────────────────────────────
-  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password, gameType, buyIn }) => {
+  socket.on('create_room', async ({ nickname, stoneStyle, useTimer, roomName, password, gameType, buyIn, ttBet }) => {
     const roomId = generateRoomId();
     const room = createRoom(roomId, {
       name: (roomName || `${nickname}의 방`).substring(0, 20),
@@ -1332,6 +1379,7 @@ io.on('connection', (socket) => {
       hostSocketId: socket.id,
       gameType: gameType || 'gomoku',
       buyIn: buyIn || 1000,
+      ttBet: Math.max(0, Math.min(1000000, parseInt(ttBet, 10) || 0)),
     });
     await getRecord(nickname);
     room.players.push({
@@ -1525,6 +1573,11 @@ io.on('connection', (socket) => {
 
     // ── 티카투카 시작 ─────────────────────────────────────────
     if (room.gameType === 'tikatuka') {
+      const esc = await ttEscrowBets(room);
+      if (!esc.ok) {
+        socket.emit('join_error', { msg: `${esc.poor} 님의 코인이 부족합니다. (판돈: ${(room.ttBet || 0).toLocaleString()})` });
+        return;
+      }
       room.status = 'playing';
       room.readySet.clear();
       room.tt = createTikaState();
@@ -1755,7 +1808,7 @@ io.on('connection', (socket) => {
 
     tt.cur = null;
     tt.rollOptions = null;
-    if (didAlchigi) ttEmitState(room, { event: 'alchigi', lane });
+    if (didAlchigi) ttEmitState(room, { event: 'alchigi', lane, val: die.v });
     else ttAdvance(room);
   });
 
@@ -1900,7 +1953,7 @@ io.on('connection', (socket) => {
   });
 
   // ── 재대결 ────────────────────────────────────────────────────
-  socket.on('rematch_request', ({ roomId }) => {
+  socket.on('rematch_request', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room) return;
     const player = room.players.find(p => p.socketId === socket.id);
@@ -1912,6 +1965,17 @@ io.on('connection', (socket) => {
         io.to(p.socketId).emit('rematch_requested', { from: player.nickname });
     });
     if (room.rematchRequests.size === 2) {
+      // 티카투카 판돈: 재대결 시작 전 재차감
+      if (room.gameType === 'tikatuka' && room.ttBet > 0) {
+        const esc = await ttEscrowBets(room);
+        if (!esc.ok) {
+          room.rematchRequests = new Set();
+          io.to(room.id).emit('tt:rematch_failed', {
+            msg: `${esc.poor} 님의 코인이 부족해 재대결이 취소되었습니다. (판돈 ${room.ttBet.toLocaleString()})`,
+          });
+          return;
+        }
+      }
       clearTurnTimer(room);
       room.board = room.gameType === 'othello' ? createOthelloBoard()
                  : (room.gameType === 'tikatuka' || room.gameType === 'holdem' ? null : createBoard());
@@ -1962,12 +2026,13 @@ io.on('connection', (socket) => {
     if (!loser) return;
     clearTurnTimer(room);
     room.status = 'finished';
+    if (room.gameType === 'tikatuka') await ttSettleBets(room, winner ? winner.nickname : null, !winner);
     await addLose(loser.nickname);
     if (winner) await addWin(winner.nickname);
     const records = await Promise.all(room.players.map(async p => ({
       nickname: p.nickname, record: await getRecord(p.nickname)
     })));
-    io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records });
+    io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records, ttBet: room.gameType === 'tikatuka' ? (room.ttBet || 0) : undefined });
     broadcastRoomList();
   });
 
@@ -2067,6 +2132,7 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
     clearTurnTimer(room);
     room.status = 'finished';
     (async () => {
+      if (room.gameType === 'tikatuka') await ttSettleBets(room, winner ? winner.nickname : null, !winner);
       await addLose(loser.nickname);
       if (winner) await addWin(winner.nickname);
       const records = await Promise.all(room.players.map(async p => ({
@@ -2074,7 +2140,7 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
       })));
       io.to(roomId).emit('game_over', {
         result: 'disconnect', winner: winner ? winner.nickname : null,
-        loser: loser.nickname, records,
+        loser: loser.nickname, records, ttBet: room.gameType === 'tikatuka' ? (room.ttBet || 0) : undefined,
       });
       broadcastRoomList();
     })();
