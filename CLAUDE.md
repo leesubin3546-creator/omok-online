@@ -200,7 +200,9 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - index.html: 방만들기 모달 라디오 '🎲 티카투카', 전용 화면 `#tt-pvp-screen`, 클라 모듈 `TTP`/`ttPvp*` (렌더러는 기존 `ttDieFaceSVG`·`.tt-*` CSS 재활용, 훈수/화면인식 없음). game_start·spectate_start·game_over·room_list·lobby에 tikatuka 분기, `socket.on('tt:state')`.
 
 **검증 완료**: 점수(단1·더블3·트리플5), 알치기(양측 비실드 동값 제거), 실드 면역(알치기 불가/대상 아님), 종료(양쪽 만석/홀드, 2라인 즉시종료 없음), 홀드(한쪽 홀드→상대 9개까지), 승자(라인수→총점) — 로직 시뮬 21케이스 통과.
-**남은 확인**: 실제 2인 접속 스모크 테스트(`node server.js` 후 두 브라우저), UI 미세조정.
+**남은 확인**: 실제 2인 접속 스모크 테스트(`node server.js` 후 두 브라우저).
+
+**UI 개편 (2026-07-05)**: 어드바이저와 동일한 가로형 라인 보드로 교체 — 좌(내 3슬롯) | 중앙(점수 vs·라인명·우세표시) | 우(상대 3슬롯), `.tt-lane`/`.tt-dice-row`/`.tt-lane-score` CSS 재활용. 보드 위 닉네임 라벨(`#ttp-head-me/opp`, 현재 턴 🎲 표시). 주사위 모션: 굴림 애니메이션(`ttpRollAnim` — 눈 랜덤 순환 후 착지, 내/상대/보너스/리롤 모두), 배치 팝(`ttp-pop`), 알치기 제거 💥(`ttp-boom-fx`) — 이전 스냅샷(`TTP.snap`) 비교로 감지. 상대 굴림도 주사위 실물 표시. jsdom 스모크 7상태 + pop/boom/click emit 검증 통과.
 
 ### (원래 스펙) 확정 스코프
 

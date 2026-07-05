@@ -929,6 +929,21 @@
   .tt-win-tie  { background:rgba(200,136,26,0.1); color:#7a4a15; border:1px solid rgba(200,136,26,0.3); }
   .tt-win-none { background:var(--card); color:var(--text2); border:1px solid var(--border); }
 
+  /* PvP 주사위 모션 */
+  @keyframes ttpRollShake {
+    0%{transform:rotate(0deg) translateY(0)} 15%{transform:rotate(-16deg) translateY(-7px)}
+    35%{transform:rotate(13deg) translateY(3px)} 55%{transform:rotate(-9deg) translateY(-5px)}
+    75%{transform:rotate(6deg) translateY(1px)} 100%{transform:rotate(0deg) translateY(0)}
+  }
+  .ttp-rolling { animation:ttpRollShake 0.55s ease-in-out infinite; }
+  @keyframes ttpLand { 0%{transform:scale(1.45)} 55%{transform:scale(0.9)} 100%{transform:scale(1)} }
+  .ttp-landed { animation:ttpLand 0.32s ease; }
+  @keyframes ttpPop { 0%{transform:scale(0.2);opacity:0} 60%{transform:scale(1.18);opacity:1} 100%{transform:scale(1)} }
+  .tt-die-slot.ttp-pop { animation:ttpPop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes ttpBoomFx { 0%{opacity:1;transform:scale(0.6)} 40%{transform:scale(1.5)} 100%{opacity:0;transform:scale(2.1)} }
+  .ttp-boom-fx { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:1.6rem; pointer-events:none; animation:ttpBoomFx 0.7s ease forwards; }
+
   @media (max-width:600px) {
     .tt-die-slot { width:46px; height:46px; }
     .tt-die-chip { width:44px; height:44px; }
@@ -1337,8 +1352,15 @@
     </div>
   </div>
 
+  <!-- 필드 라벨 (좌=나, 우=상대) -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;padding:0 12px;">
+    <div class="tt-header-me" id="ttp-head-me" style="letter-spacing:0;font-size:0.8rem;"></div>
+    <div class="tt-header-mid" style="width:110px;"></div>
+    <div class="tt-header-opp" id="ttp-head-opp" style="letter-spacing:0;font-size:0.8rem;"></div>
+  </div>
+
   <!-- 3라인 보드 -->
-  <div id="ttp-lanes" style="margin-bottom:12px;"></div>
+  <div id="ttp-lanes" class="tt-lanes" style="margin-bottom:12px;"></div>
 
   <!-- 결과 오버레이 -->
   <div id="ttp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;
@@ -3190,8 +3212,34 @@ function showScreen(id) {
 }
 
 // ══ 티카투카 PvP 클라이언트 ══════════════════════════════════
-const TTP = { s: null, roomId: null, meName: '나', oppName: '상대' };
+const TTP = { s: null, roomId: null, meName: '나', oppName: '상대',
+  snap: null, rollKey: null, prevPhase: null, prevBonus: false, rollTimers: [] };
 const TTP_LANE_NM = ['상단', '중단', '하단'];
+
+function ttpResetAnim() {
+  TTP.rollTimers.forEach(clearInterval);
+  TTP.rollTimers = [];
+  TTP.snap = null; TTP.rollKey = null; TTP.prevPhase = null; TTP.prevBonus = false;
+}
+
+// 주사위 굴림 모션: 눈이 랜덤하게 바뀌며 흔들리다 최종 값에 멈춤
+function ttpRollAnim(el, v, sh, side) {
+  if (!el) return;
+  el.classList.add('ttp-rolling');
+  let n = 0;
+  const iv = setInterval(() => {
+    n++;
+    if (n >= 7) {
+      clearInterval(iv);
+      el.classList.remove('ttp-rolling');
+      el.innerHTML = ttDieFaceSVG(v, sh, side, false);
+      el.classList.add('ttp-landed');
+      return;
+    }
+    el.innerHTML = ttDieFaceSVG(1 + Math.floor(Math.random() * 6), false, side, false);
+  }, 80);
+  TTP.rollTimers.push(iv);
+}
 
 function ttPvpStart(roomId, players, yourColor) {
   currentRoom = roomId;
@@ -3200,6 +3248,7 @@ function ttPvpStart(roomId, players, yourColor) {
   const opp = players.find(p => p.color !== yourColor);
   TTP.meName  = me  ? me.nickname  : '나';
   TTP.oppName = opp ? opp.nickname : '상대';
+  ttpResetAnim();
   document.getElementById('ttp-me-name').textContent  = TTP.meName;
   document.getElementById('ttp-opp-name').textContent = TTP.oppName;
   document.getElementById('ttp-overlay').style.display = 'none';
@@ -3210,12 +3259,12 @@ function ttPvpStart(roomId, players, yourColor) {
 function ttPvpSlot(d, lane, side, i, s) {
   const empty = d.v === 0;
   const myTurn = s.isMyTurn && !s.isSpectator;
-  let canPlace = false;
-  if (s.alchigiBonus && s.alchigiBonus.mine && empty) canPlace = true;
+  let canPlace = false, bonus = false;
+  if (s.alchigiBonus && s.alchigiBonus.mine && empty) { canPlace = true; bonus = true; }
   else if (myTurn && s.phase === 'place' && s.cur && side === 'me' && empty) canPlace = true;
   const cls = ['tt-die-slot', d.v > 0 ? 'has-val' : '', d.s ? 'is-shield' : '',
-    canPlace ? 'can-place' : ''].filter(Boolean).join(' ');
-  return `<div class="${cls}" data-lane="${lane}" data-side="${side}" data-idx="${i}" style="width:44px;height:44px;">
+    bonus ? 'can-place-bonus' : canPlace ? 'can-place' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}" data-lane="${lane}" data-side="${side}" data-idx="${i}">
     ${ttDieFaceSVG(d.v, d.s, side, false)}
     ${d.s ? '<div class="tt-shield-badge">🛡</div>' : ''}
   </div>`;
@@ -3223,6 +3272,7 @@ function ttPvpSlot(d, lane, side, i, s) {
 
 function ttPvpRender() {
   const s = TTP.s; if (!s) return;
+  TTP.rollTimers.forEach(clearInterval); TTP.rollTimers = [];
   const myTurn = s.isMyTurn && !s.isSpectator;
 
   document.getElementById('ttp-me-score').textContent  = `라인 ${s.score.me.wins} · 총점 ${s.score.me.total}`;
@@ -3230,50 +3280,87 @@ function ttPvpRender() {
   const rtag = document.getElementById('ttp-reroll-tag');
   if (rtag) rtag.textContent = s.isSpectator ? '' : (s.rerollUsed ? '리롤 사용됨' : '리롤 가능');
 
-  // 라인 보드
+  // 필드 라벨 (좌=나, 우=상대) + 현재 턴 표시
+  const meActive  = s.phase !== 'over' && (s.isSpectator ? s.turn === 1 : s.isMyTurn);
+  const oppActive = s.phase !== 'over' && !meActive;
+  document.getElementById('ttp-head-me').textContent  =
+    `${meActive ? '🎲 ' : ''}${TTP.meName}${s.isSpectator ? '' : ' (나)'}`;
+  document.getElementById('ttp-head-opp').textContent =
+    `${TTP.oppName}${oppActive ? ' 🎲' : ''}`;
+
+  // 라인 보드 — 좌: 내 3슬롯 | 중앙: 점수·라인명 | 우: 상대 3슬롯
   const lanesEl = document.getElementById('ttp-lanes');
+  const prevSnap = TTP.snap;
   let html = '';
   s.lanes.forEach((lane, li) => {
     const meScore = s.score.me.lanes[li], oppScore = s.score.opp.lanes[li];
-    const mark = meScore > oppScore ? '🔵' : oppScore > meScore ? '🔴' : '·';
-    html += `<div class="tt-lane" style="margin-bottom:8px;">
-      <div class="tt-lane-num">${TTP_LANE_NM[li]}</div>
-      <div style="flex:1;">
-        <div style="display:flex;gap:6px;justify-content:center;margin-bottom:5px;">
-          ${lane.opp.map((d, i) => ttPvpSlot(d, li, 'opp', i, s)).join('')}
-        </div>
-        <div style="display:flex;gap:6px;justify-content:center;">
-          ${lane.me.map((d, i) => ttPvpSlot(d, li, 'me', i, s)).join('')}
-        </div>
+    const winCls = meScore > oppScore ? ' winning-me' : oppScore > meScore ? ' winning-opp' : '';
+    const stxt = meScore > oppScore ? `<span style="color:#1a5fb4;">▲${s.isSpectator ? '' : ' 내 우세'}</span>`
+               : oppScore > meScore ? `<span style="color:#c0392b;">▼${s.isSpectator ? '' : ' 상대 우세'}</span>`
+               : meScore > 0        ? '<span style="color:var(--accent2);">=</span>' : '';
+    html += `<div class="tt-lane${winCls}">
+      <div class="tt-dice-row me">${lane.me.map((d, i) => ttPvpSlot(d, li, 'me', i, s)).join('')}</div>
+      <div class="tt-lane-score">
+        <div class="tt-score-row"><span class="tt-s-me">${meScore}</span><span class="tt-s-sep">vs</span><span class="tt-s-opp">${oppScore}</span></div>
+        <div class="tt-lane-status">${TTP_LANE_NM[li]} ${stxt}</div>
       </div>
-      <div class="tt-lane-score" style="text-align:center;min-width:34px;">
-        <div style="color:#c0392b;font-weight:700;">${oppScore}</div>
-        <div style="font-size:0.72rem;">${mark}</div>
-        <div style="color:#1a5fb4;font-weight:700;">${meScore}</div>
-      </div>
+      <div class="tt-dice-row opp">${lane.opp.map((d, i) => ttPvpSlot(d, li, 'opp', i, s)).join('')}</div>
     </div>`;
   });
   lanesEl.innerHTML = html;
-  lanesEl.querySelectorAll('.tt-die-slot').forEach(el => { el.onclick = () => ttPvpSlotClick(el); });
+
+  // 슬롯 클릭 + 변화 애니메이션 (새 배치 = 팝, 알치기 제거 = 💥)
+  const snap = s.lanes.map(l => ({ me: l.me.map(d => d.v), opp: l.opp.map(d => d.v) }));
+  lanesEl.querySelectorAll('.tt-die-slot').forEach(el => {
+    el.onclick = () => ttPvpSlotClick(el);
+    if (!prevSnap) return;
+    const li = +el.dataset.lane, side = el.dataset.side, i = +el.dataset.idx;
+    const pv = prevSnap[li][side][i], nv = snap[li][side][i];
+    if (pv === 0 && nv > 0) el.classList.add('ttp-pop');
+    else if (pv > 0 && nv === 0) el.insertAdjacentHTML('beforeend', '<div class="ttp-boom-fx">💥</div>');
+  });
+  TTP.snap = snap;
+
+  // 새 굴림 감지 (리롤 선택 직후는 제외)
+  const placedCount = snap.reduce((a, l) => a + l.me.filter(v => v > 0).length + l.opp.filter(v => v > 0).length, 0);
+  const rollSig = s.cur ? `${s.turn}:${s.cur.v}:${s.cur.s ? 1 : 0}:${placedCount}` : null;
+  const newRoll   = !!rollSig && rollSig !== TTP.rollKey && TTP.prevPhase !== 'choose';
+  const newChoose = s.phase === 'choose' && TTP.prevPhase !== 'choose';
+  const newBonus  = !!s.alchigiBonus && !TTP.prevBonus;
+  TTP.rollKey = rollSig; TTP.prevPhase = s.phase; TTP.prevBonus = !!s.alchigiBonus;
 
   // 현재 주사위 영역
   const dieArea = document.getElementById('ttp-die-area');
   if (s.phase === 'over') {
     dieArea.innerHTML = '';
   } else if (s.alchigiBonus && s.alchigiBonus.mine) {
-    dieArea.innerHTML = `<div style="width:48px;height:48px;">${ttDieFaceSVG(s.alchigiBonus.v, true, 'me', false)}</div>
-      <span style="font-weight:600;color:#c8881a;">🎯 알치기 보너스 실드 [${s.alchigiBonus.v}] — 빈 슬롯 클릭 (내/상대 필드)</span>`;
+    dieArea.innerHTML = `<div id="ttp-roll-die" style="width:52px;height:52px;">${ttDieFaceSVG(s.alchigiBonus.v, true, 'me', false)}</div>
+      <span style="font-weight:600;color:#c8881a;">🎯 알치기 보너스 실드 — 빛나는 빈 슬롯 클릭 (내/상대 필드)</span>`;
+    if (newBonus) ttpRollAnim(document.getElementById('ttp-roll-die'), s.alchigiBonus.v, true, 'me');
+  } else if (s.alchigiBonus) {
+    dieArea.innerHTML = `<span style="color:var(--text2);">💥 알치기! <b>${TTP.oppName}</b>가 보너스 실드 배치 중…</span>`;
   } else if (s.phase === 'choose' && myTurn && s.rollOptions) {
-    dieArea.innerHTML = `<span style="font-weight:600;">리롤 — 하나 선택:</span>` +
-      s.rollOptions.map((d, idx) => `<div class="ttp-choose" data-idx="${idx}" style="width:48px;height:48px;cursor:pointer;">${ttDieFaceSVG(d.v, d.s, 'me', false)}</div>`).join('');
+    dieArea.innerHTML = `<span style="font-weight:600;">🃏 하나 선택:</span>` +
+      s.rollOptions.map((d, idx) => `<div class="ttp-choose" data-idx="${idx}" style="width:52px;height:52px;cursor:pointer;">${ttDieFaceSVG(d.v, d.s, 'me', false)}</div>`).join('');
     dieArea.querySelectorAll('.ttp-choose').forEach(el => {
       el.onclick = () => socket.emit('tt:choose', { roomId: TTP.roomId, idx: +el.dataset.idx });
     });
+    if (newChoose) {
+      const nu = dieArea.querySelector('.ttp-choose[data-idx="1"]');
+      if (nu && s.rollOptions[1]) ttpRollAnim(nu, s.rollOptions[1].v, s.rollOptions[1].s, 'me');
+    }
   } else if (s.cur && myTurn) {
-    dieArea.innerHTML = `<div style="width:48px;height:48px;">${ttDieFaceSVG(s.cur.v, s.cur.s, 'me', false)}</div>
-      <span style="font-weight:600;">굴린 주사위 [${s.cur.v}]${s.cur.s ? ' 🛡' : ''} — 라인 클릭해서 배치</span>`;
+    dieArea.innerHTML = `<div id="ttp-roll-die" style="width:52px;height:52px;">${ttDieFaceSVG(s.cur.v, s.cur.s, 'me', false)}</div>
+      <span style="font-weight:600;">${s.cur.s ? '🛡 ' : ''}라인의 빈 칸을 클릭해 배치하세요</span>`;
+    if (newRoll) ttpRollAnim(document.getElementById('ttp-roll-die'), s.cur.v, s.cur.s, 'me');
+  } else if (s.cur) {
+    const curSide = s.isSpectator ? (s.turn === 1 ? 'me' : 'opp') : 'opp';
+    const curName = curSide === 'me' ? TTP.meName : TTP.oppName;
+    dieArea.innerHTML = `<div id="ttp-roll-die" style="width:52px;height:52px;">${ttDieFaceSVG(s.cur.v, s.cur.s, curSide, false)}</div>
+      <span style="color:var(--text2);"><b>${curName}</b>${s.isSpectator ? ' 차례' : '가 굴렸어요'}…</span>`;
+    if (newRoll) ttpRollAnim(document.getElementById('ttp-roll-die'), s.cur.v, s.cur.s, curSide);
   } else {
-    dieArea.innerHTML = `<span style="color:var(--text2);">${s.cur ? `상대 주사위 [${s.cur.v}] · ` : ''}상대 차례…</span>`;
+    dieArea.innerHTML = `<span style="color:var(--text2);">${TTP.oppName} 차례…</span>`;
   }
 
   // 버튼
@@ -3478,7 +3565,7 @@ function initSocket() {
     addChat('게임 시작!', true);
   });
   socket.on('spectate_start', ({ roomId, board, players, turn, useTimer: ut, isPaused: paused, spectatorCount: specCnt, gameType: gt }) => {
-    if (gt === 'tikatuka') { gameType = 'tikatuka'; currentRoom = roomId; TTP.roomId = roomId; isSpectating = true;
+    if (gt === 'tikatuka') { gameType = 'tikatuka'; currentRoom = roomId; TTP.roomId = roomId; isSpectating = true; ttpResetAnim();
       const p1 = players.find(p=>p.color===1), p2 = players.find(p=>p.color===2);
       TTP.meName = p1?p1.nickname:'P1'; TTP.oppName = p2?p2.nickname:'P2';
       document.getElementById('ttp-me-name').textContent = TTP.meName;
