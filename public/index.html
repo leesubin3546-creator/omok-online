@@ -1203,6 +1203,7 @@
       <div class="game-type-picker">
         <label><input type="radio" name="modal-game-type" value="gomoku" checked onchange="onModalGameTypeChange()"> ⚫ 오목 (렌주룰)</label>
         <label><input type="radio" name="modal-game-type" value="othello" onchange="onModalGameTypeChange()"> 🟢 오델로</label>
+        <label><input type="radio" name="modal-game-type" value="chess" onchange="onModalGameTypeChange()"> ♞ 체스</label>
         <label><input type="radio" name="modal-game-type" value="tikatuka" onchange="onModalGameTypeChange()"> 🎲 티카투카</label>
         <label><input type="radio" name="modal-game-type" value="holdem" onchange="onModalGameTypeChange()"> 🃏 텍사스 홀덤</label>
       </div>
@@ -3429,6 +3430,21 @@ function renderStonePreviews() {
 }
 
 function updatePlayerStoneIcons() {
+  if (gameType === 'chess') {
+    // 체스: 킹 글리프 + 백/흑 배지
+    const drawKing = (id, white) => {
+      const cv = document.getElementById(id); if (!cv) return;
+      const c = cv.getContext('2d');
+      c.clearRect(0, 0, 28, 28);
+      c.font = '22px "Segoe UI Symbol", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      if (white) { c.strokeStyle = '#3a2408'; c.lineWidth = 1.5; c.strokeText('♚', 14, 15); c.fillStyle = '#faf6ec'; c.fillText('♚', 14, 15); }
+      else { c.fillStyle = '#241505'; c.fillText('♚', 14, 15); }
+    };
+    drawKing('p1-stone-icon', true); drawKing('p2-stone-icon', false);
+    const b1 = document.getElementById('p1-style-badge'); if (b1) b1.textContent = '백';
+    const b2 = document.getElementById('p2-style-badge'); if (b2) b2.textContent = '흑';
+    return;
+  }
   const c1 = document.getElementById('p1-stone-icon')?.getContext('2d');
   if (c1) { c1.clearRect(0,0,28,28); drawStoneOnCtx(c1,14,14,12,1,p1StoneStyle); }
   const c2 = document.getElementById('p2-stone-icon')?.getContext('2d');
@@ -3849,7 +3865,7 @@ function initSocket() {
   socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut, gameType: gt }) => {
     if (gt === 'tikatuka') { gameType = 'tikatuka'; ttPvpStart(roomId, players, yourColor); return; }
     currentRoom = roomId;
-    gameBoard = board.map(r => [...r]);
+    gameBoard = board ? board.map(r => [...r]) : [];
     currentTurn = turn; gameActive = true; isSpectating = false;
     myColor = yourColor;
     roomUseTimer = ut !== false;
@@ -3860,7 +3876,8 @@ function initSocket() {
     if (gameType === 'othello') {
       let bk=0,wh=0; for (const row of board) for (const v of row){if(v===1)bk++;else if(v===2)wh++;} othelloBlack=bk; othelloWhite=wh;
     }
-    document.getElementById('board-wrap').classList.toggle('othello-mode', gameType === 'othello');
+    if (gameType === 'chess') chessResetClient();
+    document.getElementById('board-wrap').classList.toggle('othello-mode', gameType === 'othello' || gameType === 'chess');
     document.getElementById('pause-overlay').classList.remove('show');
     const myData = players.find(p => p.color === yourColor);
     myPointsBefore = myData ? (myData.record.points || 0) : (myRecord.points || 0);
@@ -3885,13 +3902,14 @@ function initSocket() {
       showPredictPanel(roomId, players.map(p => p.nickname));
       return; }
     currentRoom = roomId;
-    gameBoard = board.map(r => [...r]);
+    gameBoard = board ? board.map(r => [...r]) : [];
     gameType = gt || 'gomoku';
     othelloBlack = 2; othelloWhite = 2;
     if (gameType === 'othello') {
       let bk=0,wh=0; for (const row of board) for (const v of row){if(v===1)bk++;else if(v===2)wh++;} othelloBlack=bk; othelloWhite=wh;
     }
-    document.getElementById('board-wrap').classList.toggle('othello-mode', gameType === 'othello');
+    if (gameType === 'chess') chessResetClient();
+    document.getElementById('board-wrap').classList.toggle('othello-mode', gameType === 'othello' || gameType === 'chess');
     currentTurn = turn; isSpectating = true; gameActive = true;
     roomUseTimer = ut !== false;
     lastMove = null;
@@ -3913,6 +3931,20 @@ function initSocket() {
     showScreen('game-screen');
     addChat('관전 모드로 입장했습니다.', true);
     showPredictPanel(roomId, players.map(p => p.nickname));
+  });
+
+  // ── 체스 상태 동기화 ─────────────────────────────────────────
+  socket.on('chess:state', st => {
+    if (gameType !== 'chess') return;
+    CHESS.board = st.board;
+    CHESS.moves = st.moves || [];
+    CHESS.lastMove = st.lastMove || null;
+    CHESS.inCheck = !!st.inCheck;
+    CHESS.turn = st.turn;
+    currentTurn = st.turn === 'w' ? 1 : 2;
+    if (isSpectating || myColor !== currentTurn) { CHESS.sel = null; CHESS.targets = []; }
+    updateStatusBar();
+    drawBoard();
   });
 
   socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; lastMove = { row, col }; drawBoard(); });
@@ -4298,6 +4330,8 @@ function updateRoomList(list) {
       gameBadge = `<span class="room-badge room-badge-othello">오델로</span>`;
     } else if (r.gameType === 'tikatuka') {
       gameBadge = `<span class="room-badge room-badge-holdem">🎲 티카투카</span>`;
+    } else if (r.gameType === 'chess') {
+      gameBadge = `<span class="room-badge room-badge-othello">♞ 체스</span>`;
     } else {
       gameBadge = `<span class="room-badge room-badge-gomoku">오목</span>`;
     }
@@ -4344,7 +4378,7 @@ function renderLobbyScreen(state) {
       '🎲 티카투카 대전' + (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : ' · 무료');
   } else {
     document.getElementById('lobby-room-sub').textContent =
-      (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +
+      (state.gameType === 'othello' ? '🟢 오델로 · ' : state.gameType === 'chess' ? '♞ 체스 · ' : '⚫ 오목 · ') +
       (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음') +
       (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : '');
   }
@@ -4694,9 +4728,13 @@ function updateStatusBar() {
   document.getElementById('othello-score-bar').classList.toggle('show', gameType === 'othello');
   document.getElementById('player1-card').classList.toggle('active-turn', currentTurn === 1);
   document.getElementById('player2-card').classList.toggle('active-turn', currentTurn === 2);
-  if (isSpectating) { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; return; }
-  if (myColor === currentTurn) { bar.textContent = '✨ 당신의 차례!'; bar.style.color = 'var(--accent2)'; }
-  else { bar.textContent = currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례'; bar.style.color = 'var(--text2)'; }
+  const turnLabel = gameType === 'chess'
+    ? (currentTurn === 1 ? '♙ 백의 차례' : '♟ 흑의 차례')
+    : (currentTurn === 1 ? '⚫ 흑의 차례' : '⚪ 백의 차례');
+  const chk = gameType === 'chess' && CHESS.inCheck ? ' · 🔴 체크!' : '';
+  if (isSpectating) { bar.textContent = turnLabel + chk; return; }
+  if (myColor === currentTurn) { bar.textContent = '✨ 당신의 차례!' + chk; bar.style.color = 'var(--accent2)'; }
+  else { bar.textContent = turnLabel + chk; bar.style.color = 'var(--text2)'; }
 }
 
 function updateOthelloScoreDisplay() {
@@ -4754,15 +4792,19 @@ let canvas, ctx, hoverPos = null, hoverForbidden = false, forbiddenFlash = null;
 
 function initCanvas() {
   canvas = document.getElementById('board-canvas');
-  const isOthello = gameType === 'othello';
-  canvas.width  = isOthello ? OTHELLO_CANVAS_SIZE : CANVAS_SIZE;
-  canvas.height = isOthello ? OTHELLO_CANVAS_SIZE : CANVAS_SIZE;
+  const is8x8 = gameType === 'othello' || gameType === 'chess';
+  canvas.width  = is8x8 ? OTHELLO_CANVAS_SIZE : CANVAS_SIZE;
+  canvas.height = is8x8 ? OTHELLO_CANVAS_SIZE : CANVAS_SIZE;
   ctx = canvas.getContext('2d');
   canvas.onmousemove = (e) => {
     if (!gameActive || isSpectating || myColor !== currentTurn) {
       hoverPos = null; hoverForbidden = false; canvas.style.cursor = 'crosshair'; drawBoard(); return;
     }
     const { row, col } = getCell(e);
+    if (gameType === 'chess') {
+      canvas.style.cursor = (row >= 0 && row < 8 && col >= 0 && col < 8) ? 'pointer' : 'default';
+      return;
+    }
     if (gameType === 'othello') {
       if (row >= 0 && row < OTHELLO_SIZE && col >= 0 && col < OTHELLO_SIZE && gameBoard[row][col] === 0) {
         hoverPos = { row, col };
@@ -4782,6 +4824,7 @@ function initCanvas() {
   canvas.onclick = (e) => {
     if (!gameActive || isSpectating || myColor !== currentTurn) return;
     const { row, col } = getCell(e);
+    if (gameType === 'chess') { chessClick(row, col); return; }
     if (gameType === 'othello') {
       if (row < 0 || row >= OTHELLO_SIZE || col < 0 || col >= OTHELLO_SIZE) return;
       if (gameBoard[row][col] !== 0) return;
@@ -4798,7 +4841,7 @@ function initCanvas() {
 
 function getCell(e) {
   const rect = canvas.getBoundingClientRect();
-  if (gameType === 'othello') {
+  if (gameType === 'othello' || gameType === 'chess') {
     return {
       col: Math.floor((e.clientX - rect.left - OTHELLO_PADDING) / OTHELLO_CELL),
       row: Math.floor((e.clientY - rect.top  - OTHELLO_PADDING) / OTHELLO_CELL),
@@ -4813,6 +4856,7 @@ function getCell(e) {
 function drawBoard() {
   if (!ctx) return;
   if (gameType === 'othello') { drawOthelloBoard(); return; }
+  if (gameType === 'chess') { drawChessBoard(); return; }
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   // 보드 배경
   ctx.fillStyle = '#c88c42';
@@ -4875,6 +4919,107 @@ function drawForbiddenMark(row, col, flash) {
   ctx.beginPath(); ctx.moveTo(x-s, y-s); ctx.lineTo(x+s, y+s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x+s, y-s); ctx.lineTo(x-s, y+s); ctx.stroke();
   ctx.restore();
+}
+
+// ── 체스 클라이언트 ───────────────────────────────────────────
+const CHESS = { board: null, moves: [], sel: null, targets: [], lastMove: null, inCheck: false, turn: 'w' };
+const CHESS_GLYPHS = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+function chessResetClient() {
+  CHESS.board = null; CHESS.moves = []; CHESS.sel = null; CHESS.targets = [];
+  CHESS.lastMove = null; CHESS.inCheck = false; CHESS.turn = 'w';
+}
+function chessFlipped() { return !isSpectating && myColor === 2; }        // 흑 플레이어는 흑이 아래
+function chessSqName(r, c) { return 'abcdefgh'[c] + (8 - r); }            // board[r][c] → 'e4' (r0 = 8랭크)
+function chessDispToBoard(dr, dc) { return chessFlipped() ? { r: 7 - dr, c: 7 - dc } : { r: dr, c: dc }; }
+function chessBoardToDisp(r, c)   { return chessFlipped() ? { r: 7 - r,  c: 7 - c  } : { r, c }; }
+
+function drawChessBoard() {
+  const cs = OTHELLO_CANVAS_SIZE, P = OTHELLO_PADDING, S = OTHELLO_CELL;
+  ctx.clearRect(0, 0, cs, cs);
+  ctx.fillStyle = '#5c3a1a';
+  ctx.fillRect(0, 0, cs, cs);
+  // 체크무늬 칸 (보드 좌표 기준 색 고정 → 뒤집어도 a1은 어두운 칸)
+  for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
+    const { r, c } = chessDispToBoard(dr, dc);
+    ctx.fillStyle = (r + c) % 2 === 0 ? '#eed9ae' : '#b08050';
+    ctx.fillRect(P + dc * S, P + dr * S, S, S);
+  }
+  // 파일/랭크 라벨
+  ctx.fillStyle = '#f5e8cc'; ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let d = 0; d < 8; d++) {
+    const fb = chessDispToBoard(7, d), rb = chessDispToBoard(d, 0);
+    ctx.fillText('abcdefgh'[fb.c], P + d * S + S / 2, P + 8 * S + 14);
+    ctx.fillText(String(8 - rb.r), P - 14, P + d * S + S / 2);
+  }
+  if (!CHESS.board) return;
+
+  const tint = (sq, color) => {
+    const c = 'abcdefgh'.indexOf(sq[0]), r = 8 - +sq[1];
+    const d = chessBoardToDisp(r, c);
+    ctx.fillStyle = color;
+    ctx.fillRect(P + d.c * S, P + d.r * S, S, S);
+  };
+  if (CHESS.lastMove) { tint(CHESS.lastMove.from, 'rgba(200,136,26,0.28)'); tint(CHESS.lastMove.to, 'rgba(200,136,26,0.42)'); }
+  if (CHESS.sel) tint(CHESS.sel, 'rgba(26,95,180,0.35)');
+  if (CHESS.inCheck) {   // 체크당한 킹 칸 빨간 강조
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const q = CHESS.board[r][c];
+      if (q && q.t === 'k' && q.c === CHESS.turn) tint(chessSqName(r, c), 'rgba(200,40,40,0.42)');
+    }
+  }
+  // 기물 (유니코드 채운 글리프 — 백은 밝은 채움+외곽선)
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const q = CHESS.board[r][c];
+    if (!q) continue;
+    const d = chessBoardToDisp(r, c);
+    const x = P + d.c * S + S / 2, y = P + d.r * S + S / 2 + S * 0.03;
+    ctx.font = `${Math.floor(S * 0.78)}px "Segoe UI Symbol", serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (q.c === 'w') {
+      ctx.strokeStyle = '#3a2408'; ctx.lineWidth = 2;
+      ctx.strokeText(CHESS_GLYPHS[q.t], x, y);
+      ctx.fillStyle = '#faf6ec';
+      ctx.fillText(CHESS_GLYPHS[q.t], x, y);
+    } else {
+      ctx.fillStyle = '#241505';
+      ctx.fillText(CHESS_GLYPHS[q.t], x, y);
+    }
+  }
+  // 이동 가능 표시 (빈 칸 = 점, 잡기 = 링)
+  for (const to of CHESS.targets) {
+    const c = 'abcdefgh'.indexOf(to[0]), r = 8 - +to[1];
+    const d = chessBoardToDisp(r, c);
+    const x = P + d.c * S + S / 2, y = P + d.r * S + S / 2;
+    ctx.beginPath();
+    if (CHESS.board[r][c]) {
+      ctx.arc(x, y, S * 0.44, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(26,95,180,0.8)'; ctx.lineWidth = 4; ctx.stroke();
+    } else {
+      ctx.arc(x, y, S * 0.14, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(26,95,180,0.55)'; ctx.fill();
+    }
+  }
+}
+
+function chessClick(dispRow, dispCol) {
+  if (dispRow < 0 || dispRow > 7 || dispCol < 0 || dispCol > 7 || !CHESS.board) return;
+  const { r, c } = chessDispToBoard(dispRow, dispCol);
+  const sq = chessSqName(r, c);
+  if (CHESS.sel && CHESS.targets.includes(sq)) {
+    socket.emit('chess:move', { roomId: currentRoom, from: CHESS.sel, to: sq });
+    CHESS.sel = null; CHESS.targets = [];
+    drawBoard();
+    return;
+  }
+  const piece = CHESS.board[r][c];
+  if (piece && piece.c === (myColor === 1 ? 'w' : 'b')) {
+    CHESS.sel = sq;
+    CHESS.targets = CHESS.moves.filter(m => m.from === sq).map(m => m.to);
+  } else {
+    CHESS.sel = null; CHESS.targets = [];
+  }
+  drawBoard();
 }
 
 // ── 오델로 클라이언트 로직 ────────────────────────────────────

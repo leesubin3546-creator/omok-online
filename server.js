@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
+const { Chess } = require('chess.js');
 
 const TURN_TIMEOUT = 30000; // 30초
 
@@ -1074,7 +1075,7 @@ function createRoom(roomId, options = {}) {
     predictions: [],   // 관전자 승부 예측 [{socketId, nickname, pick, amount}]
     players: [],
     readySet: new Set(),
-    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' ? null : createBoard()),
+    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' || gameType === 'chess' ? null : createBoard()),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
@@ -1105,6 +1106,8 @@ function createRoom(roomId, options = {}) {
       actionTimer: null,
     } : null,
     tt: gameType === 'tikatuka' ? createTikaState() : null,
+    chess: gameType === 'chess' ? new Chess() : null,
+    chessLastMove: null,
   };
   rooms.set(roomId, room);
   return room;
@@ -1350,6 +1353,21 @@ function startTikaGame(room) {
   ttEmitState(room);
 }
 
+// ══ 체스 (chess.js 서버 권한 판정) ═══════════════════════════
+function buildChessState(room) {
+  const ch = room.chess;
+  return {
+    roomId: room.id,
+    board: ch.board().map(row => row.map(sq => sq ? { t: sq.type, c: sq.color } : null)),  // [0][0]=a8
+    turn: ch.turn(),                                                  // 'w' | 'b'
+    moves: ch.moves({ verbose: true }).map(m => ({ from: m.from, to: m.to })),
+    inCheck: ch.inCheck(),
+    lastMove: room.chessLastMove || null,
+    moveCount: room.moveCount,
+  };
+}
+function chessEmitState(room) { io.to(room.id).emit('chess:state', buildChessState(room)); }
+
 // ── 매칭 큐 처리 ──────────────────────────────────────────────
 function tryMatch(queueKey) {
   const q = matchQueues[queueKey];
@@ -1561,7 +1579,10 @@ io.on('connection', (socket) => {
           useTimer: room.useTimer !== false,
           isPaused: room.isPaused,
           spectatorCount: room.spectators.length,
+          gameType: room.gameType || 'gomoku',
         });
+        if (room.gameType === 'chess' && room.chess) socket.emit('chess:state', buildChessState(room));
+        if (room.gameType === 'tikatuka' && room.tt) ttEmitState(room);
       }
       io.to(roomId).emit('spectator_update', { count: room.spectators.length });
       broadcastRoomList();
@@ -1725,7 +1746,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // ── 기존 오목/오델로 시작 ─────────────────────────────────
+    // ── 기존 오목/오델로/체스 시작 ────────────────────────────
     {
       const esc = await ttEscrowBets(room);
       if (!esc.ok) {
@@ -1735,7 +1756,14 @@ io.on('connection', (socket) => {
     }
     room.status = 'playing';
     room.readySet.clear();
+    if (room.gameType === 'chess') {
+      room.chess = new Chess();
+      room.chessLastMove = null;
+      room.turn = 1;
+      room.moveCount = 0;
+    }
     await emitGameStart(room);
+    if (room.gameType === 'chess') chessEmitState(room);
   });
 
   // ── 대기실: 강퇴 (방장) ──────────────────────────────────────
@@ -1824,7 +1852,7 @@ io.on('connection', (socket) => {
   socket.on('place_stone', async ({ roomId, row, col }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
-    if (room.gameType === 'othello') return;
+    if ((room.gameType || 'gomoku') !== 'gomoku') return;
     if (room.isPaused) { socket.emit('error', { msg: '게임이 일시정지 중입니다.' }); return; }
     const player = room.players.find(p => p.socketId === socket.id);
     if (!player) return;
@@ -1957,6 +1985,52 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('turn_changed', { turn: room.turn });
       startTurnTimer(room);
     }
+  });
+
+  // ── 체스 착수 ────────────────────────────────────────────────
+  socket.on('chess:move', async ({ roomId, from, to }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || room.gameType !== 'chess' || !room.chess) return;
+    if (room.isPaused) { socket.emit('error', { msg: '게임이 일시정지 중입니다.' }); return; }
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    const ch = room.chess;
+    if (ch.turn() !== (player.color === 1 ? 'w' : 'b')) { socket.emit('error', { msg: '당신의 차례가 아닙니다.' }); return; }
+    let mv = null;
+    try { mv = ch.move({ from, to, promotion: 'q' }); } catch (e) { mv = null; }  // 프로모션 = 퀸 자동
+    if (!mv) { socket.emit('error', { msg: '둘 수 없는 수입니다.' }); return; }
+
+    clearTurnTimer(room);
+    room.moveCount++;
+    room.chessLastMove = { from: mv.from, to: mv.to };
+    room.turn = room.turn === 1 ? 2 : 1;
+    room.pendingUndo = null;
+
+    if (ch.isGameOver()) {
+      room.status = 'finished';
+      let result = 'draw', winnerNick = null, loserNick = null;   // 스테일메이트/기물부족/3회반복/50수 = 무승부
+      if (ch.isCheckmate()) {
+        result = 'win';
+        winnerNick = player.nickname;
+        const l = room.players.find(p => p.socketId !== socket.id);
+        loserNick = l ? l.nickname : null;
+      }
+      chessEmitState(room);   // 최종 국면 전송
+      await settleGameBets(room, winnerNick, result === 'draw');
+      if (winnerNick) await addWin(winnerNick);
+      if (loserNick)  await addLose(loserNick);
+      if (result === 'draw') await Promise.all(room.players.map(p => addDraw(p.nickname)));
+      const records = await Promise.all(room.players.map(async p => ({
+        nickname: p.nickname, record: await getRecord(p.nickname)
+      })));
+      io.to(roomId).emit('game_over', { result, winner: winnerNick, loser: loserNick, records, ttBet: room.ttBet || 0 });
+      broadcastRoomList();
+      return;
+    }
+
+    chessEmitState(room);
+    io.to(roomId).emit('turn_changed', { turn: room.turn });
+    startTurnTimer(room);
   });
 
   // ══ 티카투카 PvP 핸들러 ══════════════════════════════════════
@@ -2183,6 +2257,11 @@ io.on('connection', (socket) => {
         room.tt = createTikaState();
         emitGameStart(room);
         startTikaGame(room);
+      } else if (room.gameType === 'chess') {
+        room.chess = new Chess();
+        room.chessLastMove = null;
+        await emitGameStart(room);
+        chessEmitState(room);
       } else {
         emitGameStart(room);
       }

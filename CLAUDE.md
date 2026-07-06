@@ -228,6 +228,13 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 
 **공통**: 상점 모달 `#shop-modal`(탭 3개, 카탈로그는 서버 shop_info가 전달 — 가격 단일 소스), 이벤트 shop_info/shop_buy/shop_equip/shop_result. 로비 돌 디자인 카드에 🛒 상점 버튼. jsdom 스모크: 상점 렌더/잠금/선택차단/채팅 스타일 통과.
 
+## 2026-07-06 업데이트 2: 체스 (gameType 'chess')
+
+- **서버**: `chess.js@1.4` 의존성 추가(require CJS). `room.chess = new Chess()`, `buildChessState/chessEmitState`(board 매핑 `[0][0]`=a8, turn 'w'/'b', 합법수 verbose, inCheck, lastMove). 핸들러 `chess:move`(from/to, **프로모션 퀸 자동**, 불법 수 try/catch). 체크메이트=승, 스테일메이트·기물부족·3회반복·50수=무승부 → settleGameBets+game_over. start_game/rematch/관전 join에 chess 분기, `place_stone`은 gomoku 전용으로 가드 강화(board null 크래시 방지). color 1=백(선공), room.turn 유지로 기존 타이머/타임아웃 그대로 동작.
+- **클라**: 기존 game-screen 캔버스 재활용(오델로 8x8 지오메트리 공유). `drawChessBoard`(체크무늬+유니코드 기물 — 백은 밝은 채움+외곽선, 파일/랭크 라벨, 마지막 수/선택/체크 킹 강조, 이동 가능 점·잡기 링), `chessClick`(선택→합법 타겟 필터→emit), **흑 플레이어는 보드 자동 뒤집기**(`chessFlipped`), 관전자는 백 시점. 상태바 ♙백/♟흑 + '🔴 체크!', 플레이어 카드 킹 아이콘+백/흑 배지. 판돈·예측(10수 컷오프)·재대결·탈주 정산 전부 기존 인프라로 연동.
+- **검증**: chess.js 가정 11케이스(매핑/폴스메이트/스테일메이트/캐슬링/앙파상/프로모션/불법수 throw) + 클라 jsdom 8케이스(렌더/선택/이동 emit/흑 뒤집기/상대 기물 차단) 전부 통과. 기존 티카투카·상점 스모크 회귀 없음.
+- **주의**: Render 배포 시 `npm install` 필요 (package.json에 chess.js 추가됨).
+
 **주사위 수정 (2026-07-06)**:
 - 타짜의 손놀림 두 번째 눈 = `ttRollExcept(cur.v)` — 원래 눈 제외 5개 중 균등 (1..5 굴려서 exclude 이상이면 +1).
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
