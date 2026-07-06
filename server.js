@@ -1114,7 +1114,13 @@ function ttColorFull(tt, color) {
 function ttDone(tt, color) {
   return tt.held[color] || ttColorFull(tt, color);
 }
-function ttRoll() { return Math.ceil(Math.random() * 6); }
+function ttRoll() { return Math.floor(Math.random() * 6) + 1; }
+// 특정 눈을 제외한 나머지 5개 중 균등 추첨 (타짜의 손놀림용)
+function ttRollExcept(exclude) {
+  let v = Math.floor(Math.random() * 5) + 1;  // 1..5
+  if (v >= exclude) v++;                       // exclude 건너뛰기 → {1..6}\{exclude} 균등
+  return v;
+}
 function ttFirstEmptySlot(row) { return row.findIndex(d => d.v === 0); }
 
 // 상태를 각 플레이어 시점(me/opp)으로 개인화하여 전송
@@ -1818,7 +1824,7 @@ io.on('connection', (socket) => {
     const { room, tt, color } = g;
     if (tt.phase !== 'place' || !tt.cur || tt.rerollUsed[color]) return;
     tt.rerollUsed[color] = true;
-    const second = { v: ttRoll(), s: tt.cur.s };  // 실드 속성 유지(첫 착수 실드 등)
+    const second = { v: ttRollExcept(tt.cur.v), s: tt.cur.s };  // 원래 눈 제외 5개 중 추첨, 실드 속성 유지
     tt.rollOptions = [{ ...tt.cur }, second];
     tt.phase = 'choose';
     ttEmitState(room);

@@ -216,6 +216,11 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - 서버: `room.ttBet`(0~100만 sanitize), 홀덤 바이인식 에스크로 — `ttEscrowBets`(시작/재대결 시 양쪽 차감, 부족 시 환불+취소), `ttSettleBets`(승자 2배 독식/무승부 반환, `ttEscrow` 플래그로 중복 정산 방지), `ttPushCoins`(coins_info 푸시). 정산 지점: ttFinish·handleLeaveRoom(탈주=상대 독식)·resign. 재대결 부족 시 `tt:rematch_failed`.
 - 표시: room_list·lobby_state에 ttBet, 대기실 서브텍스트, PvP 점수바 VS 아래 `#ttp-bet-tag`(tt:state의 `bet`), 결과 오버레이에 ±코인 문구.
 
+**주사위 수정 (2026-07-06)**:
+- 타짜의 손놀림 두 번째 눈 = `ttRollExcept(cur.v)` — 원래 눈 제외 5개 중 균등 (1..5 굴려서 exclude 이상이면 +1).
+- `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
+- 검증: 6백만회 카이제곱 9.43(df=5, 임계 11.07) 균등 ✔, ttRollExcept 제외값별 100만회 — 중복 0회·나머지 5개 각 20% ✔.
+
 ### (원래 스펙) 확정 스코프
 
 ### 확정 스코프
