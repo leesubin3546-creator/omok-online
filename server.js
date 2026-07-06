@@ -23,12 +23,51 @@ const recordSchema = new mongoose.Schema({
   lastAttendance: { type: Date,   default: null },      // 마지막 출석
   holdemWin:      { type: Number, default: 0 },         // 홀덤 승
   holdemLose:     { type: Number, default: 0 },         // 홀덤 패
+  // 상점
+  ownedSkins:    { type: [String], default: [] },       // 구매한 돌 스킨
+  ownedTitles:   { type: [String], default: [] },       // 구매한 칭호
+  equippedTitle: { type: String,  default: '' },        // 장착 칭호
+  ownedColors:   { type: [String], default: [] },       // 구매한 닉네임 색상
+  nickColor:     { type: String,  default: '' },        // 적용 색상
 });
 const Record = mongoose.model('Record', recordSchema);
 
 // ── 재화 상수 ────────────────────────────────────────────────────
 const INITIAL_COINS    = 1000000;   // 첫 지급 / 쿨타임 후 보충
 const COOLDOWN_MS      = 2 * 60 * 60 * 1000; // 2시간
+
+// ── 상점 카탈로그 ────────────────────────────────────────────────
+const SHOP_SKINS = { gold: 500000, neon: 500000, gem: 1000000 };  // 돌 스킨 가격
+const SHOP_TITLES = {
+  gambler: { label: '🎲', name: '도박사',  price: 300000 },
+  fire:    { label: '🔥', name: '불꽃',    price: 300000 },
+  gemking: { label: '💎', name: '보석왕',  price: 1000000 },
+  king:    { label: '👑', name: '황제',    price: 3000000 },
+};
+const SHOP_COLORS = {
+  red:    { hex: '#c0392b', name: '루비',     price: 200000 },
+  blue:   { hex: '#1a5fb4', name: '사파이어', price: 200000 },
+  green:  { hex: '#2a6e2a', name: '에메랄드', price: 200000 },
+  purple: { hex: '#8010d0', name: '자수정',   price: 200000 },
+  gold:   { hex: '#c8881a', name: '황금',     price: 200000 },
+};
+// 닉네임 스타일 캐시 (채팅/게임시작 시 매번 DB 조회 방지)
+const nickStyleCache = new Map(); // nickname → { title, color }
+function cacheNickStyle(rec) {
+  const title = rec.equippedTitle && SHOP_TITLES[rec.equippedTitle] ? SHOP_TITLES[rec.equippedTitle].label : '';
+  const color = rec.nickColor && SHOP_COLORS[rec.nickColor] ? SHOP_COLORS[rec.nickColor].hex : '';
+  nickStyleCache.set(rec.nickname, { title, color });
+}
+async function getNickStyle(nickname) {
+  if (nickStyleCache.has(nickname)) return nickStyleCache.get(nickname);
+  try {
+    const rec = await Record.findOne({ nickname });
+    if (rec) { cacheNickStyle(rec); return nickStyleCache.get(nickname); }
+  } catch (e) {}
+  const none = { title: '', color: '' };
+  nickStyleCache.set(nickname, none);
+  return none;
+}
 
 // 홀덤 블라인드 (바이인 → SB/BB)
 const HOLDEM_BLINDS = {
@@ -922,6 +961,7 @@ function startTurnTimer(room) {
     if (!loser) return;
     clearTurnTimer(room);
     room.status = 'finished';
+    await settleGameBets(room, winner ? winner.nickname : null, !winner);
     await addLose(loser.nickname);
     if (winner) await addWin(winner.nickname);
     const records = await Promise.all(room.players.map(async p => ({
@@ -929,7 +969,7 @@ function startTurnTimer(room) {
     })));
     io.to(room.id).emit('game_over', {
       result: 'timeout', winner: winner ? winner.nickname : null,
-      loser: loser.nickname, records,
+      loser: loser.nickname, records, ttBet: room.ttBet || 0,
     });
   }, TURN_TIMEOUT);
   io.to(room.id).emit('timer_start', { seconds: TURN_TIMEOUT / 1000, turn: room.turn });
@@ -945,7 +985,8 @@ async function emitGameStart(room) {
     nickname: p.nickname,
     color: p.color,
     record: await getRecord(p.nickname),
-    stoneStyle: p.stoneStyle || 'classic'
+    stoneStyle: p.stoneStyle || 'classic',
+    nickStyle: await getNickStyle(p.nickname),
   })));
   room.players.forEach(p => {
     io.to(p.socketId).emit('game_start', {
@@ -1028,8 +1069,9 @@ function createRoom(roomId, options = {}) {
     hostSocketId: options.hostSocketId || null,
     gameType,
     buyIn: gameType === 'holdem' ? buyIn : undefined,
-    ttBet: gameType === 'tikatuka' ? (options.ttBet || 0) : undefined,
+    ttBet: gameType !== 'holdem' ? (options.ttBet || 0) : undefined,  // 오목/오델로/티카투카 공용 판돈
     ttEscrow: false,
+    predictions: [],   // 관전자 승부 예측 [{socketId, nickname, pick, amount}]
     players: [],
     readySet: new Set(),
     board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' ? null : createBoard()),
@@ -1232,6 +1274,30 @@ async function ttPushCoins(room) {
   }
 }
 
+// 관전자 예측 정산: 적중 2배, 무승부 반환. 정산 후 목록 비움(중복 방지).
+async function settlePredictions(room, winnerNick, isDraw) {
+  if (!room.predictions || room.predictions.length === 0) return;
+  const preds = room.predictions.splice(0);
+  for (const b of preds) {
+    let payout = 0;
+    if (isDraw) payout = b.amount;                       // 반환
+    else if (b.pick === winnerNick) payout = b.amount * 2;
+    if (payout > 0) await addCoins(b.nickname, payout);
+    const info = await getCoinsInfo(b.nickname);
+    io.to(b.socketId).emit('coins_info', info);
+    io.to(b.socketId).emit('predict_result', {
+      pick: b.pick, amount: b.amount, payout,
+      outcome: isDraw ? 'draw' : (b.pick === winnerNick ? 'win' : 'lose'),
+    });
+  }
+}
+
+// 게임 종료 공용 정산: 판돈(승자 독식) + 관전 예측 — 모든 2인 대전 게임의 종료 지점에서 호출
+async function settleGameBets(room, winnerNick, isDraw) {
+  await ttSettleBets(room, winnerNick, isDraw);
+  await settlePredictions(room, winnerNick, isDraw);
+}
+
 async function ttFinish(room) {
   const tt = room.tt;
   tt.phase = 'over';
@@ -1258,7 +1324,7 @@ async function ttFinish(room) {
     if (winnerNick) await addWin(winnerNick);
     if (loserNick)  await addLose(loserNick);
   }
-  await ttSettleBets(room, winnerNick, winColor === 0);
+  await settleGameBets(room, winnerNick, winColor === 0);
   const records = await Promise.all(room.players.map(async p => ({
     nickname: p.nickname, record: await getRecord(p.nickname)
   })));
@@ -1323,6 +1389,72 @@ io.on('connection', (socket) => {
     if (!nickname) return;
     const info = await getCoinsInfo(nickname);
     socket.emit('coins_info', info);
+  });
+
+  // ── 상점 ─────────────────────────────────────────────────────
+  socket.on('shop_info', async ({ nickname }) => {
+    if (!nickname) return;
+    try {
+      await getRecord(nickname);   // 없으면 생성
+      const rec = await Record.findOne({ nickname });
+      if (!rec) return;
+      cacheNickStyle(rec);
+      socket.emit('shop_info', {
+        coins: rec.coins || 0,
+        ownedSkins: rec.ownedSkins || [],
+        ownedTitles: rec.ownedTitles || [],
+        equippedTitle: rec.equippedTitle || '',
+        ownedColors: rec.ownedColors || [],
+        nickColor: rec.nickColor || '',
+        catalog: { skins: SHOP_SKINS, titles: SHOP_TITLES, colors: SHOP_COLORS },
+      });
+    } catch (e) { console.error('shop_info error:', e.message); }
+  });
+
+  socket.on('shop_buy', async ({ nickname, kind, id }) => {
+    if (!nickname) return;
+    try {
+      const rec = await Record.findOne({ nickname });
+      if (!rec) return;
+      let price, listField;
+      if (kind === 'skin' && SHOP_SKINS[id] !== undefined) { price = SHOP_SKINS[id]; listField = 'ownedSkins'; }
+      else if (kind === 'title' && SHOP_TITLES[id]) { price = SHOP_TITLES[id].price; listField = 'ownedTitles'; }
+      else if (kind === 'color' && SHOP_COLORS[id]) { price = SHOP_COLORS[id].price; listField = 'ownedColors'; }
+      else { socket.emit('shop_result', { ok: false, msg: '존재하지 않는 상품입니다.' }); return; }
+      if ((rec[listField] || []).includes(id)) { socket.emit('shop_result', { ok: false, msg: '이미 보유 중입니다.' }); return; }
+      if ((rec.coins || 0) < price) { socket.emit('shop_result', { ok: false, msg: `코인이 부족합니다. (필요: ${price.toLocaleString()})` }); return; }
+      rec.coins -= price;
+      if (rec.coins === 0) rec.coinsEmptyAt = new Date();
+      rec[listField] = [...(rec[listField] || []), id];
+      if (kind === 'title') rec.equippedTitle = id;   // 구매 즉시 장착
+      if (kind === 'color') rec.nickColor = id;
+      await rec.save();
+      cacheNickStyle(rec);
+      socket.emit('shop_result', { ok: true, kind, id, coins: rec.coins });
+      const info = await getCoinsInfo(nickname);
+      socket.emit('coins_info', info);
+    } catch (e) {
+      console.error('shop_buy error:', e.message);
+      socket.emit('shop_result', { ok: false, msg: '구매 처리 중 오류가 발생했습니다.' });
+    }
+  });
+
+  socket.on('shop_equip', async ({ nickname, kind, id }) => {
+    if (!nickname) return;
+    try {
+      const rec = await Record.findOne({ nickname });
+      if (!rec) return;
+      if (kind === 'title') {
+        if (id && !(rec.ownedTitles || []).includes(id)) return;
+        rec.equippedTitle = id || '';
+      } else if (kind === 'color') {
+        if (id && !(rec.ownedColors || []).includes(id)) return;
+        rec.nickColor = id || '';
+      } else return;
+      await rec.save();
+      cacheNickStyle(rec);
+      socket.emit('shop_result', { ok: true, kind, id: id || '', equipped: true });
+    } catch (e) { console.error('shop_equip error:', e.message); }
   });
 
   // ── 출석 체크 ─────────────────────────────────────────────────
@@ -1421,7 +1553,8 @@ io.on('connection', (socket) => {
       } else {
         const players = await Promise.all(room.players.map(async p => ({
           nickname: p.nickname, color: p.color,
-          record: await getRecord(p.nickname), stoneStyle: p.stoneStyle || 'classic'
+          record: await getRecord(p.nickname), stoneStyle: p.stoneStyle || 'classic',
+          nickStyle: await getNickStyle(p.nickname),
         })));
         socket.emit('spectate_start', {
           roomId, board: room.board, players, turn: room.turn,
@@ -1593,6 +1726,13 @@ io.on('connection', (socket) => {
     }
 
     // ── 기존 오목/오델로 시작 ─────────────────────────────────
+    {
+      const esc = await ttEscrowBets(room);
+      if (!esc.ok) {
+        socket.emit('join_error', { msg: `${esc.poor} 님의 코인이 부족합니다. (판돈: ${(room.ttBet || 0).toLocaleString()})` });
+        return;
+      }
+    }
     room.status = 'playing';
     room.readySet.clear();
     await emitGameStart(room);
@@ -1635,6 +1775,49 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
     handleLeaveRoom(socket.id, room, roomId);
+  });
+
+  // ── 관전자 승부 예측 베팅 ────────────────────────────────────
+  socket.on('predict_bet', async ({ roomId, pick, amount }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.status !== 'playing' || room.gameType === 'holdem') {
+      socket.emit('predict_error', { msg: '지금은 예측할 수 없습니다.' }); return;
+    }
+    const spec = room.spectators.find(s => s.socketId === socket.id);
+    if (!spec) { socket.emit('predict_error', { msg: '관전자만 예측할 수 있습니다.' }); return; }
+    if (!room.predictions) room.predictions = [];
+    if (room.predictions.find(b => b.socketId === socket.id || b.nickname === spec.nickname)) {
+      socket.emit('predict_error', { msg: '이미 이번 판에 예측했습니다.' }); return;
+    }
+    if (!room.players.find(p => p.nickname === pick)) {
+      socket.emit('predict_error', { msg: '대상 플레이어가 없습니다.' }); return;
+    }
+    const amt = Math.floor(Number(amount) || 0);
+    if (amt < 100 || amt > 100000) {
+      socket.emit('predict_error', { msg: '베팅은 100 ~ 100,000 코인까지 가능합니다.' }); return;
+    }
+    // 게임 초반에만 가능 — 오목: 10수 이내, 오델로: 돌 14개 이내(10수), 티카투카: 주사위 6개 이내
+    let early;
+    if (room.gameType === 'tikatuka') {
+      const placed = room.tt
+        ? room.tt.lanes.reduce((a, l) => a + l[1].filter(d => d.v > 0).length + l[2].filter(d => d.v > 0).length, 0)
+        : 99;
+      early = placed <= 6;
+    } else if (room.gameType === 'othello') {
+      let stones = 0;
+      for (const row of room.board) for (const c of row) if (c !== 0) stones++;
+      early = stones <= 14;
+    } else {
+      early = room.moveCount <= 10;
+    }
+    if (!early) { socket.emit('predict_error', { msg: '베팅 시간이 지났습니다. (게임 초반에만 가능)' }); return; }
+    const ok = await deductCoins(spec.nickname, amt);
+    if (!ok) { socket.emit('predict_error', { msg: '코인이 부족합니다.' }); return; }
+    room.predictions.push({ socketId: socket.id, nickname: spec.nickname, pick, amount: amt });
+    const info = await getCoinsInfo(spec.nickname);
+    socket.emit('coins_info', info);
+    socket.emit('predict_ok', { pick, amount: amt });
+    io.to(roomId).emit('chat', { nickname: '📢 예측', message: `관전자 ${spec.nickname}님이 [${pick}] 승리에 ${amt.toLocaleString()} 코인을 걸었습니다!` });
   });
 
   // ── 돌 놓기 ──────────────────────────────────────────────────
@@ -1688,20 +1871,22 @@ io.on('connection', (socket) => {
       room.status = 'finished';
       const winner = player;
       const loser = room.players.find(p => p.socketId !== socket.id);
+      await settleGameBets(room, winner.nickname, false);
       await addWin(winner.nickname);
       if (loser) await addLose(loser.nickname);
       const records = await Promise.all(room.players.map(async p => ({
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
-      io.to(roomId).emit('game_over', { result: 'win', winner: winner.nickname, records });
+      io.to(roomId).emit('game_over', { result: 'win', winner: winner.nickname, records, ttBet: room.ttBet || 0 });
       broadcastRoomList();
     } else if (isDraw) {
       room.status = 'finished';
+      await settleGameBets(room, null, true);
       await Promise.all(room.players.map(p => addDraw(p.nickname)));
       const records = await Promise.all(room.players.map(async p => ({
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
-      io.to(roomId).emit('game_over', { result: 'draw', records });
+      io.to(roomId).emit('game_over', { result: 'draw', records, ttBet: room.ttBet || 0 });
       broadcastRoomList();
     } else {
       room.turn = room.turn === 1 ? 2 : 1;
@@ -1754,13 +1939,14 @@ io.on('connection', (socket) => {
       } else {
         result = 'draw';
       }
+      await settleGameBets(room, winnerNick, result === 'draw');
       if (winnerNick) await addWin(winnerNick);
       if (loserNick)  await addLose(loserNick);
       if (result === 'draw') await Promise.all(room.players.map(p => addDraw(p.nickname)));
       const records = await Promise.all(room.players.map(async p => ({
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
-      io.to(roomId).emit('game_over', { result, winner: winnerNick, loser: loserNick, records });
+      io.to(roomId).emit('game_over', { result, winner: winnerNick, loser: loserNick, records, ttBet: room.ttBet || 0 });
       broadcastRoomList();
     } else if (nextMoves.length === 0) {
       // 다음 플레이어 착수 불가 → 패스 (현재 플레이어 계속)
@@ -1945,12 +2131,13 @@ io.on('connection', (socket) => {
     if (accept && loser) {
       clearTurnTimer(room);
       room.status = 'finished';
+      await settleGameBets(room, winner ? winner.nickname : null, !winner);
       await addLose(loser.nickname);
       if (winner) await addWin(winner.nickname);
       const records = await Promise.all(room.players.map(async p => ({
         nickname: p.nickname, record: await getRecord(p.nickname)
       })));
-      io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records });
+      io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records, ttBet: room.ttBet || 0 });
       broadcastRoomList();
     } else {
       if (loser) io.to(loser.socketId).emit('surrender_result', { ok: false, reason: '상대방이 거절했습니다.' });
@@ -1971,8 +2158,8 @@ io.on('connection', (socket) => {
         io.to(p.socketId).emit('rematch_requested', { from: player.nickname });
     });
     if (room.rematchRequests.size === 2) {
-      // 티카투카 판돈: 재대결 시작 전 재차감
-      if (room.gameType === 'tikatuka' && room.ttBet > 0) {
+      // 판돈: 재대결 시작 전 재차감 (오목/오델로/티카투카 공통)
+      if (room.gameType !== 'holdem' && room.ttBet > 0) {
         const esc = await ttEscrowBets(room);
         if (!esc.ok) {
           room.rematchRequests = new Set();
@@ -2032,13 +2219,13 @@ io.on('connection', (socket) => {
     if (!loser) return;
     clearTurnTimer(room);
     room.status = 'finished';
-    if (room.gameType === 'tikatuka') await ttSettleBets(room, winner ? winner.nickname : null, !winner);
+    await settleGameBets(room, winner ? winner.nickname : null, !winner);
     await addLose(loser.nickname);
     if (winner) await addWin(winner.nickname);
     const records = await Promise.all(room.players.map(async p => ({
       nickname: p.nickname, record: await getRecord(p.nickname)
     })));
-    io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records, ttBet: room.gameType === 'tikatuka' ? (room.ttBet || 0) : undefined });
+    io.to(roomId).emit('game_over', { result: 'resign', winner: winner ? winner.nickname : null, loser: loser.nickname, records, ttBet: room.ttBet || 0 });
     broadcastRoomList();
   });
 
@@ -2059,9 +2246,10 @@ io.on('connection', (socket) => {
   });
 
   // ── 채팅 ─────────────────────────────────────────────────────
-  socket.on('chat', ({ roomId, nickname, message }) => {
+  socket.on('chat', async ({ roomId, nickname, message }) => {
     if (!message || message.trim().length === 0) return;
-    io.to(roomId).emit('chat', { nickname, message: message.trim().substring(0, 200), time: Date.now() });
+    const style = await getNickStyle(nickname);
+    io.to(roomId).emit('chat', { nickname, message: message.trim().substring(0, 200), time: Date.now(), style });
   });
 
   // ── 연결 해제 ─────────────────────────────────────────────────
@@ -2138,7 +2326,7 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
     clearTurnTimer(room);
     room.status = 'finished';
     (async () => {
-      if (room.gameType === 'tikatuka') await ttSettleBets(room, winner ? winner.nickname : null, !winner);
+      await settleGameBets(room, winner ? winner.nickname : null, !winner);
       await addLose(loser.nickname);
       if (winner) await addWin(winner.nickname);
       const records = await Promise.all(room.players.map(async p => ({
@@ -2146,7 +2334,7 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
       })));
       io.to(roomId).emit('game_over', {
         result: 'disconnect', winner: winner ? winner.nickname : null,
-        loser: loser.nickname, records, ttBet: room.gameType === 'tikatuka' ? (room.ttBet || 0) : undefined,
+        loser: loser.nickname, records, ttBet: room.ttBet || 0,
       });
       broadcastRoomList();
     })();

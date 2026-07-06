@@ -216,6 +216,18 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - 서버: `room.ttBet`(0~100만 sanitize), 홀덤 바이인식 에스크로 — `ttEscrowBets`(시작/재대결 시 양쪽 차감, 부족 시 환불+취소), `ttSettleBets`(승자 2배 독식/무승부 반환, `ttEscrow` 플래그로 중복 정산 방지), `ttPushCoins`(coins_info 푸시). 정산 지점: ttFinish·handleLeaveRoom(탈주=상대 독식)·resign. 재대결 부족 시 `tt:rematch_failed`.
 - 표시: room_list·lobby_state에 ttBet, 대기실 서브텍스트, PvP 점수바 VS 아래 `#ttp-bet-tag`(tt:state의 `bet`), 결과 오버레이에 ±코인 문구.
 
+## 2026-07-06 업데이트: 코인 활용 4종
+
+**① 오목·오델로 판돈**: `room.ttBet`을 홀덤 외 전 게임으로 확장. 시작/재대결 시 `ttEscrowBets`, 모든 종료 지점(오목 승/무, 오델로 종료, 타임아웃, 기권 수락, resign, 탈주)에서 `settleGameBets` 호출 + game_over에 `ttBet`. 모달 판돈 픽커는 홀덤 외 전 게임 노출.
+
+**② 관전자 승부 예측**: 관전자가 승자 예측 베팅(100~10만, 게임당 1회, 즉시 차감). 컷오프: 오목 10수·오델로 돌14개·티카투카 주사위 6개 이내. 적중 2배/무승부 반환 — `settlePredictions`(settleGameBets에 포함), `room.predictions`. 이벤트: predict_bet/predict_ok/predict_error/predict_result. 클라: 우하단 고정 `#predict-panel`(관전 진입 시 표시), 베팅 시 방 채팅에 공지.
+
+**③ 돌 스킨 상점**: 프리미엄 스킨 gold(50만)/neon(50만, 글로우)/gem(100만, 다이아 컷) — `PREMIUM_SKINS`, 픽커에 🔒, 미보유 클릭 시 상점 오픈. 스키마 `ownedSkins`. 구매 즉시 자동 선택.
+
+**④ 닉네임 치장**: 칭호(🎲30만/🔥30만/💎100만/👑300만, `equippedTitle`)·닉 색상(5색 각 20만, `nickColor`). 적용 위치: 채팅(서버가 `style` 첨부, `nickStyleCache`), 오목 플레이어 카드, 티카투카 PvP 이름. 카드 전적 갱신은 endsWith 비교로 변경(칭호 접두어 대응).
+
+**공통**: 상점 모달 `#shop-modal`(탭 3개, 카탈로그는 서버 shop_info가 전달 — 가격 단일 소스), 이벤트 shop_info/shop_buy/shop_equip/shop_result. 로비 돌 디자인 카드에 🛒 상점 버튼. jsdom 스모크: 상점 렌더/잠금/선택차단/채팅 스타일 통과.
+
 **주사위 수정 (2026-07-06)**:
 - 타짜의 손놀림 두 번째 눈 = `ttRollExcept(cur.v)` — 원래 눈 제외 5개 중 균등 (1..5 굴려서 exclude 이상이면 +1).
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).

@@ -681,6 +681,22 @@
   #modal-ttbet-row.show { display:flex; flex-direction:column; gap:5px; }
   #ttbet-opts { flex-wrap:wrap; }
   #ttbet-opts .buyin-opt { flex:1 1 28%; }
+
+  /* 상점 */
+  .skin-premium .skin-lock { font-size:0.7rem; }
+  .skin-premium.owned .skin-lock { display:none; }
+  .shop-tab { flex:1; padding:7px 0; border-radius:8px; border:1px solid var(--border); background:var(--card);
+    color:var(--text2); font-family:inherit; font-size:0.8rem; font-weight:700; cursor:pointer; }
+  .shop-tab.active { border-color:var(--accent2); background:rgba(200,136,26,0.12); color:var(--accent2); }
+  .shop-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border);
+    border-radius:10px; background:var(--card); }
+  .shop-item .si-name { flex:1; font-size:0.85rem; font-weight:600; line-height:1.35; }
+  .shop-item .si-price { font-size:0.72rem; color:var(--accent2); font-weight:700; }
+  .shop-buy-btn { padding:5px 12px; border-radius:8px; border:1px solid var(--accent2); background:rgba(200,136,26,0.12);
+    color:var(--accent2); font-size:0.75rem; font-weight:700; cursor:pointer; font-family:inherit; flex-shrink:0; }
+  .shop-equip-btn { padding:5px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface);
+    color:var(--text2); font-size:0.75rem; cursor:pointer; font-family:inherit; flex-shrink:0; }
+  .shop-equip-btn.on { border-color:#2a6e2a; color:#2a6e2a; background:rgba(42,110,42,0.08); }
   .buyin-opts { display:flex; gap:8px; }
   .buyin-opt { flex:1; text-align:center; padding:8px 4px; border-radius:9px; border:1.5px solid var(--border); cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text2); background:var(--card); transition:all 0.15s; }
   .buyin-opt.selected { border-color:var(--accent); background:rgba(122,74,21,0.1); color:var(--accent); }
@@ -1067,7 +1083,10 @@
     </div>
 
     <div class="card">
-      <div class="card-title">나의 돌 디자인</div>
+      <div class="card-title">나의 돌 디자인
+        <button onclick="openShop()" style="float:right;padding:4px 12px;border-radius:8px;border:1px solid var(--accent2);
+          background:rgba(200,136,26,0.1);color:var(--accent2);font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;">🛒 상점</button>
+      </div>
       <p class="stone-picker-desc">각자 선택한 디자인이 게임에서 그대로 적용됩니다</p>
       <div class="stone-picker" id="stone-picker">
         <div class="stone-opt" data-style="classic" onclick="selectStoneStyle('classic')"><canvas id="sp-classic" width="72" height="40"></canvas><span>클래식</span></div>
@@ -1080,6 +1099,9 @@
         <div class="stone-opt" data-style="cloud" onclick="selectStoneStyle('cloud')"><canvas id="sp-cloud" width="72" height="40"></canvas><span>구름</span></div>
         <div class="stone-opt" data-style="butterfly" onclick="selectStoneStyle('butterfly')"><canvas id="sp-butterfly" width="72" height="40"></canvas><span>나비</span></div>
         <div class="stone-opt" data-style="poring" onclick="selectStoneStyle('poring')"><canvas id="sp-poring" width="72" height="40"></canvas><span>포링</span></div>
+        <div class="stone-opt skin-premium" data-style="gold" onclick="selectStoneStyle('gold')"><canvas id="sp-gold" width="72" height="40"></canvas><span>황금 <span class="skin-lock">🔒</span></span></div>
+        <div class="stone-opt skin-premium" data-style="neon" onclick="selectStoneStyle('neon')"><canvas id="sp-neon" width="72" height="40"></canvas><span>네온 <span class="skin-lock">🔒</span></span></div>
+        <div class="stone-opt skin-premium" data-style="gem" onclick="selectStoneStyle('gem')"><canvas id="sp-gem" width="72" height="40"></canvas><span>보석 <span class="skin-lock">🔒</span></span></div>
       </div>
     </div>
 
@@ -1217,6 +1239,32 @@
       <button class="btn-primary" onclick="submitCreateRoom()">만들기</button>
     </div>
   </div>
+</div>
+
+<!-- 상점 모달 -->
+<div id="shop-modal" class="modal-backdrop">
+  <div class="modal-box" style="max-width:430px;width:94%;">
+    <div class="modal-title">🛒 상점 <span id="shop-coins" style="float:right;font-size:0.85rem;color:var(--accent2);"></span></div>
+    <div style="display:flex;gap:6px;">
+      <button class="shop-tab active" data-tab="skins" onclick="shopTab('skins')">돌 스킨</button>
+      <button class="shop-tab" data-tab="titles" onclick="shopTab('titles')">칭호</button>
+      <button class="shop-tab" data-tab="colors" onclick="shopTab('colors')">닉 색상</button>
+    </div>
+    <div id="shop-items" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;"></div>
+    <div id="shop-msg" style="font-size:0.75rem;color:#c0392b;min-height:16px;text-align:center;"></div>
+    <div class="modal-btns"><button class="btn-secondary" onclick="closeShop()">닫기</button></div>
+  </div>
+</div>
+
+<!-- 관전자 승부 예측 패널 -->
+<div id="predict-panel" style="display:none;position:fixed;right:16px;bottom:16px;z-index:400;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;
+  box-shadow:0 4px 16px rgba(60,35,10,0.25);width:230px;">
+  <div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">🔮 승부 예측 <span style="font-weight:400;font-size:0.68rem;color:var(--text2);">적중 시 2배</span></div>
+  <div id="predict-picks" style="display:flex;gap:6px;margin-bottom:8px;"></div>
+  <div id="predict-amounts" style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap;"></div>
+  <button id="predict-btn" class="btn-primary btn-sm" style="width:100%;" onclick="submitPredict()">베팅</button>
+  <div id="predict-status" style="font-size:0.7rem;color:var(--text2);margin-top:6px;min-height:14px;">게임 초반에만 베팅 가능</div>
 </div>
 
 <!-- 출석 상자 모달 -->
@@ -2731,8 +2779,9 @@ const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
 const OTHELLO_CANVAS_SIZE = OTHELLO_CELL * OTHELLO_SIZE + OTHELLO_PADDING * 2;
-const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','poring'];
-const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', poring:'포링' };
+const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','poring','gold','neon','gem'];
+const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', poring:'포링', gold:'황금', neon:'네온', gem:'보석' };
+const PREMIUM_SKINS = ['gold','neon','gem'];   // 상점 구매 필요
 
 // ── 급수 시스템 ───────────────────────────────────────────────
 const RANK_THRESHOLDS = [
@@ -2848,6 +2897,9 @@ const STONE_COLORS = {
   cloud:     { c1:['#4060d0','#1830a0','#080c60'], c2:['#c8b0f8','#a080f0','#6840c8'] },
   butterfly: { c1:['#c040f8','#8010d0','#480080'], c2:['#f870e8','#e030c8','#a00090'] },
   poring:    { c1:['#ffb0c8','#f0708f','#c03058'], c2:['#a8ccff','#5a95e8','#2255b0'] },
+  gold:      { c1:['#f0c050','#b07818','#5c3a04'], c2:['#fff4c8','#f8d868','#c89020'] },
+  neon:      { c1:['#80ffd8','#10e0a8','#007850'], c2:['#ff88f0','#f020cc','#980080'] },
+  gem:       { c1:['#ff7890','#d81850','#780020'], c2:['#88b4ff','#3060e8','#0828a0'] },
 };
 
 // 포링 돌 이미지 (1=원본 포링, 2=포포링·파랑)
@@ -2929,6 +2981,12 @@ function stonePath(c, x, y, r, style) {
       c.bezierCurveTo(x+r*.5,y-r*.05,x+r*.05,y+r*.04,x,y);
       break;
     }
+    case 'gem': {
+      // 브릴리언트 컷 다이아몬드 실루엣
+      const pts = [[-0.58,-0.72],[0.58,-0.72],[0.98,-0.22],[0,0.98],[-0.98,-0.22]];
+      pts.forEach(([px,py],i) => { const sx=x+px*r, sy=y+py*r; if(i===0) c.moveTo(sx,sy); else c.lineTo(sx,sy); });
+      c.closePath(); break;
+    }
     default:
       c.arc(x, y, r, 0, Math.PI*2); break;
   }
@@ -2962,7 +3020,10 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
   const g = c.createRadialGradient(x-r*0.32, y-r*0.34, r*0.04, x+r*0.1, y+r*0.12, r*1.08);
   g.addColorStop(0, stops[0]); g.addColorStop(0.5, stops[1]); g.addColorStop(1, stops[2]);
   stonePath(c, x, y, r, style);
-  c.fillStyle = g; c.fill();
+  c.fillStyle = g;
+  if (style === 'neon') { c.shadowColor = color === 1 ? '#20f0b0' : '#f860e0'; c.shadowBlur = r * 0.55; }
+  c.fill();
+  c.shadowBlur = 0;
 
   // 하이라이트 (클리핑)
   c.save();
@@ -3260,12 +3321,99 @@ function _deadCode_neverCalled(c, x, y, r, color, style) {
 
 // ─────────────────────────────────────────────────────────────
 function selectStoneStyle(style) {
+  // 프리미엄 스킨은 보유 시에만 선택 가능 (미보유 클릭 → 상점 열기)
+  if (PREMIUM_SKINS.includes(style) && SHOP.loaded && !SHOP.ownedSkins.includes(style)) {
+    openShop(); shopTab('skins'); return;
+  }
   currentStoneStyle = style;
   localStorage.setItem('omok_stone_style', style);
   document.querySelectorAll('.stone-opt').forEach(el =>
     el.classList.toggle('selected', el.dataset.style === style));
   renderStonePreviews();
   if (ctx) drawBoard();
+}
+
+// ── 상점 ──────────────────────────────────────────────────────
+const SHOP = { loaded: false, coins: 0, ownedSkins: [], ownedTitles: [], equippedTitle: '',
+  ownedColors: [], nickColor: '', catalog: null, tab: 'skins' };
+function openShop() {
+  if (socket) socket.emit('shop_info', { nickname: myNickname });
+  document.getElementById('shop-msg').textContent = '';
+  document.getElementById('shop-modal').classList.add('show');
+  renderShop();
+}
+function closeShop() { document.getElementById('shop-modal').classList.remove('show'); }
+function shopTab(t) {
+  SHOP.tab = t;
+  document.querySelectorAll('.shop-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  renderShop();
+}
+function fmtShopPrice(n) { return n >= 10000 && n % 10000 === 0 ? (n / 10000) + '만' : n.toLocaleString(); }
+function renderShop() {
+  const box = document.getElementById('shop-items');
+  document.getElementById('shop-coins').textContent = `💰 ${SHOP.coins.toLocaleString()}`;
+  if (!SHOP.catalog) {
+    box.innerHTML = '<div style="text-align:center;color:var(--text2);font-size:0.8rem;padding:20px;">불러오는 중…</div>';
+    return;
+  }
+  let html = '';
+  if (SHOP.tab === 'skins') {
+    for (const [id, price] of Object.entries(SHOP.catalog.skins)) {
+      const owned = SHOP.ownedSkins.includes(id);
+      html += `<div class="shop-item">
+        <canvas id="shop-sp-${id}" width="72" height="40"></canvas>
+        <div class="si-name">${STYLE_NAMES[id] || id}<br><span class="si-price">${owned ? '✔ 보유 중' : fmtShopPrice(price) + ' 코인'}</span></div>
+        ${owned ? `<button class="shop-equip-btn on" onclick="selectStoneStyle('${id}');closeShop()">사용</button>`
+                : `<button class="shop-buy-btn" onclick="shopBuy('skin','${id}')">구매</button>`}
+      </div>`;
+    }
+  } else if (SHOP.tab === 'titles') {
+    html += `<div class="shop-item"><div class="si-name">칭호 없음</div>
+      <button class="shop-equip-btn ${!SHOP.equippedTitle ? 'on' : ''}" onclick="shopEquip('title','')">${!SHOP.equippedTitle ? '적용 중' : '해제'}</button></div>`;
+    for (const [id, t] of Object.entries(SHOP.catalog.titles)) {
+      const owned = SHOP.ownedTitles.includes(id);
+      const equipped = SHOP.equippedTitle === id;
+      html += `<div class="shop-item">
+        <div style="font-size:1.35rem;">${t.label}</div>
+        <div class="si-name">${t.name}<br><span class="si-price">${owned ? '✔ 보유 중' : fmtShopPrice(t.price) + ' 코인'}</span></div>
+        ${owned ? `<button class="shop-equip-btn ${equipped ? 'on' : ''}" onclick="shopEquip('title','${equipped ? '' : id}')">${equipped ? '장착 중' : '장착'}</button>`
+                : `<button class="shop-buy-btn" onclick="shopBuy('title','${id}')">구매</button>`}
+      </div>`;
+    }
+  } else {
+    html += `<div class="shop-item"><div class="si-name">기본 색상</div>
+      <button class="shop-equip-btn ${!SHOP.nickColor ? 'on' : ''}" onclick="shopEquip('color','')">${!SHOP.nickColor ? '적용 중' : '해제'}</button></div>`;
+    for (const [id, cdef] of Object.entries(SHOP.catalog.colors)) {
+      const owned = SHOP.ownedColors.includes(id);
+      const equipped = SHOP.nickColor === id;
+      html += `<div class="shop-item">
+        <div style="width:26px;height:26px;border-radius:50%;background:${cdef.hex};border:2px solid rgba(0,0,0,0.15);flex-shrink:0;"></div>
+        <div class="si-name" style="color:${cdef.hex};">${cdef.name}<br><span class="si-price">${owned ? '✔ 보유 중' : fmtShopPrice(cdef.price) + ' 코인'}</span></div>
+        ${owned ? `<button class="shop-equip-btn ${equipped ? 'on' : ''}" onclick="shopEquip('color','${equipped ? '' : id}')">${equipped ? '적용 중' : '적용'}</button>`
+                : `<button class="shop-buy-btn" onclick="shopBuy('color','${id}')">구매</button>`}
+      </div>`;
+    }
+  }
+  box.innerHTML = html;
+  if (SHOP.tab === 'skins') {
+    for (const id of Object.keys(SHOP.catalog.skins)) {
+      const cv = document.getElementById('shop-sp-' + id);
+      if (cv) { const c = cv.getContext('2d'); c.clearRect(0, 0, 72, 40); drawStoneOnCtx(c, 18, 20, 15, 1, id); drawStoneOnCtx(c, 54, 20, 15, 2, id); }
+    }
+  }
+}
+function shopBuy(kind, id) {
+  document.getElementById('shop-msg').textContent = '';
+  if (socket) socket.emit('shop_buy', { nickname: myNickname, kind, id });
+}
+function shopEquip(kind, id) {
+  document.getElementById('shop-msg').textContent = '';
+  if (socket) socket.emit('shop_equip', { nickname: myNickname, kind, id });
+}
+function updateSkinLocks() {
+  document.querySelectorAll('.stone-opt.skin-premium').forEach(el => {
+    el.classList.toggle('owned', SHOP.ownedSkins.includes(el.dataset.style));
+  });
 }
 
 function renderStonePreviews() {
@@ -3335,8 +3483,9 @@ function ttPvpStart(roomId, players, yourColor) {
   TTP.roomId = roomId;
   const me  = players.find(p => p.color === yourColor);
   const opp = players.find(p => p.color !== yourColor);
-  TTP.meName  = me  ? me.nickname  : '나';
-  TTP.oppName = opp ? opp.nickname : '상대';
+  const deco = p => p ? ((p.nickStyle && p.nickStyle.title ? p.nickStyle.title + ' ' : '') + p.nickname) : null;
+  TTP.meName  = deco(me)  || '나';
+  TTP.oppName = deco(opp) || '상대';
   ttpResetAnim();
   document.getElementById('ttp-me-name').textContent  = TTP.meName;
   document.getElementById('ttp-opp-name').textContent = TTP.oppName;
@@ -3537,6 +3686,7 @@ function ttPvpLeave() {
   if (TTP.roomId) socket.emit('leave_room', { roomId: TTP.roomId });
   document.getElementById('ttp-overlay').style.display = 'none';
   document.getElementById('ttp-chat-messages').innerHTML = '';
+  hidePredictPanel();
   showScreen('lobby-screen');
   if (socket) socket.emit('get_room_list');
 }
@@ -3608,6 +3758,7 @@ function initSocket() {
     selectStoneStyle(currentStoneStyle);
     socket.emit('request_record', { nickname: myNickname });
     socket.emit('get_coins', { nickname: myNickname });
+    socket.emit('shop_info', { nickname: myNickname });
     socket.emit('get_room_list');
   });
   socket.on('your_record', (rec) => { updateRecordUI(rec); });
@@ -3615,6 +3766,27 @@ function initSocket() {
   // ── 재화 정보 수신 ───────────────────────────────────────────
   socket.on('coins_info', ({ coins, cooldownRemaining, attendanceAvailable }) => {
     updateCoinsUI(coins, cooldownRemaining, attendanceAvailable);
+    SHOP.coins = coins;
+  });
+
+  // ── 상점 수신 ────────────────────────────────────────────────
+  socket.on('shop_info', data => {
+    Object.assign(SHOP, data, { loaded: true });
+    updateSkinLocks();
+    // 보유하지 않은 프리미엄 스킨이 선택돼 있으면 기본으로 복원
+    if (PREMIUM_SKINS.includes(currentStoneStyle) && !SHOP.ownedSkins.includes(currentStoneStyle)) {
+      selectStoneStyle('classic');
+    }
+    if (document.getElementById('shop-modal').classList.contains('show')) renderShop();
+  });
+  socket.on('shop_result', res => {
+    if (!res.ok) { document.getElementById('shop-msg').textContent = `⚠ ${res.msg}`; return; }
+    if (res.kind === 'skin' && !res.equipped) {
+      SHOP.ownedSkins.push(res.id);   // 즉시 반영 후 새 스킨 선택
+      updateSkinLocks();
+      selectStoneStyle(res.id);
+    }
+    if (socket) socket.emit('shop_info', { nickname: myNickname });
   });
 
   // ── 출석 결과 수신 ───────────────────────────────────────────
@@ -3709,7 +3881,9 @@ function initSocket() {
       TTP.meName = p1?p1.nickname:'P1'; TTP.oppName = p2?p2.nickname:'P2';
       document.getElementById('ttp-me-name').textContent = TTP.meName;
       document.getElementById('ttp-opp-name').textContent = TTP.oppName;
-      showScreen('tt-pvp-screen'); return; }
+      showScreen('tt-pvp-screen');
+      showPredictPanel(roomId, players.map(p => p.nickname));
+      return; }
     currentRoom = roomId;
     gameBoard = board.map(r => [...r]);
     gameType = gt || 'gomoku';
@@ -3738,6 +3912,7 @@ function initSocket() {
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
     addChat('관전 모드로 입장했습니다.', true);
+    showPredictPanel(roomId, players.map(p => p.nickname));
   });
 
   socket.on('stone_placed', ({ row, col, color }) => { gameBoard[row][col] = color; lastMove = { row, col }; drawBoard(); });
@@ -3803,7 +3978,8 @@ function initSocket() {
     document.getElementById('consent-banner').classList.remove('show');
   });
 
-  socket.on('game_over', ({ result, winner, loser, records }) => {
+  socket.on('game_over', ({ result, winner, loser, records, ttBet }) => {
+    hidePredictPanel();
     if (gameType === 'tikatuka') {
       if (records) { const me = records.find(r => r.nickname === myNickname); if (me) updateRecordUI(me.record); }
       ttPvpGameOver(result, winner);
@@ -3829,13 +4005,19 @@ function initSocket() {
         }
       }
     }
+    if (ttBet > 0 && !isSpectating) {
+      if (result === 'draw') rankChangeText += `  ·  💰 판돈 ${ttBet.toLocaleString()} 반환`;
+      else if (winner === myNickname) rankChangeText += `  ·  💰 +${ttBet.toLocaleString()}`;
+      else rankChangeText += `  ·  💰 -${ttBet.toLocaleString()}`;
+    }
     showOverlay(result, winner, loser, records, rankChangeText);
     if (records) records.forEach(r => {
-      if (document.getElementById('p1-name').textContent === r.nickname) {
+      // 칭호 접두어가 붙을 수 있으므로 endsWith로 비교
+      if (document.getElementById('p1-name').textContent.endsWith(r.nickname)) {
         document.getElementById('p1-rec').innerHTML =
           `${r.record.win}승 ${r.record.lose}패 <span class="rank-tag${isDan(getRank(r.record.points||0))?' dan':''}" id="p1-rank-tag">${getRank(r.record.points||0)}</span>`;
       }
-      if (document.getElementById('p2-name').textContent === r.nickname) {
+      if (document.getElementById('p2-name').textContent.endsWith(r.nickname)) {
         document.getElementById('p2-rec').innerHTML =
           `${r.record.win}승 ${r.record.lose}패 <span class="rank-tag${isDan(getRank(r.record.points||0))?' dan':''}" id="p2-rank-tag">${getRank(r.record.points||0)}</span>`;
       }
@@ -3850,6 +4032,20 @@ function initSocket() {
       showScreen('tt-pvp-screen');
     }
     ttPvpRender();
+  });
+  socket.on('predict_ok', ({ pick, amount }) => {
+    PRED.placed = true;
+    document.getElementById('predict-btn').disabled = true;
+    document.getElementById('predict-status').textContent = `✔ [${pick}] 승리에 ${amount.toLocaleString()} 베팅 완료`;
+  });
+  socket.on('predict_error', ({ msg }) => {
+    document.getElementById('predict-status').textContent = `⚠ ${msg}`;
+  });
+  socket.on('predict_result', ({ pick, amount, payout, outcome }) => {
+    const txt = outcome === 'win' ? `🔮 예측 적중! [${pick}] 승리 — +${payout.toLocaleString()} 코인 획득!`
+              : outcome === 'draw' ? `🔮 무승부 — 베팅 ${amount.toLocaleString()} 코인 반환`
+              : `🔮 예측 실패 — ${amount.toLocaleString()} 코인 손실`;
+    addChat(txt, true);
   });
   socket.on('tt:rematch_failed', ({ msg }) => {
     const detEl = document.getElementById('ttp-result-detail');
@@ -3948,14 +4144,14 @@ function initSocket() {
     hdAddChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
   });
 
-  socket.on('chat', ({ nickname, message }) => {
+  socket.on('chat', ({ nickname, message, style }) => {
     // forward chat to holdem chat if on holdem screen
     const onHoldem = document.getElementById('holdem-screen').classList.contains('active');
-    if (onHoldem) {
-      hdAddChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
-    } else {
-      addChat(`<span class="cn">${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`);
-    }
+    const title = style && style.title ? style.title + ' ' : '';
+    const colorAttr = style && style.color ? ` style="color:${style.color}"` : '';
+    const line = `${title}<span class="cn"${colorAttr}>${escapeHtml(nickname)}</span>: ${escapeHtml(message)}`;
+    if (onHoldem) hdAddChat(line);
+    else addChat(line);
   });
 }
 
@@ -3969,9 +4165,7 @@ function openCreateRoomModal() {
   document.getElementById('modal-room-error').textContent = '';
   // reset game type to gomoku
   document.querySelector('input[name="modal-game-type"][value="gomoku"]').checked = true;
-  document.getElementById('modal-buyin-row').classList.remove('show');
-  document.getElementById('modal-ttbet-row').classList.remove('show');
-  document.getElementById('modal-timer-row').style.display = '';
+  onModalGameTypeChange();
   selectedBuyIn = 1000;
   document.querySelectorAll('#modal-buyin-row .buyin-opt').forEach(el => {
     el.classList.toggle('selected', parseInt(el.dataset.buyin) === 1000);
@@ -3986,7 +4180,7 @@ function onModalGameTypeChange() {
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
   const isHoldem = gt === 'holdem';
   document.getElementById('modal-buyin-row').classList.toggle('show', isHoldem);
-  document.getElementById('modal-ttbet-row').classList.toggle('show', gt === 'tikatuka');
+  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldem);  // 오목/오델로/티카투카 판돈
   // 티카투카는 타이머 없음, 홀덤은 타이머 숨김
   document.getElementById('modal-timer-row').style.display = (isHoldem || gt === 'tikatuka') ? 'none' : '';
 }
@@ -4016,8 +4210,42 @@ function submitCreateRoom() {
     roomName: name, password: password || null, useTimer: timerOn, gameType: gt
   };
   if (gt === 'holdem') payload.buyIn = selectedBuyIn;
-  if (gt === 'tikatuka') payload.ttBet = selectedTtBet;
+  else payload.ttBet = selectedTtBet;
   socket.emit('create_room', payload);
+}
+
+// ── 관전자 승부 예측 ───────────────────────────────────────────
+const PRED = { roomId: null, players: [], pick: null, amount: 1000, placed: false };
+const PRED_AMOUNTS = [1000, 5000, 10000, 50000];
+function showPredictPanel(roomId, playerNames) {
+  PRED.roomId = roomId;
+  PRED.players = playerNames.slice(0, 2);
+  PRED.pick = null; PRED.amount = 1000; PRED.placed = false;
+  document.getElementById('predict-picks').innerHTML = PRED.players.map(n =>
+    `<button class="btn-secondary btn-sm predict-pick" data-pick="${escapeHtml(n)}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n)}</button>`).join('');
+  document.getElementById('predict-amounts').innerHTML = PRED_AMOUNTS.map(a =>
+    `<button class="btn-secondary btn-sm predict-amt" data-amt="${a}" style="flex:1;padding:4px 2px;font-size:0.7rem;${a === 1000 ? 'border-color:var(--accent2);color:var(--accent2);' : ''}">${a >= 10000 ? (a / 10000) + '만' : (a / 1000) + '천'}</button>`).join('');
+  document.querySelectorAll('.predict-pick').forEach(b => b.onclick = () => {
+    PRED.pick = b.dataset.pick;
+    document.querySelectorAll('.predict-pick').forEach(x =>
+      x.style.cssText += x.dataset.pick === PRED.pick ? 'border-color:var(--accent2);color:var(--accent2);' : 'border-color:var(--border);color:var(--text2);');
+  });
+  document.querySelectorAll('.predict-amt').forEach(b => b.onclick = () => {
+    PRED.amount = +b.dataset.amt;
+    document.querySelectorAll('.predict-amt').forEach(x =>
+      x.style.cssText += +x.dataset.amt === PRED.amount ? 'border-color:var(--accent2);color:var(--accent2);' : 'border-color:var(--border);color:var(--text2);');
+  });
+  document.getElementById('predict-btn').disabled = false;
+  document.getElementById('predict-status').textContent = '게임 초반에만 베팅 가능';
+  document.getElementById('predict-panel').style.display = 'block';
+}
+function hidePredictPanel() {
+  document.getElementById('predict-panel').style.display = 'none';
+}
+function submitPredict() {
+  if (PRED.placed) return;
+  if (!PRED.pick) { document.getElementById('predict-status').textContent = '⚠ 플레이어를 선택하세요'; return; }
+  socket.emit('predict_bet', { roomId: PRED.roomId, pick: PRED.pick, amount: PRED.amount });
 }
 
 // ── 비밀번호 모달 ──────────────────────────────────────────────
@@ -4117,7 +4345,8 @@ function renderLobbyScreen(state) {
   } else {
     document.getElementById('lobby-room-sub').textContent =
       (state.gameType === 'othello' ? '🟢 오델로 · ' : '⚫ 오목 · ') +
-      (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음');
+      (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음') +
+      (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : '');
   }
 
   const isHost = state.players.some(p => p.isHost && p.nickname === myNickname);
@@ -4412,6 +4641,7 @@ function goLobby() {
   document.getElementById('othello-score-bar').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('chat-messages').innerHTML = '';
+  hidePredictPanel();
   showScreen('lobby-screen');
   renderStonePreviews();
   selectStoneStyle(currentStoneStyle);
@@ -4442,13 +4672,17 @@ function setupPlayerCards(players) {
 
   if (black) {
     const rank = getRank(black.record.points || 0);
-    document.getElementById('p1-name').textContent = black.nickname;
+    const el = document.getElementById('p1-name');
+    el.textContent = (black.nickStyle && black.nickStyle.title ? black.nickStyle.title + ' ' : '') + black.nickname;
+    el.style.color = (black.nickStyle && black.nickStyle.color) || '';
     document.getElementById('p1-rec').innerHTML =
       `${black.record.win}승 ${black.record.lose}패 <span class="rank-tag${isDan(rank)?' dan':''}" id="p1-rank-tag">${rank}</span>`;
   }
   if (white) {
     const rank = getRank(white.record.points || 0);
-    document.getElementById('p2-name').textContent = white.nickname;
+    const el = document.getElementById('p2-name');
+    el.textContent = (white.nickStyle && white.nickStyle.title ? white.nickStyle.title + ' ' : '') + white.nickname;
+    el.style.color = (white.nickStyle && white.nickStyle.color) || '';
     document.getElementById('p2-rec').innerHTML =
       `${white.record.win}승 ${white.record.lose}패 <span class="rank-tag${isDan(rank)?' dan':''}" id="p2-rank-tag">${rank}</span>`;
   }
