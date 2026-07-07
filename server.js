@@ -38,7 +38,7 @@ const INITIAL_COINS    = 1000000;   // 첫 지급 / 쿨타임 후 보충
 const COOLDOWN_MS      = 2 * 60 * 60 * 1000; // 2시간
 
 // ── 상점 카탈로그 ────────────────────────────────────────────────
-const SHOP_SKINS = { gold: 500000, neon: 500000, gem: 1000000 };  // 돌 스킨 가격
+const SHOP_SKINS = { gold: 500000, neon: 500000, gem: 1000000, goodcoco: 1000000 };  // 돌 스킨 가격
 const SHOP_TITLES = {
   gambler: { label: '🎲', name: '도박사',  price: 300000 },
   fire:    { label: '🔥', name: '불꽃',    price: 300000 },
@@ -1191,7 +1191,7 @@ function ttEmitState(room, extra = {}) {
       rerollUsed: tt.rerollUsed[me],
       held: { me: tt.held[me], opp: tt.held[opp] },
       alchigiBonus: tt.alchigiBonus
-        ? { mine: tt.alchigiBonus.color === me, v: tt.alchigiBonus.v }
+        ? { mine: tt.alchigiBonus.color === me, v: tt.alchigiBonus.v, color: tt.alchigiBonus.color }
         : null,
       score: {
         me:  { lanes: sc.lanes.map(l => l[me]),  wins: sc.laneWins[me],  total: sc.total[me] },
@@ -1207,6 +1207,9 @@ function ttEmitState(room, extra = {}) {
     io.to(spec.socketId).emit('tt:state', {
       roomId: room.id, lanes, yourColor: 0, bet: room.ttBet || 0, turn: tt.turn, isMyTurn: false,
       cur: tt.cur ? { ...tt.cur } : null, phase: tt.phase, isSpectator: true,
+      alchigiBonus: tt.alchigiBonus
+        ? { mine: false, v: tt.alchigiBonus.v, color: tt.alchigiBonus.color }
+        : null,
       held: { me: tt.held[1], opp: tt.held[2] },
       score: {
         me:  { lanes: sc.lanes.map(l => l[1]), wins: sc.laneWins[1], total: sc.total[1] },

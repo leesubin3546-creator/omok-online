@@ -169,13 +169,19 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 
 ---
 
-## 2026-07-02 업데이트 2: 포링 돌 디자인
+## 2026-07-02 업데이트 2: 포링 돌 디자인 → (2026-07-06 굿코코로 교체됨)
 
 - 돌 디자인 픽커에 **포링** 스타일 추가 (오목·오델로 공용)
 - 흑(1) = 원본 핑크 포링, 백(2) = 포포링(파랑, hue +225° 변환 생성)
 - 이미지: `public/image/poring.png`, `public/image/poporing.png` (root `image/`의 원본은 보존)
 - `drawStoneOnCtx`에 poring 분기 (이미지, 높이 2.3r) + 로드 전 폴백 원형(STONE_COLORS.poring)
 - `drawOthelloStone`이 흑백 고정 → 픽커 스타일 공용(`drawStoneOnCtx`)으로 변경
+
+### 2026-07-06: 포링 → 굿코코 교체 (프리미엄 100만)
+- `image/Goodcoco.png`(초록 새싹 캐릭터) 누끼: 테두리 플러드필 배경 제거 + 최대 컴포넌트만 유지 + 말풍선("굳!") 구역 지우개 마스크(머리 외곽선 우측 여백 기준, 말풍선 꼬리가 캐릭터와 연결돼 있어 필요) → `public/image/goodcoco.png` (288×365)
+- 변형색: 초록 계열 hue만 +165° 회전(볼터치 핑크·외곽선 유지) → `goodcoco2.png` (블루퍼플). 처리 스크립트는 스크래치패드(재실행 시 image/Goodcoco.png 원본에서 재생성 가능)
+- 코드: PORING_IMGS→GOODCOCO_IMGS, drawStoneOnCtx 분기 교체, ALL_STYLES/STYLE_NAMES poring→goodcoco('굿코코'), **PREMIUM_SKINS에 추가 + SHOP_SKINS goodcoco: 1000000**, 픽커 🔒 프리미엄 슬롯, localStorage 'poring' 저장값은 classic으로 마이그레이션
+- 검증: node-canvas로 오목/오델로 보드 위 돌 크기 렌더 확인, jsdom 스모크 회귀 없음
 
 ---
 
@@ -233,6 +239,7 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - **서버**: `chess.js@1.4` 의존성 추가(require CJS). `room.chess = new Chess()`, `buildChessState/chessEmitState`(board 매핑 `[0][0]`=a8, turn 'w'/'b', 합법수 verbose, inCheck, lastMove). 핸들러 `chess:move`(from/to, **프로모션 퀸 자동**, 불법 수 try/catch). 체크메이트=승, 스테일메이트·기물부족·3회반복·50수=무승부 → settleGameBets+game_over. start_game/rematch/관전 join에 chess 분기, `place_stone`은 gomoku 전용으로 가드 강화(board null 크래시 방지). color 1=백(선공), room.turn 유지로 기존 타이머/타임아웃 그대로 동작.
 - **클라**: 기존 game-screen 캔버스 재활용(오델로 8x8 지오메트리 공유). `drawChessBoard`(체크무늬+유니코드 기물 — 백은 밝은 채움+외곽선, 파일/랭크 라벨, 마지막 수/선택/체크 킹 강조, 이동 가능 점·잡기 링), `chessClick`(선택→합법 타겟 필터→emit), **흑 플레이어는 보드 자동 뒤집기**(`chessFlipped`), 관전자는 백 시점. 상태바 ♙백/♟흑 + '🔴 체크!', 플레이어 카드 킹 아이콘+백/흑 배지. 판돈·예측(10수 컷오프)·재대결·탈주 정산 전부 기존 인프라로 연동.
 - **검증**: chess.js 가정 11케이스(매핑/폴스메이트/스테일메이트/캐슬링/앙파상/프로모션/불법수 throw) + 클라 jsdom 8케이스(렌더/선택/이동 emit/흑 뒤집기/상대 기물 차단) 전부 통과. 기존 티카투카·상점 스모크 회귀 없음.
+- **기물 퀄업 (2026-07-06)**: 유니코드 글리프 → 자체 벡터 스프라이트로 교체. `chessBodyPath`(기물별 실루엣 패스, 100×100 좌표계)+`chessDetailPath`(눈/갈기/왕관 구슬 등)+`chessPieceSprite`(2배 슈퍼샘플 오프스크린 캐시 `CHESS_SPRITES`). 그라디언트 채움(백 아이보리/흑 다크브라운), 림 라이트(흑 기물 어두운 칸 분리), 바닥 그림자. 흑 나이트 좌우반전(마주봄). 플레이어 카드 킹 아이콘도 스프라이트. node-canvas로 12기물 렌더 시각 검증 완료. CHESS_GLYPHS는 잔존(미사용 가능).
 - **주의**: Render 배포 시 `npm install` 필요 (package.json에 chess.js 추가됨).
 
 **주사위 수정 (2026-07-06)**:

@@ -1100,7 +1100,7 @@
         <div class="stone-opt" data-style="drop" onclick="selectStoneStyle('drop')"><canvas id="sp-drop" width="72" height="40"></canvas><span>물방울</span></div>
         <div class="stone-opt" data-style="cloud" onclick="selectStoneStyle('cloud')"><canvas id="sp-cloud" width="72" height="40"></canvas><span>구름</span></div>
         <div class="stone-opt" data-style="butterfly" onclick="selectStoneStyle('butterfly')"><canvas id="sp-butterfly" width="72" height="40"></canvas><span>나비</span></div>
-        <div class="stone-opt" data-style="poring" onclick="selectStoneStyle('poring')"><canvas id="sp-poring" width="72" height="40"></canvas><span>포링</span></div>
+        <div class="stone-opt skin-premium" data-style="goodcoco" onclick="selectStoneStyle('goodcoco')"><canvas id="sp-goodcoco" width="72" height="40"></canvas><span>굿코코 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="gold" onclick="selectStoneStyle('gold')"><canvas id="sp-gold" width="72" height="40"></canvas><span>황금 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="neon" onclick="selectStoneStyle('neon')"><canvas id="sp-neon" width="72" height="40"></canvas><span>네온 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="gem" onclick="selectStoneStyle('gem')"><canvas id="sp-gem" width="72" height="40"></canvas><span>보석 <span class="skin-lock">🔒</span></span></div>
@@ -2782,9 +2782,9 @@ const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
 const OTHELLO_CANVAS_SIZE = OTHELLO_CELL * OTHELLO_SIZE + OTHELLO_PADDING * 2;
-const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','poring','gold','neon','gem'];
-const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', poring:'포링', gold:'황금', neon:'네온', gem:'보석' };
-const PREMIUM_SKINS = ['gold','neon','gem'];   // 상점 구매 필요
+const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','goodcoco','gold','neon','gem'];
+const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', goodcoco:'굿코코', gold:'황금', neon:'네온', gem:'보석' };
+const PREMIUM_SKINS = ['gold','neon','gem','goodcoco'];   // 상점 구매 필요
 
 // ── 급수 시스템 ───────────────────────────────────────────────
 const RANK_THRESHOLDS = [
@@ -2866,6 +2866,7 @@ let currentTurn = 1;
 let isSpectating = false;
 let gameActive = false;
 let currentStoneStyle = localStorage.getItem('omok_stone_style') || 'classic';
+if (currentStoneStyle === 'poring') currentStoneStyle = 'classic';   // 포링 → 굿코코 교체 마이그레이션
 let p1StoneStyle = 'classic';
 let p2StoneStyle = 'classic';
 // 타이머
@@ -2899,17 +2900,17 @@ const STONE_COLORS = {
   drop:      { c1:['#10c0d8','#0880a0','#024060'], c2:['#90e8ff','#40c0f8','#0090d0'] },
   cloud:     { c1:['#4060d0','#1830a0','#080c60'], c2:['#c8b0f8','#a080f0','#6840c8'] },
   butterfly: { c1:['#c040f8','#8010d0','#480080'], c2:['#f870e8','#e030c8','#a00090'] },
-  poring:    { c1:['#ffb0c8','#f0708f','#c03058'], c2:['#a8ccff','#5a95e8','#2255b0'] },
+  goodcoco:  { c1:['#c8e088','#96c050','#5a8020'], c2:['#b0a0e8','#8070cc','#4c3a96'] },
   gold:      { c1:['#f0c050','#b07818','#5c3a04'], c2:['#fff4c8','#f8d868','#c89020'] },
   neon:      { c1:['#80ffd8','#10e0a8','#007850'], c2:['#ff88f0','#f020cc','#980080'] },
   gem:       { c1:['#ff7890','#d81850','#780020'], c2:['#88b4ff','#3060e8','#0828a0'] },
 };
 
-// 포링 돌 이미지 (1=원본 포링, 2=포포링·파랑)
-const PORING_IMGS = { 1: new Image(), 2: new Image() };
-PORING_IMGS[1].src = 'image/poring.png';
-PORING_IMGS[2].src = 'image/poporing.png';
-[1,2].forEach(k => PORING_IMGS[k].onload = () => {
+// 굿코코 돌 이미지 (1=원본 초록, 2=블루퍼플 변형)
+const GOODCOCO_IMGS = { 1: new Image(), 2: new Image() };
+GOODCOCO_IMGS[1].src = 'image/goodcoco.png';
+GOODCOCO_IMGS[2].src = 'image/goodcoco2.png';
+[1,2].forEach(k => GOODCOCO_IMGS[k].onload = () => {
   try {
     if (typeof renderStonePreviews === 'function') renderStonePreviews();
     if (typeof updatePlayerStoneIcons === 'function') updatePlayerStoneIcons();
@@ -2996,8 +2997,8 @@ function stonePath(c, x, y, r, style) {
 }
 
 function drawStoneOnCtx(c, x, y, r, color, style) {
-  if (style === 'poring') {
-    const img = PORING_IMGS[color === 1 ? 1 : 2];
+  if (style === 'goodcoco') {
+    const img = GOODCOCO_IMGS[color === 1 ? 1 : 2];
     if (img.complete && img.naturalWidth) {
       const h = r * 2.3, w = h * (img.naturalWidth / img.naturalHeight);
       c.drawImage(img, x - w/2, y - h/2 - r*0.05, w, h);
@@ -3433,14 +3434,12 @@ function renderStonePreviews() {
 
 function updatePlayerStoneIcons() {
   if (gameType === 'chess') {
-    // 체스: 킹 글리프 + 백/흑 배지
+    // 체스: 킹 스프라이트 + 백/흑 배지
     const drawKing = (id, white) => {
       const cv = document.getElementById(id); if (!cv) return;
       const c = cv.getContext('2d');
       c.clearRect(0, 0, 28, 28);
-      c.font = '22px "Segoe UI Symbol", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      if (white) { c.strokeStyle = '#3a2408'; c.lineWidth = 1.5; c.strokeText('♚', 14, 15); c.fillStyle = '#faf6ec'; c.fillText('♚', 14, 15); }
-      else { c.fillStyle = '#241505'; c.fillText('♚', 14, 15); }
+      c.drawImage(chessPieceSprite('k', white ? 'w' : 'b', 26), 1, 1, 26, 26);
     };
     drawKing('p1-stone-icon', true); drawKing('p2-stone-icon', false);
     const b1 = document.getElementById('p1-style-badge'); if (b1) b1.textContent = '백';
@@ -3626,7 +3625,11 @@ function ttPvpRender() {
       <span style="font-weight:600;color:#c8881a;">🎯 알치기 보너스 실드 — 빛나는 빈 슬롯 클릭 (내/상대 필드)</span>`;
     if (newBonus) ttpRollAnim(document.getElementById('ttp-roll-die'), s.alchigiBonus.v, true, 'me');
   } else if (s.alchigiBonus) {
-    dieArea.innerHTML = `<span style="color:var(--text2);">💥 알치기! <b>${TTP.oppName}</b>가 보너스 실드 배치 중…</span>`;
+    // 상대(또는 관전 중인 플레이어)의 보너스 실드 — 눈 값과 함께 실물 표시
+    const who = s.isSpectator ? (s.alchigiBonus.color === 1 ? TTP.meName : TTP.oppName) : TTP.oppName;
+    dieArea.innerHTML = `<div id="ttp-roll-die" style="width:60px;height:60px;">${ttDieFaceSVG(s.alchigiBonus.v, true, 'opp', false)}</div>
+      <span style="color:var(--text2);">💥 알치기! <b>${who}</b>가 보너스 실드 [${s.alchigiBonus.v}] 배치 중…</span>`;
+    if (newBonus) ttpRollAnim(document.getElementById('ttp-roll-die'), s.alchigiBonus.v, true, 'opp');
   } else if (s.phase === 'choose' && myTurn && s.rollOptions) {
     dieArea.innerHTML = `<span style="font-weight:600;">🃏 하나 선택:</span>` +
       s.rollOptions.map((d, idx) => `<div class="ttp-choose" data-idx="${idx}" style="width:60px;height:60px;cursor:pointer;">${ttDieFaceSVG(d.v, d.s, 'me', false)}</div>`).join('');
@@ -4926,6 +4929,133 @@ function drawForbiddenMark(row, col, flash) {
 // ── 체스 클라이언트 ───────────────────────────────────────────
 const CHESS = { board: null, moves: [], sel: null, targets: [], lastMove: null, inCheck: false, turn: 'w' };
 const CHESS_GLYPHS = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+
+// ── 체스 기물 벡터 스프라이트 (100×100 좌표계, 2배 슈퍼샘플 캐시) ──
+const CHESS_SPRITES = {};
+function chessBodyPath(c, t) {
+  c.beginPath();
+  switch (t) {
+    case 'p':
+      c.moveTo(28,88);
+      c.bezierCurveTo(28,79, 37,77, 40,68);
+      c.bezierCurveTo(42,62, 43,56, 44,51);
+      c.bezierCurveTo(36,47, 36,36, 44,32);
+      c.bezierCurveTo(41,20, 59,20, 56,32);
+      c.bezierCurveTo(64,36, 64,47, 56,51);
+      c.bezierCurveTo(57,56, 58,62, 60,68);
+      c.bezierCurveTo(63,77, 72,79, 72,88);
+      break;
+    case 'r':
+      c.moveTo(25,88); c.lineTo(25,81); c.lineTo(32,75); c.lineTo(32,58);
+      c.lineTo(28,54); c.lineTo(28,40); c.lineTo(25,40); c.lineTo(25,22);
+      c.lineTo(35,22); c.lineTo(35,28); c.lineTo(44,28); c.lineTo(44,22);
+      c.lineTo(56,22); c.lineTo(56,28); c.lineTo(65,28); c.lineTo(65,22);
+      c.lineTo(75,22); c.lineTo(75,40); c.lineTo(72,40); c.lineTo(72,54);
+      c.lineTo(68,58); c.lineTo(68,75); c.lineTo(75,81); c.lineTo(75,88);
+      break;
+    case 'b':
+      c.moveTo(27,88);
+      c.bezierCurveTo(27,82, 35,80, 39,74);
+      c.bezierCurveTo(42,69, 43,63, 43,57);
+      c.bezierCurveTo(35,51, 33,42, 40,34);
+      c.bezierCurveTo(43,30, 46,27, 47,23);
+      c.bezierCurveTo(45,21, 45,16, 50,15);
+      c.bezierCurveTo(55,16, 55,21, 53,23);
+      c.bezierCurveTo(54,27, 57,30, 60,34);
+      c.bezierCurveTo(67,42, 65,51, 57,57);
+      c.bezierCurveTo(57,63, 58,69, 61,74);
+      c.bezierCurveTo(65,80, 73,82, 73,88);
+      break;
+    case 'q':
+      c.moveTo(26,88);
+      c.bezierCurveTo(26,82, 34,80, 37,72);
+      c.lineTo(30,38); c.lineTo(40,54);
+      c.lineTo(42,30); c.lineTo(47,52);
+      c.lineTo(50,27); c.lineTo(53,52);
+      c.lineTo(58,30); c.lineTo(60,54);
+      c.lineTo(70,38); c.lineTo(63,72);
+      c.bezierCurveTo(66,80, 74,82, 74,88);
+      break;
+    case 'k':
+      c.moveTo(28,88);
+      c.bezierCurveTo(28,82, 35,80, 38,72);
+      c.lineTo(33,46);
+      c.bezierCurveTo(29,40, 31,33, 38,32);
+      c.lineTo(46,32); c.lineTo(46,27); c.lineTo(42,27); c.lineTo(42,21);
+      c.lineTo(46,21); c.lineTo(46,15); c.lineTo(54,15); c.lineTo(54,21);
+      c.lineTo(58,21); c.lineTo(58,27); c.lineTo(54,27); c.lineTo(54,32);
+      c.lineTo(62,32);
+      c.bezierCurveTo(69,33, 71,40, 67,46);
+      c.lineTo(62,72);
+      c.bezierCurveTo(65,80, 72,82, 72,88);
+      break;
+    case 'n':
+      c.moveTo(28,88); c.lineTo(30,78);
+      c.bezierCurveTo(28,70, 25,66, 23,60);
+      c.lineTo(14,56);
+      c.bezierCurveTo(12,53, 12,51, 14,49);
+      c.lineTo(19,46); c.lineTo(23,48); c.lineTo(25,44);
+      c.bezierCurveTo(28,34, 34,26, 40,22);
+      c.lineTo(43,12); c.lineTo(48,20);
+      c.lineTo(53,13); c.lineTo(56,22);
+      c.bezierCurveTo(68,30, 74,44, 74,62);
+      c.lineTo(74,81); c.lineTo(72,88);
+      break;
+  }
+  c.closePath();
+}
+function chessDetailPath(c, t, ink, bodyFill) {
+  c.strokeStyle = ink; c.lineWidth = 2; c.lineCap = 'round';
+  const line = (x1, y1, x2, y2) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+  const dot = (x, y, r) => {
+    c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
+    c.fillStyle = bodyFill; c.fill();
+    c.lineWidth = 1.6; c.stroke(); c.lineWidth = 2;
+  };
+  switch (t) {
+    case 'p': break;
+    case 'r': line(33,75, 67,75); line(30,41, 70,41); break;
+    case 'b': line(45,45, 55,35); line(37,80, 63,80); break;
+    case 'q': line(37,67, 63,67); line(38,74, 62,74);
+      dot(30,34,2.6); dot(42,26,2.6); dot(50,23,2.6); dot(58,26,2.6); dot(70,34,2.6); break;
+    case 'k': line(38,67, 62,67); line(38,74, 62,74); line(35,46, 65,46); break;
+    case 'n': {
+      c.beginPath(); c.arc(38, 36, 2.2, 0, Math.PI * 2); c.fillStyle = ink; c.fill();    // 눈
+      c.beginPath(); c.arc(17, 52, 1.7, 0, Math.PI * 2); c.fill();                        // 콧구멍
+      c.beginPath(); c.moveTo(54, 26); c.bezierCurveTo(60, 36, 62, 46, 60, 58); c.stroke(); // 갈기
+      break;
+    }
+  }
+}
+function chessPieceSprite(t, colr, px) {
+  const key = t + colr + px;
+  if (CHESS_SPRITES[key]) return CHESS_SPRITES[key];
+  const white = colr === 'w';
+  const cv = document.createElement('canvas');
+  cv.width = px * 2; cv.height = px * 2;
+  const c = cv.getContext('2d');
+  c.scale(px * 2 / 100, px * 2 / 100);
+  if (t === 'n' && !white) { c.translate(100, 0); c.scale(-1, 1); }   // 흑 나이트는 반전 → 서로 마주봄
+  // 바닥 그림자
+  c.beginPath(); c.ellipse(50, 89.5, 26, 5.5, 0, 0, Math.PI * 2);
+  c.fillStyle = 'rgba(40,20,5,0.25)'; c.fill();
+  // 몸통
+  chessBodyPath(c, t);
+  const g = c.createLinearGradient(0, 8, 0, 92);
+  if (white) { g.addColorStop(0, '#fffdf2'); g.addColorStop(0.55, '#efe0bd'); g.addColorStop(1, '#c6ae82'); }
+  else       { g.addColorStop(0, '#7a5a38'); g.addColorStop(0.45, '#3c2a17'); g.addColorStop(1, '#191007'); }
+  c.fillStyle = g; c.fill();
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  // 림 라이트(어두운 칸에서 흑 기물 분리) → 외곽선
+  c.lineWidth = 4.5; c.strokeStyle = white ? 'rgba(74,47,16,0.3)' : 'rgba(235,214,170,0.5)';
+  c.stroke();
+  c.lineWidth = 2.2; c.strokeStyle = white ? '#4a2f10' : '#120b04';
+  c.stroke();
+  // 디테일 (나이트는 반전된 좌표계 그대로)
+  chessDetailPath(c, t, white ? '#4a2f10' : '#d9c396', white ? '#efe0bd' : '#3c2a17');
+  CHESS_SPRITES[key] = cv;
+  return cv;
+}
 function chessResetClient() {
   CHESS.board = null; CHESS.moves = []; CHESS.sel = null; CHESS.targets = [];
   CHESS.lastMove = null; CHESS.inCheck = false; CHESS.turn = 'w';
@@ -4970,23 +5100,14 @@ function drawChessBoard() {
       if (q && q.t === 'k' && q.c === CHESS.turn) tint(chessSqName(r, c), 'rgba(200,40,40,0.42)');
     }
   }
-  // 기물 (유니코드 채운 글리프 — 백은 밝은 채움+외곽선)
+  // 기물 (벡터 스프라이트)
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const q = CHESS.board[r][c];
     if (!q) continue;
     const d = chessBoardToDisp(r, c);
-    const x = P + d.c * S + S / 2, y = P + d.r * S + S / 2 + S * 0.03;
-    ctx.font = `${Math.floor(S * 0.78)}px "Segoe UI Symbol", serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (q.c === 'w') {
-      ctx.strokeStyle = '#3a2408'; ctx.lineWidth = 2;
-      ctx.strokeText(CHESS_GLYPHS[q.t], x, y);
-      ctx.fillStyle = '#faf6ec';
-      ctx.fillText(CHESS_GLYPHS[q.t], x, y);
-    } else {
-      ctx.fillStyle = '#241505';
-      ctx.fillText(CHESS_GLYPHS[q.t], x, y);
-    }
+    const px = Math.floor(S * 0.94);
+    const x = P + d.c * S + S / 2, y = P + d.r * S + S / 2;
+    ctx.drawImage(chessPieceSprite(q.t, q.c, px), x - px / 2, y - px / 2, px, px);
   }
   // 이동 가능 표시 (빈 칸 = 점, 잡기 = 링)
   for (const to of CHESS.targets) {
