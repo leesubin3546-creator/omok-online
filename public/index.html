@@ -712,7 +712,8 @@
   /* 족보 패널 */
   #hd-hand-rank-panel { background:var(--surface); border-radius:11px; border:1px solid var(--border); padding:10px 12px; display:flex; flex-direction:column; gap:3px; }
   #hd-hand-rank-panel .panel-title { font-size:0.72rem; font-weight:700; color:var(--text2); letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; }
-  .hr-row { display:flex; align-items:center; gap:7px; padding:3px 6px; border-radius:6px; font-size:0.76rem; color:var(--text2); transition:background 0.15s, color 0.15s; }
+  .hr-rows { display:grid; grid-template-columns:1fr 1fr; gap:2px 6px; }   /* 2열 압축 — 채팅과 한 화면에 */
+  .hr-row { display:flex; align-items:center; gap:5px; padding:2px 4px; border-radius:6px; font-size:0.72rem; color:var(--text2); transition:background 0.15s, color 0.15s; white-space:nowrap; }
   .hr-row.current { background:rgba(240,184,48,0.18); color:#f0b830; font-weight:700; }
   .hr-row.current .hr-dot { background:#f0b830; box-shadow:0 0 6px rgba(240,184,48,0.6); }
   .hr-dot { width:7px; height:7px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background 0.15s; }
@@ -950,6 +951,50 @@
   .tt-win-opp  { background:rgba(192,57,43,0.1); color:#c0392b; border:1px solid rgba(192,57,43,0.3); }
   .tt-win-tie  { background:rgba(200,136,26,0.1); color:#7a4a15; border:1px solid rgba(200,136,26,0.3); }
   .tt-win-none { background:var(--card); color:var(--text2); border:1px solid var(--border); }
+
+  /* ── 블랙잭 ─────────────────────────────────────────── */
+  #bj-wrap { width:100%; max-width:780px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  #bj-status {
+    padding:10px 14px; border-radius:10px; background:var(--surface); border:1px solid var(--border);
+    font-size:0.9rem; font-weight:600; text-align:center; color:var(--accent);
+  }
+  #bj-dealer-box {
+    background:#1a5c34; border:2px solid #0d4020; border-radius:14px; padding:14px 18px;
+    display:flex; flex-direction:column; gap:8px; align-items:center;
+  }
+  #bj-dealer-box .bj-label { color:#d8f0dc; font-weight:700; font-size:0.85rem; letter-spacing:1px; }
+  .bj-cards { display:flex; gap:5px; flex-wrap:wrap; align-items:center; min-height:56px; justify-content:center; }
+  .bj-value { display:inline-block; padding:1px 9px; border-radius:9px; background:rgba(0,0,0,0.25);
+    font-size:0.75rem; font-weight:800; color:#ffe9a8; margin-left:4px; }
+  #bj-players-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .bj-player {
+    flex:1 1 30%; min-width:170px; background:var(--card); border:2px solid var(--border);
+    border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:6px;
+    transition:border-color 0.2s, box-shadow 0.2s;
+  }
+  .bj-player.turn { border-color:#f0b830; box-shadow:0 0 14px rgba(240,184,48,0.45); }
+  .bj-player.gone { opacity:0.45; }
+  .bj-player .bj-pname { font-size:0.85rem; font-weight:700; }
+  .bj-player .bj-pname .bj-value { background:rgba(0,0,0,0.1); color:var(--accent); }
+  .bj-player .bj-sub { font-size:0.74rem; color:var(--text2); min-height:16px; }
+  .bj-badge { font-weight:800; padding:1px 7px; border-radius:8px; font-size:0.72rem; }
+  .bj-badge.bj-win  { color:#2a6e2a; background:rgba(42,110,42,0.12); }
+  .bj-badge.bj-lose { color:#c0392b; background:rgba(192,57,43,0.12); }
+  .bj-badge.bj-push { color:var(--text2); background:rgba(0,0,0,0.07); }
+  .bj-badge.bj-gold { color:#a06a00; background:rgba(240,184,48,0.25); }
+  #bj-bet-bar, #bj-action-bar {
+    display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px;
+  }
+  .bj-bet-opt { padding:7px 12px; border-radius:9px; border:1.5px solid var(--border); background:var(--card);
+    font-size:0.8rem; font-weight:700; color:var(--text2); cursor:pointer; font-family:inherit; }
+  .bj-bet-opt.selected { border-color:var(--accent2); color:var(--accent2); background:rgba(200,136,26,0.1); }
+  #bj-chat-box { background:var(--surface); border-radius:11px; border:1px solid var(--border);
+    display:flex; flex-direction:column; height:160px; overflow:hidden; }
+  #bj-chat-messages { flex:1; overflow-y:auto; padding:10px 12px; font-size:0.83rem;
+    display:flex; flex-direction:column; gap:3px; }
+  #bj-chat-messages::-webkit-scrollbar { width:4px; }
+  #bj-chat-messages::-webkit-scrollbar-thumb { background:#c4a070; border-radius:4px; }
 
   /* PvP 레이아웃 확대 + 채팅 */
   #ttp-wrap { width:100%; max-width:920px; margin:0 auto; display:flex; flex-direction:column; }
@@ -1208,6 +1253,7 @@
         <label><input type="radio" name="modal-game-type" value="chess" onchange="onModalGameTypeChange()"> ♞ 체스</label>
         <label><input type="radio" name="modal-game-type" value="tikatuka" onchange="onModalGameTypeChange()"> 🎲 티카투카</label>
         <label><input type="radio" name="modal-game-type" value="holdem" onchange="onModalGameTypeChange()"> 🃏 텍사스 홀덤</label>
+        <label><input type="radio" name="modal-game-type" value="blackjack" onchange="onModalGameTypeChange()"> 🂡 블랙잭</label>
       </div>
     </div>
     <div id="modal-buyin-row">
@@ -1430,6 +1476,40 @@
       <!-- JS로 렌더링 -->
     </div>
     <button class="btn-secondary btn-sm" onclick="hdGoLobby()">로비로 나가기</button>
+  </div>
+</div>
+
+<!-- 블랙잭 -->
+<div id="bj-screen" class="screen" style="padding:20px 16px;">
+  <div id="bj-wrap">
+    <div class="tt-toolbar">
+      <button class="tt-back-btn" onclick="bjLeave()">← 나가기</button>
+      <span class="tt-toolbar-title">🂡 블랙잭</span>
+      <span id="bj-round-tag" style="font-size:0.72rem;color:var(--text2);"></span>
+    </div>
+    <div id="bj-status">대기 중…</div>
+    <div id="bj-dealer-box">
+      <div class="bj-label">🎩 딜러 <span id="bj-dealer-value" class="bj-value"></span></div>
+      <div id="bj-dealer-cards" class="bj-cards"></div>
+    </div>
+    <div id="bj-players-row"></div>
+    <div id="bj-bet-bar" style="display:none;">
+      <span style="font-size:0.85rem;font-weight:700;">💰 베팅</span>
+      <div id="bj-bet-opts" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <button class="btn-primary btn-sm" onclick="bjPlaceBet()">베팅하기</button>
+    </div>
+    <div id="bj-action-bar" style="display:none;">
+      <button class="hd-btn hd-btn-call"  id="bj-btn-hit"    onclick="bjEmitAct('bj:hit')">🃏 히트</button>
+      <button class="hd-btn hd-btn-check" id="bj-btn-stand"  onclick="bjEmitAct('bj:stand')">✋ 스탠드</button>
+      <button class="hd-btn hd-btn-raise" id="bj-btn-double" onclick="bjEmitAct('bj:double')">✕2 더블다운</button>
+    </div>
+    <div id="bj-chat-box">
+      <div id="bj-chat-messages"></div>
+      <div style="display:flex;gap:6px;padding:7px 10px;border-top:1px solid var(--border);">
+        <input id="bj-chat-input" type="text" placeholder="메시지 입력..." maxlength="200">
+        <button class="btn-secondary btn-sm" onclick="bjSendChat()">전송</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3462,7 +3542,91 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
 }
 
-// ══ 티카투카 PvP 클라이언트 ══════════════════════════════════
+// ══ 블랙잭 클라이언트 ════════════════════════════════════════
+const BJ = { s: null, betChoice: 1000 };
+const BJ_BET_OPTS = [1000, 5000, 10000, 50000, 100000];
+
+function bjStart(roomId) {
+  currentRoom = roomId;
+  gameType = 'blackjack';
+  BJ.s = null; BJ.betChoice = 1000;
+  document.getElementById('bj-chat-messages').innerHTML = '';
+  document.getElementById('bj-bet-opts').innerHTML = BJ_BET_OPTS.map(a =>
+    `<button class="bj-bet-opt ${a === 1000 ? 'selected' : ''}" data-amt="${a}" onclick="bjPickBet(${a})">${a >= 10000 ? (a / 10000) + '만' : (a / 1000) + '천'}</button>`).join('');
+  showScreen('bj-screen');
+}
+function bjPickBet(a) {
+  BJ.betChoice = a;
+  document.querySelectorAll('.bj-bet-opt').forEach(b => b.classList.toggle('selected', +b.dataset.amt === a));
+}
+function bjPlaceBet() {
+  if (socket && currentRoom) socket.emit('bj:bet', { roomId: currentRoom, amount: BJ.betChoice });
+}
+function bjEmitAct(ev) {
+  if (socket && currentRoom) socket.emit(ev, { roomId: currentRoom });
+}
+function bjSendChat() {
+  const input = document.getElementById('bj-chat-input');
+  const msg = input.value.trim();
+  if (!msg || !currentRoom) return;
+  socket.emit('chat', { roomId: currentRoom, nickname: myNickname, message: msg });
+  input.value = '';
+}
+document.getElementById('bj-chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') bjSendChat(); });
+function bjLeave() {
+  if (currentRoom) socket.emit('leave_room', { roomId: currentRoom });
+  currentRoom = null;
+  BJ.s = null;
+  showScreen('lobby-screen');
+  if (socket) {
+    socket.emit('get_room_list');
+    socket.emit('get_coins', { nickname: myNickname });
+  }
+}
+
+function bjRender() {
+  const s = BJ.s; if (!s) return;
+  document.getElementById('bj-round-tag').textContent = s.round ? `라운드 ${s.round}` : '';
+
+  // 딜러
+  document.getElementById('bj-dealer-cards').innerHTML =
+    s.dealer.map(c => renderHdCard(c)).join('') +
+    Array(s.dealerHidden || 0).fill(renderHdCard('back')).join('');
+  document.getElementById('bj-dealer-value').textContent = s.dealerValue != null ? s.dealerValue : '?';
+
+  // 플레이어
+  const myIdx = s.players.findIndex(p => p.nickname === myNickname);
+  document.getElementById('bj-players-row').innerHTML = s.players.map((p, i) => {
+    const badge =
+      p.result === 'bj'   ? `<span class="bj-badge bj-gold">🂡 블랙잭! +${p.payout.toLocaleString()}</span>` :
+      p.result === 'win'  ? `<span class="bj-badge bj-win">승리 +${p.payout.toLocaleString()}</span>` :
+      p.result === 'push' ? `<span class="bj-badge bj-push">무승부 (반환)</span>` :
+      p.result === 'lose' ? `<span class="bj-badge bj-lose">패배 -${p.bet.toLocaleString()}</span>` :
+      p.bust              ? `<span class="bj-badge bj-lose">💥 버스트!</span>` :
+      p.natural           ? `<span class="bj-badge bj-gold">🂡 블랙잭!</span>` : '';
+    return `<div class="bj-player ${s.phase === 'acting' && s.actionIdx === i ? 'turn' : ''} ${p.isDisconnected ? 'gone' : ''}">
+      <div class="bj-pname">${escapeHtml(p.nickname)}${i === myIdx ? ' (나)' : ''}${p.value != null ? `<span class="bj-value">${p.value}</span>` : ''}</div>
+      <div class="bj-cards" style="justify-content:flex-start;">${p.cards.map(c => renderHdCard(c)).join('')}</div>
+      <div class="bj-sub">${p.bet ? `베팅 ${p.bet.toLocaleString()}${p.doubled ? ' (더블)' : ''}` : (s.phase === 'betting' ? '베팅 대기…' : '관망')} ${badge}</div>
+    </div>`;
+  }).join('');
+
+  // 컨트롤 + 상태
+  const me = myIdx >= 0 ? s.players[myIdx] : null;
+  const myTurn = s.phase === 'acting' && me && s.actionIdx === myIdx && !me.done;
+  document.getElementById('bj-bet-bar').style.display = (s.phase === 'betting' && me && !me.bet) ? 'flex' : 'none';
+  document.getElementById('bj-action-bar').style.display = myTurn ? 'flex' : 'none';
+  if (myTurn) document.getElementById('bj-btn-double').disabled = me.cards.length !== 2;
+  const st = document.getElementById('bj-status');
+  if (s.phase === 'betting') {
+    st.textContent = !me ? '👁 관전 중 — 베팅 페이즈' : (me.bet ? '✔ 베팅 완료 — 다른 플레이어 대기…' : `💰 베팅하세요! (${s.betTime || 20}초 내 미베팅 시 이번 라운드 관망)`);
+  } else if (s.phase === 'acting') {
+    st.textContent = myTurn ? '🃏 내 차례 — 히트 / 스탠드 / 더블다운'
+      : `⏳ ${s.players[s.actionIdx] ? s.players[s.actionIdx].nickname : '…'} 차례`;
+  } else {
+    st.textContent = '🎩 딜러 카드 공개 — 정산 후 다음 라운드가 시작됩니다';
+  }
+}
 const TTP = { s: null, roomId: null, meName: '나', oppName: '상대',
   snap: null, rollKey: null, prevPhase: null, prevBonus: false, rollTimers: [] };
 const TTP_LANE_NM = ['상단', '중단', '하단'];
@@ -3745,7 +3909,8 @@ function updateRecordUI(rec) {
 }
 function addChat(text, isSystem = false) {
   const onTtPvp = document.getElementById('tt-pvp-screen').classList.contains('active');
-  const msgs = document.getElementById(onTtPvp ? 'ttp-chat-messages' : 'chat-messages');
+  const onBj = document.getElementById('bj-screen').classList.contains('active');
+  const msgs = document.getElementById(onTtPvp ? 'ttp-chat-messages' : onBj ? 'bj-chat-messages' : 'chat-messages');
   const div = document.createElement('div');
   div.className = 'chat-msg';
   div.innerHTML = isSystem ? `<span class="sys">${text}</span>` : text;
@@ -3869,6 +4034,7 @@ function initSocket() {
 
   socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut, gameType: gt }) => {
     if (gt === 'tikatuka') { gameType = 'tikatuka'; ttPvpStart(roomId, players, yourColor); return; }
+    if (gt === 'blackjack') { isSpectating = false; bjStart(roomId); return; }
     currentRoom = roomId;
     gameBoard = board ? board.map(r => [...r]) : [];
     currentTurn = turn; gameActive = true; isSpectating = false;
@@ -3906,6 +4072,7 @@ function initSocket() {
       showScreen('tt-pvp-screen');
       showPredictPanel(roomId, players.map(p => p.nickname));
       return; }
+    if (gt === 'blackjack') { isSpectating = true; bjStart(roomId); return; }
     currentRoom = roomId;
     gameBoard = board ? board.map(r => [...r]) : [];
     gameType = gt || 'gomoku';
@@ -3936,6 +4103,16 @@ function initSocket() {
     showScreen('game-screen');
     addChat('관전 모드로 입장했습니다.', true);
     showPredictPanel(roomId, players.map(p => p.nickname));
+  });
+
+  // ── 블랙잭 상태 동기화 ───────────────────────────────────────
+  socket.on('bj:state', s => {
+    if (s.roomId && currentRoom && s.roomId !== currentRoom) return;
+    BJ.s = s;
+    if (s.roomId) currentRoom = s.roomId;
+    gameType = 'blackjack';
+    if (!document.getElementById('bj-screen').classList.contains('active')) showScreen('bj-screen');
+    bjRender();
   });
 
   // ── 체스 상태 동기화 ─────────────────────────────────────────
@@ -4215,11 +4392,11 @@ function openCreateRoomModal() {
 }
 function onModalGameTypeChange() {
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
-  const isHoldem = gt === 'holdem';
+  const isHoldem = gt === 'holdem', isBj = gt === 'blackjack';
   document.getElementById('modal-buyin-row').classList.toggle('show', isHoldem);
-  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldem);  // 오목/오델로/티카투카 판돈
-  // 티카투카는 타이머 없음, 홀덤은 타이머 숨김
-  document.getElementById('modal-timer-row').style.display = (isHoldem || gt === 'tikatuka') ? 'none' : '';
+  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldem && !isBj);  // 블랙잭은 라운드별 인게임 베팅
+  // 티카투카/블랙잭은 타이머 없음, 홀덤은 타이머 숨김
+  document.getElementById('modal-timer-row').style.display = (isHoldem || isBj || gt === 'tikatuka') ? 'none' : '';
 }
 function selectBuyIn(amount) {
   selectedBuyIn = amount;
@@ -4337,6 +4514,8 @@ function updateRoomList(list) {
       gameBadge = `<span class="room-badge room-badge-holdem">🎲 티카투카</span>`;
     } else if (r.gameType === 'chess') {
       gameBadge = `<span class="room-badge room-badge-othello">♞ 체스</span>`;
+    } else if (r.gameType === 'blackjack') {
+      gameBadge = `<span class="room-badge room-badge-holdem">🂡 블랙잭</span>`;
     } else {
       gameBadge = `<span class="room-badge room-badge-gomoku">오목</span>`;
     }
@@ -4378,6 +4557,9 @@ function renderLobbyScreen(state) {
   if (state.gameType === 'holdem') {
     document.getElementById('lobby-room-sub').textContent =
       `🃏 텍사스 홀덤 · 바이인 ${(state.buyIn || 1000).toLocaleString()}`;
+  } else if (state.gameType === 'blackjack') {
+    document.getElementById('lobby-room-sub').textContent =
+      '🂡 블랙잭 · 딜러(하우스) 상대 · 라운드별 베팅 · 혼자서도 시작 가능';
   } else if (state.gameType === 'tikatuka') {
     document.getElementById('lobby-room-sub').textContent =
       '🎲 티카투카 대전' + (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : ' · 무료');
@@ -4397,9 +4579,9 @@ function renderLobbyScreen(state) {
   const grid = document.getElementById('lobby-players-grid');
   grid.innerHTML = '';
 
-  if (state.gameType === 'holdem') {
+  if (state.gameType === 'holdem' || state.gameType === 'blackjack') {
     grid.classList.add('holdem-lobby');
-    const maxP = 6;
+    const maxP = state.gameType === 'blackjack' ? 5 : 6;
     for (let i = 0; i < maxP; i++) {
       const p = state.players[i];
       if (p) {
@@ -4464,7 +4646,7 @@ function renderLobbyScreen(state) {
   // 관전석 이동 버튼
   const specActions = document.getElementById('lobby-spec-actions');
   specActions.innerHTML = '';
-  const maxPlayers = state.gameType === 'holdem' ? 6 : 2;
+  const maxPlayers = state.maxPlayers || (state.gameType === 'holdem' ? 6 : state.gameType === 'blackjack' ? 5 : 2);
   if (meAsPlayer && !meAsPlayer.isHost) {
     specActions.innerHTML = `<button class="btn-secondary btn-sm" onclick="moveToSpectator()">관전석으로 이동</button>`;
   } else if (meAsSpec && state.players.length < maxPlayers) {
@@ -5371,15 +5553,15 @@ function renderHandRankPanel(currentHandName) {
   const panel = document.getElementById('hd-hand-rank-panel');
   if (!panel) return;
   const currentRank = currentHandName != null ? (HD_NAME_TO_RANK[currentHandName] ?? -1) : -1;
-  panel.innerHTML = '<div class="panel-title">족보</div>' +
+  panel.innerHTML = '<div class="panel-title">족보</div><div class="hr-rows">' +
     HD_HAND_RANKS.map(h => {
       const isCurrent = h.rank === currentRank;
       return `<div class="hr-row ${isCurrent ? 'current' : ''}">
         <div class="hr-dot"></div>
         <div class="hr-label">${h.name}</div>
-        <div class="hr-rank">${isCurrent ? '◀ 현재' : ''}</div>
+        <div class="hr-rank">${isCurrent ? '◀' : ''}</div>
       </div>`;
-    }).join('');
+    }).join('') + '</div>';
 }
 
 // ── 홀덤 UI ───────────────────────────────────────────────────

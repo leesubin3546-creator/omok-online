@@ -252,6 +252,19 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
 - 검증: 6백만회 카이제곱 9.43(df=5, 임계 11.07) 균등 ✔, ttRollExcept 제외값별 100만회 — 중복 0회·나머지 5개 각 20% ✔.
 
+## 2026-07-07 업데이트 2: 블랙잭 (gameType 'blackjack')
+
+- **룰**: 딜러 = 하우스(서버), 1~5인(솔로 시작 가능 — start_game 2인 체크 예외). 라운드제: 베팅(20초, 프리셋 1천~10만, 즉시 차감) → 딜(2덱) → 히트/스탠드/더블다운(첫 2장, 추가 차감) → 딜러 17까지 히트(전원 버스트 시 드로우 생략) → 정산(승 2배, 블랙잭 2.5배(3:2), 푸시 반환) → 6초 후 다음 라운드. 미베팅 = 그 라운드 관망. 액션 20초 타임아웃 = 스탠드.
+- **서버**: `createBjState`/`bjValue`(A=11/1)/`startBjRound`(나간 플레이어 제거+방장 이전, 전원 이탈 시 방 삭제)/`bjDeal`/`bjAdvance`/`bjDealerPlay`/`bjAction`. 이벤트 bj:bet/hit/stand/double, 상태 `bj:state`(betting/acting 중 딜러 홀카드 숨김). handleLeaveRoom 블랙잭 분기(socket.leave + 현재 차례면 자동 스탠드). 예측 베팅 제외, resign 가드(홀덤 포함), maxPlayers 5(4곳), useTimer=false.
+- **클라**: `#bj-screen`(딜러 박스/플레이어 박스들/베팅 바/액션 바/채팅), `BJ`/`bj*` 함수, 홀덤 카드 렌더러(`renderHdCard`) 재활용. game_start·spectate_start·bj:state 분기, addChat이 bj 화면 활성 시 `#bj-chat-messages` 라우팅. 대기실은 홀덤식 그리드 공유(5슬롯).
+- **검증**: 서버 시뮬 28케이스(밸류 계산/내추럴 자동스탠드/홀카드 숨김·공개/2.5배·2배·푸시 배당/버스트/더블 차감·2배 반영/관망 제외/이탈 제거) + 클라 jsdom 16케이스 전부 통과. 기존 스모크 회귀 없음.
+
+## 2026-07-07 업데이트: 홀덤 이탈/레이아웃 수정
+
+- **로비로 나가면 아웃 처리**: handleLeaveRoom 홀덤 분기에서 `socket.leave(roomId)` 추가 — 이후 holdem_state 브로드캐스트를 안 받아 화면 재소환 버그 해결. `startHoldemHand` 시작 시 `isDisconnected` 플레이어 제거 + **남은 칩 코인 환급**(addCoins) + 방장 이전. `startHoldemTimer`에서 나간 플레이어 차례면 0.4초 후 즉시 자동 폴드(30초 대기 제거).
+- **족보 패널 2열 압축**: `.hr-rows` grid 2열, '◀ 현재'→'◀' — 채팅(200px)과 족보가 한 화면에 들어옴.
+- 탈주 정산 규칙: 게임 도중 나가면 그 핸드의 베팅분은 팟에 남고(폴드), 남은 스택은 다음 핸드 시작 시 코인으로 환급. 잔여 1명이면 게임 종료 → 승자 정산.
+
 ### (원래 스펙) 확정 스코프
 
 ### 확정 스코프

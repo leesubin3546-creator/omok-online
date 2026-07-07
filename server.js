@@ -641,6 +641,14 @@ function startHoldemTimer(room) {
   if (!h || h.actionIndex < 0) return;
   const cp = room.players[h.actionIndex];
   if (!cp || cp.folded || cp.allIn) return;
+  // 나간 플레이어 차례 → 즉시 폴드 (30초 기다리지 않음)
+  if (cp.isDisconnected) {
+    const idx = h.actionIndex;
+    setTimeout(() => {
+      if (room.status === 'playing' && h.playersToAct[0] === idx) processHoldemAction(room, idx, 'fold', 0);
+    }, 400);
+    return;
+  }
   io.to(room.id).emit('holdem_timer', {
     playerIndex: h.actionIndex, nickname: cp.nickname, seconds: 30, timestamp: Date.now(),
   });
@@ -664,6 +672,17 @@ function postBlind(room, playerIdx, amount) {
 function startHoldemHand(room) {
   const h = room.holdem;
   if (!h || room.status !== 'playing') return;
+  // 나간(연결 끊긴) 플레이어 정리: 남은 칩은 코인으로 환급 후 테이블에서 제거
+  for (let i = room.players.length - 1; i >= 0; i--) {
+    const p = room.players[i];
+    if (p.isDisconnected) {
+      if (p.chips > 0) addCoins(p.nickname, p.chips);
+      room.players.splice(i, 1);
+    }
+  }
+  if (room.players.length > 0 && !room.players.find(p => p.socketId === room.hostSocketId)) {
+    room.hostSocketId = room.players[0].socketId;   // 방장 이전
+  }
   const activeIdxs = room.players.map((p, i) => ({ p, i })).filter(({ p }) => p.chips > 0).map(({ i }) => i);
   if (activeIdxs.length < 2) { endHoldemGame(room); return; }
 
@@ -951,6 +970,179 @@ async function endHoldemGame(room) {
   setTimeout(() => { if (rooms.has(room.id)) rooms.delete(room.id); }, 30000);
 }
 
+// ══ 블랙잭 (딜러 = 하우스, 라운드제) ═════════════════════════
+const BJ_BET_MIN = 100, BJ_BET_MAX = 100000;
+const BJ_BET_TIME = 20000, BJ_ACT_TIME = 20000;
+function createBjState() {
+  return { phase: 'waiting', deck: [], dealer: [], actionIdx: -1, round: 0, timer: null };
+}
+function bjClearTimer(room) {
+  if (room.bj && room.bj.timer) { clearTimeout(room.bj.timer); room.bj.timer = null; }
+}
+// 핸드 값: A=11(버스트 시 1), J/Q/K=10
+function bjValue(cards) {
+  let sum = 0, aces = 0;
+  for (const c of cards) {
+    if (c.rank === 14) { aces++; sum += 11; }
+    else if (c.rank >= 11) sum += 10;
+    else sum += c.rank;
+  }
+  while (sum > 21 && aces > 0) { sum -= 10; aces--; }
+  return sum;
+}
+function bjEmitState(room, extra = {}) {
+  const bj = room.bj;
+  const hideHole = bj.phase === 'betting' || bj.phase === 'acting';
+  io.to(room.id).emit('bj:state', {
+    roomId: room.id,
+    phase: bj.phase,
+    round: bj.round,
+    dealer: hideHole ? bj.dealer.slice(0, 1) : bj.dealer,
+    dealerHidden: hideHole ? Math.max(0, bj.dealer.length - 1) : 0,
+    dealerValue: hideHole ? null : (bj.dealer.length ? bjValue(bj.dealer) : null),
+    actionIdx: bj.actionIdx,
+    betTime: BJ_BET_TIME / 1000,
+    players: room.players.map(p => ({
+      nickname: p.nickname,
+      bet: p.bjBet || 0,
+      cards: p.bjCards || [],
+      value: p.bjCards && p.bjCards.length ? bjValue(p.bjCards) : null,
+      done: !!p.bjDone, bust: !!p.bjBust, doubled: !!p.bjDoubled, natural: !!p.bjNatural,
+      result: p.bjResult || null, payout: p.bjPayout || 0,
+      isDisconnected: !!p.isDisconnected,
+    })),
+    ...extra,
+  });
+}
+
+function startBjRound(room) {
+  const bj = room.bj;
+  if (!bj || room.status !== 'playing') return;
+  bjClearTimer(room);
+  // 나간 플레이어 제거 (라운드 단위 정산이라 환급 없음)
+  for (let i = room.players.length - 1; i >= 0; i--) {
+    if (room.players[i].isDisconnected) room.players.splice(i, 1);
+  }
+  if (room.players.length === 0) { rooms.delete(room.id); broadcastRoomList(); return; }
+  if (!room.players.find(p => p.socketId === room.hostSocketId)) room.hostSocketId = room.players[0].socketId;
+  bj.round++;
+  bj.phase = 'betting';
+  bj.dealer = [];
+  bj.actionIdx = -1;
+  for (const p of room.players) {
+    p.bjBet = 0; p.bjCards = []; p.bjDone = false; p.bjBust = false;
+    p.bjDoubled = false; p.bjResult = null; p.bjPayout = 0; p.bjNatural = false;
+  }
+  bjEmitState(room, { event: 'round_start' });
+  bj.timer = setTimeout(() => bjDeal(room), BJ_BET_TIME);
+}
+
+function bjDeal(room) {
+  const bj = room.bj;
+  if (!bj || room.status !== 'playing' || bj.phase !== 'betting') return;
+  bjClearTimer(room);
+  const betting = room.players.filter(p => p.bjBet > 0);
+  if (betting.length === 0) { startBjRound(room); return; }   // 전원 미베팅 → 라운드 재시작
+  bj.phase = 'acting';
+  bj.deck = shuffleDeck([...createDeck(), ...createDeck()]);  // 2덱
+  for (const p of betting) p.bjCards = [bj.deck.pop(), bj.deck.pop()];
+  bj.dealer = [bj.deck.pop(), bj.deck.pop()];
+  for (const p of betting) {
+    if (bjValue(p.bjCards) === 21) { p.bjNatural = true; p.bjDone = true; }  // 블랙잭 자동 스탠드
+  }
+  for (const p of room.players) if (!(p.bjBet > 0)) p.bjDone = true;         // 관망자 스킵
+  bjAdvance(room);
+}
+
+function bjAdvance(room) {
+  const bj = room.bj;
+  if (!bj || room.status !== 'playing' || bj.phase !== 'acting') return;
+  const next = room.players.findIndex(p => p.bjBet > 0 && !p.bjDone);
+  if (next === -1) { bjDealerPlay(room); return; }
+  bj.actionIdx = next;
+  // 나간 플레이어 → 자동 스탠드
+  if (room.players[next].isDisconnected) {
+    room.players[next].bjDone = true;
+    bjAdvance(room);
+    return;
+  }
+  bjEmitState(room);
+  bjClearTimer(room);
+  bj.timer = setTimeout(() => {
+    if (bj.phase === 'acting' && bj.actionIdx === next && room.status === 'playing') {
+      room.players[next].bjDone = true;   // 시간초과 = 스탠드
+      bjAdvance(room);
+    }
+  }, BJ_ACT_TIME);
+}
+
+async function bjDealerPlay(room) {
+  const bj = room.bj;
+  bjClearTimer(room);
+  bj.phase = 'dealer';
+  bj.actionIdx = -1;
+  // 살아있는 핸드가 있을 때만 딜러가 드로우 (전원 버스트/블랙잭이면 공개만)
+  const anyLive = room.players.some(p => p.bjBet > 0 && !p.bjBust && !p.bjNatural);
+  while (anyLive && bjValue(bj.dealer) < 17) bj.dealer.push(bj.deck.pop());
+  const dv = bjValue(bj.dealer);
+  const dealerBj = bj.dealer.length === 2 && dv === 21;
+  for (const p of room.players) {
+    if (!(p.bjBet > 0)) continue;
+    const v = bjValue(p.bjCards);
+    let result, payout = 0;
+    if (p.bjBust) result = 'lose';
+    else if (p.bjNatural && !dealerBj) { result = 'bj'; payout = Math.floor(p.bjBet * 2.5); }  // 블랙잭 3:2
+    else if (dealerBj && !p.bjNatural) result = 'lose';
+    else if (dv > 21 || v > dv) { result = 'win'; payout = p.bjBet * 2; }
+    else if (v === dv) { result = 'push'; payout = p.bjBet; }
+    else result = 'lose';
+    p.bjResult = result; p.bjPayout = payout;
+    if (payout > 0) await addCoins(p.nickname, payout);
+  }
+  bj.phase = 'settle';
+  bjEmitState(room, { event: 'settle' });
+  for (const p of room.players) {
+    if (p.isDisconnected) continue;
+    const info = await getCoinsInfo(p.nickname);
+    io.to(p.socketId).emit('coins_info', info);
+  }
+  bj.timer = setTimeout(() => startBjRound(room), 6000);
+}
+
+async function bjAction(roomId, socketId, act) {
+  const room = rooms.get(roomId);
+  if (!room || room.gameType !== 'blackjack' || room.status !== 'playing') return;
+  const bj = room.bj;
+  if (!bj || bj.phase !== 'acting') return;
+  const idx = room.players.findIndex(p => p.socketId === socketId);
+  if (idx === -1 || bj.actionIdx !== idx) return;
+  const p = room.players[idx];
+  if (p.bjDone) return;
+  if (act === 'double') {
+    if (p.bjCards.length !== 2) return;
+    const ok = await deductCoins(p.nickname, p.bjBet);
+    if (!ok) { io.to(socketId).emit('error', { msg: '코인이 부족해 더블다운할 수 없습니다.' }); return; }
+    const info = await getCoinsInfo(p.nickname);
+    io.to(socketId).emit('coins_info', info);
+    p.bjBet *= 2; p.bjDoubled = true;
+    p.bjCards.push(bj.deck.pop());
+    if (bjValue(p.bjCards) > 21) p.bjBust = true;
+    p.bjDone = true;
+    bjAdvance(room);
+    return;
+  }
+  if (act === 'hit') {
+    p.bjCards.push(bj.deck.pop());
+    const v = bjValue(p.bjCards);
+    if (v > 21) { p.bjBust = true; p.bjDone = true; }
+    else if (v === 21) p.bjDone = true;
+    bjAdvance(room);
+    return;
+  }
+  p.bjDone = true;   // stand
+  bjAdvance(room);
+}
+
 // ── 타이머 ────────────────────────────────────────────────────
 function startTurnTimer(room) {
   if (!room.useTimer) return;
@@ -1021,7 +1213,7 @@ function broadcastRoomList() {
         hasPassword: !!room.password,
         status: room.status,
         playerCount: room.players.length,
-        maxPlayers: room.gameType === 'holdem' ? 6 : 2,
+        maxPlayers: room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2,
         players: room.players.map(p => p.nickname),
         spectatorCount: room.spectators.length,
         useTimer: room.useTimer !== false,
@@ -1055,7 +1247,7 @@ async function broadcastLobbyState(room) {
     gameType: room.gameType || 'gomoku',
     buyIn: room.buyIn,
     ttBet: room.ttBet,
-    maxPlayers: room.gameType === 'holdem' ? 6 : 2,
+    maxPlayers: room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2,
   });
 }
 
@@ -1075,7 +1267,7 @@ function createRoom(roomId, options = {}) {
     predictions: [],   // 관전자 승부 예측 [{socketId, nickname, pick, amount}]
     players: [],
     readySet: new Set(),
-    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' || gameType === 'chess' ? null : createBoard()),
+    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' || gameType === 'chess' || gameType === 'blackjack' ? null : createBoard()),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
@@ -1108,6 +1300,7 @@ function createRoom(roomId, options = {}) {
     tt: gameType === 'tikatuka' ? createTikaState() : null,
     chess: gameType === 'chess' ? new Chess() : null,
     chessLastMove: null,
+    bj: gameType === 'blackjack' ? createBjState() : null,
   };
   rooms.set(roomId, room);
   return room;
@@ -1534,7 +1727,7 @@ io.on('connection', (socket) => {
     const room = createRoom(roomId, {
       name: (roomName || `${nickname}의 방`).substring(0, 20),
       password: password || null,
-      useTimer: gameType === 'tikatuka' ? false : (useTimer !== false),
+      useTimer: (gameType === 'tikatuka' || gameType === 'blackjack') ? false : (useTimer !== false),
       hostSocketId: socket.id,
       gameType: gameType || 'gomoku',
       buyIn: buyIn || 1000,
@@ -1586,6 +1779,7 @@ io.on('connection', (socket) => {
         });
         if (room.gameType === 'chess' && room.chess) socket.emit('chess:state', buildChessState(room));
         if (room.gameType === 'tikatuka' && room.tt) ttEmitState(room);
+        if (room.gameType === 'blackjack' && room.bj) bjEmitState(room);
       }
       io.to(roomId).emit('spectator_update', { count: room.spectators.length });
       broadcastRoomList();
@@ -1607,7 +1801,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const maxPlayers = room.gameType === 'holdem' ? 6 : 2;
+      const maxPlayers = room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2;
       if (room.players.length < maxPlayers) {
         // 플레이어 슬롯 입장
         room.players.push({
@@ -1662,7 +1856,7 @@ io.on('connection', (socket) => {
   socket.on('move_to_player', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'waiting') return;
-    const maxP = room.gameType === 'holdem' ? 6 : 2;
+    const maxP = room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2;
     if (room.players.length >= maxP) { socket.emit('join_error', { msg: '플레이어 슬롯이 꽉 찼습니다.' }); return; }
 
     const specIdx = room.spectators.findIndex(s => s.socketId === socket.id);
@@ -1700,7 +1894,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'waiting') return;
     if (room.hostSocketId !== socket.id) { socket.emit('join_error', { msg: '방장만 시작할 수 있습니다.' }); return; }
-    if (room.players.length < 2) { socket.emit('join_error', { msg: '플레이어가 2명 이상이어야 합니다.' }); return; }
+    // 블랙잭은 딜러(하우스) 상대라 1인 시작 가능
+    if (room.players.length < 2 && room.gameType !== 'blackjack') { socket.emit('join_error', { msg: '플레이어가 2명 이상이어야 합니다.' }); return; }
 
     const nonHostPlayers = room.players.filter(p => p.socketId !== room.hostSocketId);
     const allReady = nonHostPlayers.every(p => room.readySet.has(p.socketId));
@@ -1731,6 +1926,17 @@ io.on('connection', (socket) => {
       room.holdem.phase = 'preflop';
       broadcastRoomList();
       startHoldemHand(room);
+      return;
+    }
+
+    // ── 블랙잭 시작 ───────────────────────────────────────────
+    if (room.gameType === 'blackjack') {
+      room.status = 'playing';
+      room.readySet.clear();
+      room.bj = createBjState();
+      await emitGameStart(room);   // 클라 화면 전환 (board=null, useTimer=false)
+      startBjRound(room);
+      broadcastRoomList();
       return;
     }
 
@@ -1811,7 +2017,7 @@ io.on('connection', (socket) => {
   // ── 관전자 승부 예측 베팅 ────────────────────────────────────
   socket.on('predict_bet', async ({ roomId, pick, amount }) => {
     const room = rooms.get(roomId);
-    if (!room || room.status !== 'playing' || room.gameType === 'holdem') {
+    if (!room || room.status !== 'playing' || room.gameType === 'holdem' || room.gameType === 'blackjack') {
       socket.emit('predict_error', { msg: '지금은 예측할 수 없습니다.' }); return;
     }
     const spec = room.spectators.find(s => s.socketId === socket.id);
@@ -2035,6 +2241,32 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('turn_changed', { turn: room.turn });
     startTurnTimer(room);
   });
+
+  // ── 블랙잭 핸들러 ────────────────────────────────────────────
+  socket.on('bj:bet', async ({ roomId, amount }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.gameType !== 'blackjack' || room.status !== 'playing') return;
+    const bj = room.bj;
+    if (!bj || bj.phase !== 'betting') return;
+    const p = room.players.find(pp => pp.socketId === socket.id);
+    if (!p || p.bjBet > 0) return;
+    const amt = Math.floor(Number(amount) || 0);
+    if (amt < BJ_BET_MIN || amt > BJ_BET_MAX) {
+      socket.emit('error', { msg: `베팅은 ${BJ_BET_MIN.toLocaleString()} ~ ${BJ_BET_MAX.toLocaleString()} 코인까지 가능합니다.` });
+      return;
+    }
+    const ok = await deductCoins(p.nickname, amt);
+    if (!ok) { socket.emit('error', { msg: '코인이 부족합니다.' }); return; }
+    p.bjBet = amt;
+    const info = await getCoinsInfo(p.nickname);
+    socket.emit('coins_info', info);
+    bjEmitState(room);
+    // 전원 베팅 완료 → 바로 딜
+    if (room.players.every(pp => pp.isDisconnected || pp.bjBet > 0)) bjDeal(room);
+  });
+  socket.on('bj:hit',    ({ roomId }) => { bjAction(roomId, socket.id, 'hit'); });
+  socket.on('bj:stand',  ({ roomId }) => { bjAction(roomId, socket.id, 'stand'); });
+  socket.on('bj:double', ({ roomId }) => { bjAction(roomId, socket.id, 'double'); });
 
   // ══ 티카투카 PvP 핸들러 ══════════════════════════════════════
   function ttGuard(roomId) {
@@ -2296,6 +2528,7 @@ io.on('connection', (socket) => {
   socket.on('resign', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
+    if (room.gameType === 'holdem' || room.gameType === 'blackjack') return;   // 라운드제 게임은 기권 없음
     const loser = room.players.find(p => p.socketId === socket.id);
     const winner = room.players.find(p => p.socketId !== socket.id);
     if (!loser) return;
@@ -2394,11 +2627,40 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
       const p = room.players[playerIdx];
       p.isDisconnected = true;
       io.to(roomId).emit('holdem_player_disconnect', { nickname: p.nickname, playerIdx });
+      // 소켓을 io 방에서 분리 → 이후 holdem_state 브로드캐스트로 화면이 다시 소환되지 않음
+      const leavingSocket = io.sockets.sockets.get(socketId);
+      if (leavingSocket) leavingSocket.leave(roomId);
       // 현재 액션 순서면 자동 폴드
       const h = room.holdem;
       if (h && h.playersToAct.length > 0 && h.playersToAct[0] === playerIdx) {
         processHoldemAction(room, playerIdx, 'fold', 0);
       }
+      return;
+    }
+
+    // ── 블랙잭: 표시만 하고 다음 라운드 시작 시 제거 ──────────
+    if (room.gameType === 'blackjack') {
+      const p = room.players[playerIdx];
+      p.isDisconnected = true;
+      const ls = io.sockets.sockets.get(socketId);
+      if (ls) ls.leave(roomId);
+      const bj = room.bj;
+      if (room.players.every(pp => pp.isDisconnected)) {
+        // 전원 이탈 → 방 정리
+        bjClearTimer(room);
+        rooms.delete(roomId);
+        broadcastRoomList();
+        return;
+      }
+      if (bj && bj.phase === 'acting' && bj.actionIdx === playerIdx) {
+        p.bjDone = true;
+        bjAdvance(room);
+      } else if (bj && bj.phase === 'betting' && room.players.every(pp => pp.isDisconnected || pp.bjBet > 0)) {
+        bjDeal(room);   // 남은 전원이 베팅 완료 상태면 바로 진행
+      } else {
+        bjEmitState(room);
+      }
+      broadcastRoomList();
       return;
     }
 
