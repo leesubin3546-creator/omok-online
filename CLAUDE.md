@@ -177,6 +177,11 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - `drawStoneOnCtx`에 poring 분기 (이미지, 높이 2.3r) + 로드 전 폴백 원형(STONE_COLORS.poring)
 - `drawOthelloStone`이 흑백 고정 → 픽커 스타일 공용(`drawStoneOnCtx`)으로 변경
 
+### 2026-07-07: 도화가 추가 — 블루퍼플 변형 폐기
+- 파란 색변형(goodcoco2)이 어색하다는 피드백 → `image/i0177680165.gif`(도화가 치비, GIF 1000×1000)에서 첫 프레임 추출 후 누끼(테두리 플러드필, 단일 컴포넌트) → **`public/image/goodcoco2.png` 교체** (296×370, 긴 변 370px로 축소)
+- 스킨 구성: 플레이어1 = 모코코(초록, goodcoco.png 그대로), 플레이어2 = 도화가. 표시명 '굿코코'→'모코코' (STYLE_NAMES·픽커), 스킨 id/상점 키는 'goodcoco' 유지(보유 데이터 호환). 폴백 c2 색상을 크림톤으로 변경
+- node-canvas는 GIF 첫 프레임 로드 가능 확인. 검증: 보드 2종 위 돌 크기 렌더 OK
+
 ### 2026-07-06: 포링 → 굿코코 교체 (프리미엄 100만)
 - `image/Goodcoco.png`(초록 새싹 캐릭터) 누끼: 테두리 플러드필 배경 제거 + 최대 컴포넌트만 유지 + 말풍선("굳!") 구역 지우개 마스크(머리 외곽선 우측 여백 기준, 말풍선 꼬리가 캐릭터와 연결돼 있어 필요) → `public/image/goodcoco.png` (288×365)
 - 변형색: 초록 계열 hue만 +165° 회전(볼터치 핑크·외곽선 유지) → `goodcoco2.png` (블루퍼플). 처리 스크립트는 스크래치패드(재실행 시 image/Goodcoco.png 원본에서 재생성 가능)

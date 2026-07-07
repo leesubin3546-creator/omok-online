@@ -1100,7 +1100,7 @@
         <div class="stone-opt" data-style="drop" onclick="selectStoneStyle('drop')"><canvas id="sp-drop" width="72" height="40"></canvas><span>물방울</span></div>
         <div class="stone-opt" data-style="cloud" onclick="selectStoneStyle('cloud')"><canvas id="sp-cloud" width="72" height="40"></canvas><span>구름</span></div>
         <div class="stone-opt" data-style="butterfly" onclick="selectStoneStyle('butterfly')"><canvas id="sp-butterfly" width="72" height="40"></canvas><span>나비</span></div>
-        <div class="stone-opt skin-premium" data-style="goodcoco" onclick="selectStoneStyle('goodcoco')"><canvas id="sp-goodcoco" width="72" height="40"></canvas><span>굿코코 <span class="skin-lock">🔒</span></span></div>
+        <div class="stone-opt skin-premium" data-style="goodcoco" onclick="selectStoneStyle('goodcoco')"><canvas id="sp-goodcoco" width="72" height="40"></canvas><span>모코코 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="gold" onclick="selectStoneStyle('gold')"><canvas id="sp-gold" width="72" height="40"></canvas><span>황금 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="neon" onclick="selectStoneStyle('neon')"><canvas id="sp-neon" width="72" height="40"></canvas><span>네온 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="gem" onclick="selectStoneStyle('gem')"><canvas id="sp-gem" width="72" height="40"></canvas><span>보석 <span class="skin-lock">🔒</span></span></div>
@@ -2783,7 +2783,7 @@ const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
 const OTHELLO_CANVAS_SIZE = OTHELLO_CELL * OTHELLO_SIZE + OTHELLO_PADDING * 2;
 const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','goodcoco','gold','neon','gem'];
-const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', goodcoco:'굿코코', gold:'황금', neon:'네온', gem:'보석' };
+const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', goodcoco:'모코코', gold:'황금', neon:'네온', gem:'보석' };
 const PREMIUM_SKINS = ['gold','neon','gem','goodcoco'];   // 상점 구매 필요
 
 // ── 급수 시스템 ───────────────────────────────────────────────
@@ -2900,13 +2900,13 @@ const STONE_COLORS = {
   drop:      { c1:['#10c0d8','#0880a0','#024060'], c2:['#90e8ff','#40c0f8','#0090d0'] },
   cloud:     { c1:['#4060d0','#1830a0','#080c60'], c2:['#c8b0f8','#a080f0','#6840c8'] },
   butterfly: { c1:['#c040f8','#8010d0','#480080'], c2:['#f870e8','#e030c8','#a00090'] },
-  goodcoco:  { c1:['#c8e088','#96c050','#5a8020'], c2:['#b0a0e8','#8070cc','#4c3a96'] },
+  goodcoco:  { c1:['#c8e088','#96c050','#5a8020'], c2:['#f7efe6','#e0cbc2','#a08076'] },
   gold:      { c1:['#f0c050','#b07818','#5c3a04'], c2:['#fff4c8','#f8d868','#c89020'] },
   neon:      { c1:['#80ffd8','#10e0a8','#007850'], c2:['#ff88f0','#f020cc','#980080'] },
   gem:       { c1:['#ff7890','#d81850','#780020'], c2:['#88b4ff','#3060e8','#0828a0'] },
 };
 
-// 굿코코 돌 이미지 (1=원본 초록, 2=블루퍼플 변형)
+// 모코코·도화가 돌 이미지 (1=모코코 초록, 2=도화가)
 const GOODCOCO_IMGS = { 1: new Image(), 2: new Image() };
 GOODCOCO_IMGS[1].src = 'image/goodcoco.png';
 GOODCOCO_IMGS[2].src = 'image/goodcoco2.png';
