@@ -252,6 +252,13 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
 - 검증: 6백만회 카이제곱 9.43(df=5, 임계 11.07) 균등 ✔, ttRollExcept 제외값별 100만회 — 중복 0회·나머지 5개 각 20% ✔.
 
+## 2026-07-07 업데이트 3: 준수 돌 스킨 (프리미엄 200만)
+
+- `image/준수백돌.png`(흰 배경+검은 로고)·`준수흑돌.png`(검은 배경+흰 로고)에서 로고를 휘도→알파 변환으로 추출 → `public/image/junsu_w.png`(백돌용 검은 로고)/`junsu_b.png`(흑돌용 흰 로고), 221×396. ※node-canvas는 한글 경로 fopen 실패 → `loadImage(fs.readFileSync(path))` 버퍼 로드로 우회
+- 렌더: **클래식 돌 그대로 그린 뒤 로고 스탬프** — drawStoneOnCtx 끝에 junsu 분기(원형 클리핑, 높이 1.3r, globalAlpha 0.92). STONE_COLORS.junsu = classic 복사(폴백/상점 스와치)
+- 코드: `JUNSU_IMGS`(goodcoco와 같은 onload 재렌더 패턴), ALL_STYLES/STYLE_NAMES('준수')/PREMIUM_SKINS, 픽커 🔒 슬롯, **SHOP_SKINS junsu: 2000000** (최고가)
+- 검증: node-canvas로 오목/오델로 보드 위 흑백 돌 렌더 확인, 문법·스모크 회귀 없음
+
 ## 2026-07-07 업데이트 2: 블랙잭 (gameType 'blackjack')
 
 - **룰**: 딜러 = 하우스(서버), 1~5인(솔로 시작 가능 — start_game 2인 체크 예외). 라운드제: 베팅(20초, 프리셋 1천~10만, 즉시 차감) → 딜(2덱) → 히트/스탠드/더블다운(첫 2장, 추가 차감) → 딜러 17까지 히트(전원 버스트 시 드로우 생략) → 정산(승 2배, 블랙잭 2.5배(3:2), 푸시 반환) → 6초 후 다음 라운드. 미베팅 = 그 라운드 관망. 액션 20초 타임아웃 = 스탠드.

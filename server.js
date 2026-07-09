@@ -38,7 +38,7 @@ const INITIAL_COINS    = 1000000;   // 첫 지급 / 쿨타임 후 보충
 const COOLDOWN_MS      = 2 * 60 * 60 * 1000; // 2시간
 
 // ── 상점 카탈로그 ────────────────────────────────────────────────
-const SHOP_SKINS = { gold: 500000, neon: 500000, gem: 1000000, goodcoco: 1000000 };  // 돌 스킨 가격
+const SHOP_SKINS = { gold: 500000, neon: 500000, gem: 1000000, goodcoco: 1000000, junsu: 2000000 };  // 돌 스킨 가격
 const SHOP_TITLES = {
   gambler: { label: '🎲', name: '도박사',  price: 300000 },
   fire:    { label: '🔥', name: '불꽃',    price: 300000 },

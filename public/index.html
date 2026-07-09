@@ -1149,6 +1149,7 @@
         <div class="stone-opt skin-premium" data-style="gold" onclick="selectStoneStyle('gold')"><canvas id="sp-gold" width="72" height="40"></canvas><span>황금 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="neon" onclick="selectStoneStyle('neon')"><canvas id="sp-neon" width="72" height="40"></canvas><span>네온 <span class="skin-lock">🔒</span></span></div>
         <div class="stone-opt skin-premium" data-style="gem" onclick="selectStoneStyle('gem')"><canvas id="sp-gem" width="72" height="40"></canvas><span>보석 <span class="skin-lock">🔒</span></span></div>
+        <div class="stone-opt skin-premium" data-style="junsu" onclick="selectStoneStyle('junsu')"><canvas id="sp-junsu" width="72" height="40"></canvas><span>준수 <span class="skin-lock">🔒</span></span></div>
       </div>
     </div>
 
@@ -2862,9 +2863,9 @@ const CELL = 36, PADDING = 22, SIZE = 15;
 const CANVAS_SIZE = CELL * (SIZE - 1) + PADDING * 2;
 const OTHELLO_CELL = 64, OTHELLO_PADDING = 28, OTHELLO_SIZE = 8;
 const OTHELLO_CANVAS_SIZE = OTHELLO_CELL * OTHELLO_SIZE + OTHELLO_PADDING * 2;
-const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','goodcoco','gold','neon','gem'];
-const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', goodcoco:'모코코', gold:'황금', neon:'네온', gem:'보석' };
-const PREMIUM_SKINS = ['gold','neon','gem','goodcoco'];   // 상점 구매 필요
+const ALL_STYLES = ['classic','leaf','sakura','star','moon','heart','drop','cloud','butterfly','goodcoco','gold','neon','gem','junsu'];
+const STYLE_NAMES = { classic:'클래식', leaf:'나뭇잎', sakura:'벚꽃', star:'별', moon:'초승달', heart:'하트', drop:'물방울', cloud:'구름', butterfly:'나비', goodcoco:'모코코', gold:'황금', neon:'네온', gem:'보석', junsu:'준수' };
+const PREMIUM_SKINS = ['gold','neon','gem','goodcoco','junsu'];   // 상점 구매 필요
 
 // ── 급수 시스템 ───────────────────────────────────────────────
 const RANK_THRESHOLDS = [
@@ -2981,6 +2982,7 @@ const STONE_COLORS = {
   cloud:     { c1:['#4060d0','#1830a0','#080c60'], c2:['#c8b0f8','#a080f0','#6840c8'] },
   butterfly: { c1:['#c040f8','#8010d0','#480080'], c2:['#f870e8','#e030c8','#a00090'] },
   goodcoco:  { c1:['#c8e088','#96c050','#5a8020'], c2:['#f7efe6','#e0cbc2','#a08076'] },
+  junsu:     { c1:['#606060','#282828','#080808'], c2:['#f8f8f8','#e4e4e4','#c0c0c0'] },
   gold:      { c1:['#f0c050','#b07818','#5c3a04'], c2:['#fff4c8','#f8d868','#c89020'] },
   neon:      { c1:['#80ffd8','#10e0a8','#007850'], c2:['#ff88f0','#f020cc','#980080'] },
   gem:       { c1:['#ff7890','#d81850','#780020'], c2:['#88b4ff','#3060e8','#0828a0'] },
@@ -2991,6 +2993,18 @@ const GOODCOCO_IMGS = { 1: new Image(), 2: new Image() };
 GOODCOCO_IMGS[1].src = 'image/goodcoco.png';
 GOODCOCO_IMGS[2].src = 'image/goodcoco2.png';
 [1,2].forEach(k => GOODCOCO_IMGS[k].onload = () => {
+  try {
+    if (typeof renderStonePreviews === 'function') renderStonePreviews();
+    if (typeof updatePlayerStoneIcons === 'function') updatePlayerStoneIcons();
+    if (typeof ctx !== 'undefined' && ctx) drawBoard();
+  } catch(e) {}
+});
+
+// 준수 로고 (클래식 돌 스탬프용 — 1=흑돌용 흰 로고, 2=백돌용 검은 로고)
+const JUNSU_IMGS = { 1: new Image(), 2: new Image() };
+JUNSU_IMGS[1].src = 'image/junsu_b.png';
+JUNSU_IMGS[2].src = 'image/junsu_w.png';
+[1,2].forEach(k => JUNSU_IMGS[k].onload = () => {
   try {
     if (typeof renderStonePreviews === 'function') renderStonePreviews();
     if (typeof updatePlayerStoneIcons === 'function') updatePlayerStoneIcons();
@@ -3138,6 +3152,19 @@ function drawStoneOnCtx(c, x, y, r, color, style) {
       c.stroke();
     });
     c.restore();
+  }
+
+  // 준수 스킨: 클래식 돌 위 로고 스탬프 (흑돌=흰 로고, 백돌=검은 로고)
+  if (style === 'junsu') {
+    const img = JUNSU_IMGS[color === 1 ? 1 : 2];
+    if (img.complete && img.naturalWidth) {
+      c.save();
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.clip();
+      const h = r * 1.3, w = h * (img.naturalWidth / img.naturalHeight);
+      c.globalAlpha *= 0.92;
+      c.drawImage(img, x - w / 2, y - h / 2, w, h);
+      c.restore();
+    }
   }
 
   c.restore();
