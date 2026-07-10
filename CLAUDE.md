@@ -252,6 +252,13 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
 - 검증: 6백만회 카이제곱 9.43(df=5, 임계 11.07) 균등 ✔, ttRollExcept 제외값별 100만회 — 중복 0회·나머지 5개 각 20% ✔.
 
+## 2026-07-09 업데이트: 판돈 50만 + 올인빵
+
+- 판돈 픽커에 **500,000**과 **🔥 올인빵** 추가 (모달 8옵션, 올인빵 선택 시 경고문 표시). `selectedTtBet`은 숫자 또는 'allin' 문자열, dataset 비교는 String으로.
+- **올인빵**: `room.ttAllin` — 시작/재대결 시 `ttEscrowBets`가 **각자 전 재산**을 개인별로 차감(`ttEscrowAmounts`), 한쪽이 0코인이면 시작 거부. `ttSettleBets`에서 승자가 합계(`ttLastPot`) 독식, 무승부는 각자 원금 반환(닉네임 키 기준이라 탈주에도 안전). 잔액이 달라도 그대로 전액 (min 매칭 아님).
+- 전파: room_list/lobby_state/tt:state에 `ttAllin`/`allin`, game_over 9개 지점에 `ttAllin`/`ttPot` (replace_all). 표시: 방 목록·대기실 '🔥 올인빵', PvP 태그, 결과 오버레이("올인빵 승리! 총 X 획득" / "전 재산 상실").
+- 검증: 에스크로/독식/무승부 반환/0코인 거부/중복 정산 방지/기존 50만 경로 11케이스 + 클라 7케이스 + 비올인 회귀 4케이스 통과. ※스크래치패드 정리로 구 스모크 파일 소실 — 재생성 필요 시 CLAUDE.md 명세 참고.
+
 ## 2026-07-07 업데이트 3: 준수 돌 스킨 (프리미엄 200만)
 
 - `image/준수백돌.png`(흰 배경+검은 로고)·`준수흑돌.png`(검은 배경+흰 로고)에서 로고를 휘도→알파 변환으로 추출 → `public/image/junsu_w.png`(백돌용 검은 로고)/`junsu_b.png`(흑돌용 흰 로고), 221×396. ※node-canvas는 한글 경로 fopen 실패 → `loadImage(fs.readFileSync(path))` 버퍼 로드로 우회

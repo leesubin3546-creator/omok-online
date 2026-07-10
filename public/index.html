@@ -1274,6 +1274,11 @@
         <div class="buyin-opt" data-ttbet="10000" onclick="selectTtBet(10000)">10,000</div>
         <div class="buyin-opt" data-ttbet="50000" onclick="selectTtBet(50000)">50,000</div>
         <div class="buyin-opt" data-ttbet="100000" onclick="selectTtBet(100000)">100,000</div>
+        <div class="buyin-opt" data-ttbet="500000" onclick="selectTtBet(500000)">500,000</div>
+        <div class="buyin-opt" data-ttbet="allin" onclick="selectTtBet('allin')" style="color:#c0392b;border-color:rgba(192,57,43,0.5);">🔥 올인빵</div>
+      </div>
+      <div id="ttbet-allin-hint" style="display:none;font-size:0.7rem;color:#c0392b;font-weight:600;">
+        ⚠ 올인빵: 시작 시 두 사람의 전 재산이 걸리고, 승자가 전부 가져갑니다 (무승부 시 반환)
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;" id="modal-timer-row">
@@ -3731,7 +3736,7 @@ function ttPvpRender() {
 
   document.getElementById('ttp-me-score').textContent  = `라인 ${s.score.me.wins} · 총점 ${s.score.me.total}`;
   document.getElementById('ttp-opp-score').textContent = `라인 ${s.score.opp.wins} · 총점 ${s.score.opp.total}`;
-  document.getElementById('ttp-bet-tag').textContent = s.bet > 0 ? `💰 ${s.bet.toLocaleString()}` : '';
+  document.getElementById('ttp-bet-tag').textContent = s.allin ? '🔥 올인빵' : (s.bet > 0 ? `💰 ${s.bet.toLocaleString()}` : '');
   const rtag = document.getElementById('ttp-reroll-tag');
   if (rtag) rtag.textContent = s.isSpectator ? '' : (s.rerollUsed ? '타짜의 손놀림 사용 완료' : '타짜의 손놀림 1회 가능');
 
@@ -3902,7 +3907,7 @@ function ttPvpLeave() {
   showScreen('lobby-screen');
   if (socket) socket.emit('get_room_list');
 }
-function ttPvpGameOver(result, winner) {
+function ttPvpGameOver(result, winner, betInfo) {
   const s = TTP.s;
   let msg;
   if (result === 'draw') msg = '🤝 무승부';
@@ -3911,7 +3916,11 @@ function ttPvpGameOver(result, winner) {
   document.getElementById('ttp-result-msg').textContent = msg;
   let detail = s ? `라인 ${s.score.me.wins} : ${s.score.opp.wins} · 총점 ${s.score.me.total} : ${s.score.opp.total}` : '';
   const bet = s && s.bet > 0 ? s.bet : 0;
-  if (bet && !isSpectating) {
+  if (betInfo && betInfo.ttAllin && !isSpectating) {
+    if (result === 'draw') detail += '\n🔥 올인빵 무승부 — 전액 반환';
+    else if (winner === myNickname) detail += `\n🔥 올인빵 승리! 총 ${(betInfo.ttPot || 0).toLocaleString()} 코인 획득!`;
+    else detail += '\n🔥 올인빵 패배… 전 재산 상실';
+  } else if (bet && !isSpectating) {
     if (result === 'draw') detail += `\n💰 판돈 ${bet.toLocaleString()} 반환`;
     else if (winner === myNickname) detail += `\n💰 +${bet.toLocaleString()} 코인 획득!`;
     else detail += `\n💰 -${bet.toLocaleString()} 코인`;
@@ -4219,11 +4228,11 @@ function initSocket() {
     document.getElementById('consent-banner').classList.remove('show');
   });
 
-  socket.on('game_over', ({ result, winner, loser, records, ttBet }) => {
+  socket.on('game_over', ({ result, winner, loser, records, ttBet, ttAllin, ttPot }) => {
     hidePredictPanel();
     if (gameType === 'tikatuka') {
       if (records) { const me = records.find(r => r.nickname === myNickname); if (me) updateRecordUI(me.record); }
-      ttPvpGameOver(result, winner);
+      ttPvpGameOver(result, winner, { ttAllin, ttPot });
       return;
     }
     clearClientTimer();
@@ -4246,7 +4255,11 @@ function initSocket() {
         }
       }
     }
-    if (ttBet > 0 && !isSpectating) {
+    if (ttAllin && !isSpectating) {
+      if (result === 'draw') rankChangeText += '  ·  🔥 올인빵 무승부 — 전액 반환';
+      else if (winner === myNickname) rankChangeText += `  ·  🔥 올인빵 승리! 총 ${(ttPot || 0).toLocaleString()} 획득`;
+      else rankChangeText += '  ·  🔥 올인빵 패배… 전 재산 상실';
+    } else if (ttBet > 0 && !isSpectating) {
       if (result === 'draw') rankChangeText += `  ·  💰 판돈 ${ttBet.toLocaleString()} 반환`;
       else if (winner === myNickname) rankChangeText += `  ·  💰 +${ttBet.toLocaleString()}`;
       else rankChangeText += `  ·  💰 -${ttBet.toLocaleString()}`;
@@ -4413,8 +4426,9 @@ function openCreateRoomModal() {
   });
   selectedTtBet = 0;
   document.querySelectorAll('#ttbet-opts .buyin-opt').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.ttbet) === 0);
+    el.classList.toggle('selected', el.dataset.ttbet === '0');
   });
+  document.getElementById('ttbet-allin-hint').style.display = 'none';
   document.getElementById('create-room-modal').classList.add('show');
 }
 function onModalGameTypeChange() {
@@ -4432,10 +4446,11 @@ function selectBuyIn(amount) {
   });
 }
 function selectTtBet(amount) {
-  selectedTtBet = amount;
+  selectedTtBet = amount;   // 숫자 또는 'allin'
   document.querySelectorAll('#ttbet-opts .buyin-opt').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.ttbet) === amount);
+    el.classList.toggle('selected', el.dataset.ttbet === String(amount));
   });
+  document.getElementById('ttbet-allin-hint').style.display = amount === 'allin' ? 'block' : 'none';
 }
 function closeCreateRoomModal() {
   document.getElementById('create-room-modal').classList.remove('show');
@@ -4550,7 +4565,7 @@ function updateRoomList(list) {
     <div class="room-item" onclick="${onclick}">
       <div class="room-item-info">
         <div class="room-item-name">${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.name)}</div>
-        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · 바이인 ${r.buyIn.toLocaleString()}` : ''}${r.ttBet ? ` · 💰 판돈 ${r.ttBet.toLocaleString()}` : ''}</div>
+        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · 바이인 ${r.buyIn.toLocaleString()}` : ''}${r.ttBet ? ` · 💰 판돈 ${r.ttBet.toLocaleString()}` : ''}${r.ttAllin ? ' · 🔥 올인빵' : ''}</div>
       </div>
       <div class="room-item-badges">
         ${gameBadge}
@@ -4589,12 +4604,12 @@ function renderLobbyScreen(state) {
       '🂡 블랙잭 · 딜러(하우스) 상대 · 라운드별 베팅 · 혼자서도 시작 가능';
   } else if (state.gameType === 'tikatuka') {
     document.getElementById('lobby-room-sub').textContent =
-      '🎲 티카투카 대전' + (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : ' · 무료');
+      '🎲 티카투카 대전' + (state.ttAllin ? ' · 🔥 올인빵 (전 재산!)' : state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : ' · 무료');
   } else {
     document.getElementById('lobby-room-sub').textContent =
       (state.gameType === 'othello' ? '🟢 오델로 · ' : state.gameType === 'chess' ? '♞ 체스 · ' : '⚫ 오목 · ') +
       (state.useTimer ? '⏱ 타이머 있음' : '⏱ 타이머 없음') +
-      (state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : '');
+      (state.ttAllin ? ' · 🔥 올인빵 (전 재산!)' : state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : '');
   }
 
   const isHost = state.players.some(p => p.isHost && p.nickname === myNickname);
