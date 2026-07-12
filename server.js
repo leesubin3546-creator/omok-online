@@ -1497,6 +1497,7 @@ function ttEmitState(room, extra = {}) {
       yourColor: me,
       bet: room.ttBet || 0,
       allin: !!room.ttAllin,
+      allinAmount: room.ttAllinMatched || 0,
       turn: tt.turn,
       isMyTurn: tt.turn === me,
       cur: tt.cur ? { ...tt.cur } : null,
@@ -1519,7 +1520,7 @@ function ttEmitState(room, extra = {}) {
     const me = 1, opp = 2;
     const lanes = tt.lanes.map(l => ({ me: l[me].map(d => ({ ...d })), opp: l[opp].map(d => ({ ...d })) }));
     io.to(spec.socketId).emit('tt:state', {
-      roomId: room.id, lanes, yourColor: 0, bet: room.ttBet || 0, allin: !!room.ttAllin, turn: tt.turn, isMyTurn: false,
+      roomId: room.id, lanes, yourColor: 0, bet: room.ttBet || 0, allin: !!room.ttAllin, allinAmount: room.ttAllinMatched || 0, turn: tt.turn, isMyTurn: false,
       cur: tt.cur ? { ...tt.cur } : null, phase: tt.phase, isSpectator: true,
       alchigiBonus: tt.alchigiBonus
         ? { mine: false, v: tt.alchigiBonus.v, color: tt.alchigiBonus.color }
@@ -1556,26 +1557,33 @@ function ttAdvance(room) {
 
 // 판돈 에스크로 차감 (시작/재대결 시) — 성공 시 true, 실패 시 차감분 환불 후 false
 async function ttEscrowBets(room) {
-  // 올인빵: 각자 전 재산을 걸고 승자가 전부 독식
+  // 올인빵: 적은 잔액 기준 매칭 (포커 올인 방식) — 양쪽이 같은 금액을 걸고 승자가 2배 독식
   if (room.ttAllin) {
-    const amounts = {};
+    let minBal = Infinity;
     for (const p of room.players) {
       const info = await getCoinsInfo(p.nickname);
       if (!(info.coins > 0)) return { ok: false, poor: p.nickname };
-      amounts[p.nickname] = info.coins;
+      minBal = Math.min(minBal, info.coins);
     }
+    const amounts = {};
     const paid = [];
     for (const p of room.players) {
-      const ok = await deductCoins(p.nickname, amounts[p.nickname]);
+      const ok = await deductCoins(p.nickname, minBal);
       if (!ok) {
         for (const [n, a] of paid) await addCoins(n, a);
         return { ok: false, poor: p.nickname };
       }
-      paid.push([p.nickname, amounts[p.nickname]]);
+      amounts[p.nickname] = minBal;
+      paid.push([p.nickname, minBal]);
     }
     room.ttEscrowAmounts = amounts;
+    room.ttAllinMatched = minBal;
     room.ttEscrow = true;
     await ttPushCoins(room);
+    io.to(room.id).emit('chat', {
+      nickname: '📢',
+      message: `🔥 올인빵 성립! 매칭 금액 ${minBal.toLocaleString()} (적은 잔액 기준) — 승자가 총 ${(minBal * 2).toLocaleString()} 획득`,
+    });
     return { ok: true };
   }
   const bet = room.ttBet || 0;

@@ -1031,6 +1031,8 @@
   .ttp-landed { animation:ttpLand 0.32s ease; }
   @keyframes ttpPop { 0%{transform:scale(0.2);opacity:0} 60%{transform:scale(1.18);opacity:1} 100%{transform:scale(1)} }
   .tt-die-slot.ttp-pop { animation:ttpPop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes ttpShift { 0%{opacity:0.25;transform:scale(0.8)} 100%{opacity:1;transform:scale(1)} }
+  .tt-die-slot.ttp-shift { animation:ttpShift 0.32s ease; }   /* 압축 정렬로 자리가 바뀐 주사위 */
   @keyframes ttpBoomFx { 0%{opacity:1;transform:scale(0.5) rotate(-12deg)} 40%{transform:scale(1.6) rotate(8deg)} 100%{opacity:0;transform:scale(2.3) rotate(0deg)} }
   .ttp-boom-fx { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:2rem; pointer-events:none; animation:ttpBoomFx 0.9s ease forwards; }
@@ -1294,7 +1296,7 @@
         <div class="buyin-opt" data-ttbet="allin" onclick="selectTtBet('allin')" style="color:#c0392b;border-color:rgba(192,57,43,0.5);">🔥 올인빵</div>
       </div>
       <div id="ttbet-allin-hint" style="display:none;font-size:0.7rem;color:#c0392b;font-weight:600;">
-        ⚠ 올인빵: 시작 시 두 사람의 전 재산이 걸리고, 승자가 전부 가져갑니다 (무승부 시 반환)
+        ⚠ 올인빵: 두 사람 중 <b>적은 잔액에 맞춰 같은 금액</b>을 서로 겁니다 (포커 올인 방식). 승자가 2배 독식, 무승부 시 반환
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;" id="modal-timer-row">
@@ -1417,6 +1419,14 @@
       <button class="btn-secondary btn-sm" onclick="requestSurrender()" id="surrender-btn">항복</button>
       <button class="btn-secondary btn-sm" onclick="resignGame()" id="resign-btn">기권</button>
     </div>
+    <div id="spectator-actions" style="display:none;">
+      <button class="btn-secondary btn-sm" onclick="goLobby()">👁 관전 나가기</button>
+    </div>
+    <div id="postgame-bar" style="display:none;gap:6px;">
+      <button class="btn-primary btn-sm" onclick="requestRematch()" id="postgame-rematch-btn">🔄 재대결</button>
+      <button class="btn-secondary btn-sm" onclick="goLobby()">로비로</button>
+      <button class="btn-secondary btn-sm" onclick="document.getElementById('overlay').classList.add('show')">📊 결과</button>
+    </div>
     <div id="chat-box">
       <div id="chat-messages"></div>
       <div id="chat-input-row">
@@ -1438,6 +1448,7 @@
       <button class="btn-primary" onclick="requestRematch()" id="rematch-btn">재대결</button>
       <button class="btn-secondary" onclick="goLobby()">로비로</button>
     </div>
+    <button class="btn-secondary btn-sm" onclick="closeGameOverlay()" style="margin-top:4px;">💬 닫고 채팅하기</button>
   </div>
 </div>
 
@@ -1566,6 +1577,13 @@
     background:rgba(46,125,50,0.1);border:1px solid rgba(46,125,50,0.3);
     font-size:0.9rem;color:#1b5e20;font-weight:500;text-align:center;">연결 중…</div>
 
+  <!-- 게임 종료 후 액션 바 (오버레이 닫은 뒤) -->
+  <div id="ttp-postgame-bar" style="display:none;gap:8px;justify-content:center;margin-bottom:10px;">
+    <button class="btn-primary btn-sm" id="ttp-postgame-rematch" onclick="ttPvpRematch()">🔄 재대결</button>
+    <button class="btn-secondary btn-sm" onclick="ttPvpLeave()">로비로</button>
+    <button class="btn-secondary btn-sm" onclick="document.getElementById('ttp-overlay').style.display='flex'">📊 결과</button>
+  </div>
+
   <!-- 현재 주사위 + 액션 -->
   <div style="margin-bottom:12px;text-align:center;">
     <div id="ttp-die-area" style="display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:52px;"></div>
@@ -1613,6 +1631,9 @@
         font-size:1rem;cursor:pointer;font-family:inherit;font-weight:600;margin-right:8px;">🔄 재대결</button>
       <button onclick="ttPvpLeave()" style="padding:10px 24px;border-radius:10px;background:rgba(0,0,0,0.06);
         border:1px solid var(--border);color:var(--text2);font-size:1rem;cursor:pointer;font-family:inherit;">종료</button>
+      <div style="margin-top:10px;">
+        <button class="btn-secondary btn-sm" onclick="ttpCloseOverlay()">💬 닫고 채팅하기</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3716,9 +3737,11 @@ function ttPvpStart(roomId, players, yourColor) {
   TTP.meName  = deco(me)  || '나';
   TTP.oppName = deco(opp) || '상대';
   ttpResetAnim();
+  TTP.lastClick = null;
   document.getElementById('ttp-me-name').textContent  = TTP.meName;
   document.getElementById('ttp-opp-name').textContent = TTP.oppName;
   document.getElementById('ttp-overlay').style.display = 'none';
+  document.getElementById('ttp-postgame-bar').style.display = 'none';
   document.getElementById('ttp-status').textContent = '게임 시작!';
   showScreen('tt-pvp-screen');
 }
@@ -3752,7 +3775,9 @@ function ttPvpRender() {
 
   document.getElementById('ttp-me-score').textContent  = `라인 ${s.score.me.wins} · 총점 ${s.score.me.total}`;
   document.getElementById('ttp-opp-score').textContent = `라인 ${s.score.opp.wins} · 총점 ${s.score.opp.total}`;
-  document.getElementById('ttp-bet-tag').textContent = s.allin ? '🔥 올인빵' : (s.bet > 0 ? `💰 ${s.bet.toLocaleString()}` : '');
+  document.getElementById('ttp-bet-tag').textContent = s.allin
+    ? `🔥 올인빵${s.allinAmount ? ' ' + s.allinAmount.toLocaleString() : ''}`
+    : (s.bet > 0 ? `💰 ${s.bet.toLocaleString()}` : '');
   const rtag = document.getElementById('ttp-reroll-tag');
   if (rtag) rtag.textContent = s.isSpectator ? '' : (s.rerollUsed ? '타짜의 손놀림 사용 완료' : '타짜의 손놀림 1회 가능');
 
@@ -3786,17 +3811,31 @@ function ttPvpRender() {
   });
   lanesEl.innerHTML = html;
 
-  // 슬롯 클릭 + 변화 애니메이션 (새 배치 = 팝, 알치기 제거 = 💥) — 표시 위치 기준 비교
+  // 슬롯 클릭 + 변화 애니메이션 (새 배치 = 팝, 알치기 제거 = 💥, 자리 이동 = 재배치 표시)
   const snap = disp.map(l => ({ me: l.me.map(d => d.v), opp: l.opp.map(d => d.v) }));
+  const popped = [];
   lanesEl.querySelectorAll('.tt-die-slot').forEach(el => {
     el.onclick = () => ttPvpSlotClick(el);
     if (!prevSnap) return;
     const li = +el.dataset.lane, side = el.dataset.side, i = +el.dataset.idx;
     const pv = prevSnap[li][side][i], nv = snap[li][side][i];
-    if (pv === 0 && nv > 0) el.classList.add('ttp-pop');
+    if (pv === 0 && nv > 0) { el.classList.add('ttp-pop'); popped.push(el); }
     else if (pv > 0 && nv === 0) el.insertAdjacentHTML('beforeend', '<div class="ttp-boom-fx">💥</div>');
+    else if (pv > 0 && nv > 0 && pv !== nv) el.classList.add('ttp-shift');   // 압축 정렬로 값이 밀린 칸
   });
   TTP.snap = snap;
+
+  // 내가 클릭한 칸과 실제 배치 칸이 다르면 고스트 이동으로 안내
+  if (TTP.lastClick) {
+    const lc = TTP.lastClick;
+    TTP.lastClick = null;
+    const target = popped.find(el => +el.dataset.lane === lc.lane && el.dataset.side === lc.side);
+    if (target && +target.dataset.idx !== lc.idx) {
+      const fromEl = lanesEl.querySelector(`.tt-die-slot[data-lane="${lc.lane}"][data-side="${lc.side}"][data-idx="${lc.idx}"]`);
+      const die = disp[lc.lane][lc.side][+target.dataset.idx];
+      if (fromEl && die) ttpFlyGhost(fromEl, target, die, lc.side);
+    }
+  }
 
   // 알치기 연출: 서버 event 신호 → 중앙 토스트 + 해당 라인 흔들림
   if (s.event === 'alchigi') {
@@ -3885,12 +3924,28 @@ function ttPvpSlotClick(el) {
   const s = TTP.s; if (!s || s.isSpectator) return;
   const lane = +el.dataset.lane, side = el.dataset.side;
   if (s.alchigiBonus && s.alchigiBonus.mine) {
+    TTP.lastClick = { lane, side, idx: +el.dataset.idx };   // 고스트 이동 모션용
     socket.emit('tt:placeBonus', { roomId: TTP.roomId, side, lane });
     return;
   }
   if (!s.isMyTurn || s.phase !== 'place' || !s.cur) return;
   if (side !== 'me') return;               // 일반 배치는 내 필드만
+  TTP.lastClick = { lane, side, idx: +el.dataset.idx };
   socket.emit('tt:place', { roomId: TTP.roomId, lane });
+}
+
+// 클릭한 칸과 실제 배치 칸이 다를 때: 클릭 위치 → 최종 위치로 날아가는 고스트
+function ttpFlyGhost(fromEl, toEl, die, side) {
+  const fr = fromEl.getBoundingClientRect(), tr = toEl.getBoundingClientRect();
+  const g = document.createElement('div');
+  g.style.cssText = `position:fixed;left:${fr.left}px;top:${fr.top}px;width:${fr.width}px;height:${fr.height}px;`
+    + 'z-index:800;pointer-events:none;transition:transform 0.28s ease;';
+  g.innerHTML = ttDieFaceSVG(die.v, die.s, side, false);
+  document.body.appendChild(g);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    g.style.transform = `translate(${tr.left - fr.left}px, ${tr.top - fr.top}px)`;
+  }));
+  setTimeout(() => g.remove(), 320);
 }
 
 function ttPvpReroll() {
@@ -3915,9 +3970,16 @@ function ttPvpRematch() {
   const b = document.getElementById('ttp-rematch-btn');
   b.textContent = '상대 수락 대기…'; b.disabled = true;
 }
+function ttpCloseOverlay() {
+  document.getElementById('ttp-overlay').style.display = 'none';
+  const bar = document.getElementById('ttp-postgame-bar');
+  bar.style.display = 'flex';
+  document.getElementById('ttp-postgame-rematch').style.display = isSpectating ? 'none' : '';
+}
 function ttPvpLeave() {
   if (TTP.roomId) socket.emit('leave_room', { roomId: TTP.roomId });
   document.getElementById('ttp-overlay').style.display = 'none';
+  document.getElementById('ttp-postgame-bar').style.display = 'none';
   document.getElementById('ttp-chat-messages').innerHTML = '';
   hidePredictPanel();
   showScreen('lobby-screen');
@@ -4112,6 +4174,8 @@ function initSocket() {
     document.getElementById('turn-timer-wrap').style.display = 'none';
     document.getElementById('consent-banner').classList.remove('show');
     document.getElementById('game-actions').style.display = '';
+    document.getElementById('spectator-actions').style.display = 'none';
+    document.getElementById('postgame-bar').style.display = 'none';
     updateSpectatorCount(0);
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
@@ -4153,6 +4217,8 @@ function initSocket() {
     document.getElementById('turn-timer-wrap').style.display = 'none';
     document.getElementById('consent-banner').classList.remove('show');
     document.getElementById('game-actions').style.display = 'none';
+    document.getElementById('spectator-actions').style.display = 'flex';
+    document.getElementById('postgame-bar').style.display = 'none';
     updateSpectatorCount(specCnt || 0);
     setupPlayerCards(players); updateStatusBar(); initCanvas(); drawBoard();
     showScreen('game-screen');
@@ -4972,6 +5038,14 @@ function closeAttendanceModal() {
   document.getElementById('attendance-modal').classList.remove('show');
 }
 
+// 결과 팝업 닫고 채팅/관전 계속 (오목/오델로/체스)
+function closeGameOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+  const bar = document.getElementById('postgame-bar');
+  bar.style.display = 'flex';
+  document.getElementById('postgame-rematch-btn').style.display = isSpectating ? 'none' : '';
+}
+
 function goLobby() {
   clearClientTimer();
   pendingConsentType = null;
@@ -4983,6 +5057,8 @@ function goLobby() {
   document.getElementById('board-wrap').classList.remove('othello-mode');
   document.getElementById('othello-score-bar').classList.remove('show');
   document.getElementById('overlay').classList.remove('show');
+  document.getElementById('postgame-bar').style.display = 'none';
+  document.getElementById('spectator-actions').style.display = 'none';
   document.getElementById('chat-messages').innerHTML = '';
   hidePredictPanel();
   showScreen('lobby-screen');
