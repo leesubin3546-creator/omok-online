@@ -687,9 +687,9 @@
   /* 상점 */
   .skin-premium .skin-lock { font-size:0.7rem; }
   .skin-premium.owned .skin-lock { display:none; }
-  .shop-tab { flex:1; padding:7px 0; border-radius:8px; border:1px solid var(--border); background:var(--card);
+  .shop-tab, .lb-tab { flex:1; padding:7px 0; border-radius:8px; border:1px solid var(--border); background:var(--card);
     color:var(--text2); font-family:inherit; font-size:0.8rem; font-weight:700; cursor:pointer; }
-  .shop-tab.active { border-color:var(--accent2); background:rgba(200,136,26,0.12); color:var(--accent2); }
+  .shop-tab.active, .lb-tab.active { border-color:var(--accent2); background:rgba(200,136,26,0.12); color:var(--accent2); }
   .shop-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--border);
     border-radius:10px; background:var(--card); }
   .shop-item .si-name { flex:1; font-size:0.85rem; font-weight:600; line-height:1.35; }
@@ -1190,6 +1190,19 @@
       </div>
     </div>
 
+    <div class="card lobby-wide" id="leaderboard-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="card-title">🏆 리더보드</div>
+        <button class="btn-secondary btn-sm" onclick="loadLeaderboard()" style="font-size:0.72rem;padding:3px 9px;">↻ 새로고침</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="lb-tab active" data-lbtab="rich" onclick="lbTab('rich')">💰 부자 랭킹</button>
+        <button class="lb-tab" data-lbtab="omok" onclick="lbTab('omok')">⚫ 오목 랭킹</button>
+        <button class="lb-tab" data-lbtab="holdem" onclick="lbTab('holdem')">🃏 홀덤 랭킹</button>
+      </div>
+      <div id="lb-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -1255,15 +1268,18 @@
         <label><input type="radio" name="modal-game-type" value="tikatuka" onchange="onModalGameTypeChange()"> 🎲 티카투카</label>
         <label><input type="radio" name="modal-game-type" value="holdem" onchange="onModalGameTypeChange()"> 🃏 텍사스 홀덤</label>
         <label><input type="radio" name="modal-game-type" value="blackjack" onchange="onModalGameTypeChange()"> 🂡 블랙잭</label>
+        <label><input type="radio" name="modal-game-type" value="indian" onchange="onModalGameTypeChange()"> 🂠 인디언 포커</label>
       </div>
     </div>
     <div id="modal-buyin-row">
       <div class="modal-label">바이인 (참가비)</div>
-      <div class="buyin-opts">
-        <div class="buyin-opt selected" data-buyin="1000" onclick="selectBuyIn(1000)">1,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 10/20</span></div>
-        <div class="buyin-opt" data-buyin="5000" onclick="selectBuyIn(5000)">5,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 50/100</span></div>
-        <div class="buyin-opt" data-buyin="10000" onclick="selectBuyIn(10000)">10,000<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 100/200</span></div>
+      <div class="buyin-opts" style="flex-wrap:wrap;">
+        <div class="buyin-opt selected" data-buyin="10000" onclick="selectBuyIn(10000)">1만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 100/200~</span></div>
+        <div class="buyin-opt" data-buyin="50000" onclick="selectBuyIn(50000)">5만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 500/1천~</span></div>
+        <div class="buyin-opt" data-buyin="100000" onclick="selectBuyIn(100000)">10만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 1천/2천~</span></div>
+        <div class="buyin-opt" data-buyin="500000" onclick="selectBuyIn(500000)">50만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">블라인드 5천/1만~</span></div>
       </div>
+      <div style="font-size:0.68rem;color:var(--text2);">⏫ 4핸드마다 블라인드 2배 상승 (토너먼트 방식)</div>
     </div>
     <div id="modal-ttbet-row">
       <div class="modal-label">💰 판돈 (승자 독식)</div>
@@ -3982,7 +3998,10 @@ function initSocket() {
     socket.emit('get_coins', { nickname: myNickname });
     socket.emit('shop_info', { nickname: myNickname });
     socket.emit('get_room_list');
+    socket.emit('get_leaderboard');
+    socket.emit('rejoin_check', { nickname: myNickname });   // 진행 중이던 게임 자동 복귀
   });
+  socket.on('leaderboard', data => { LB.data = data; renderLeaderboard(); });
   socket.on('your_record', (rec) => { updateRecordUI(rec); });
 
   // ── 재화 정보 수신 ───────────────────────────────────────────
@@ -4338,6 +4357,7 @@ function initSocket() {
 
   // ── 홀덤 소켓 핸들러 ──────────────────────────────────────────
   socket.on('holdem_state', (state) => {
+    if (state.phase === 'preflop' && (state.communityCards || []).length === 0) hdClearRunout();   // 새 핸드
     holdemState = state;
     closeCreateRoomModal();
     showScreen('holdem-screen');
@@ -4367,31 +4387,59 @@ function initSocket() {
     }
   });
 
-  socket.on('holdem_showdown', (state) => {
+  // 서버 payload: { roomId, showdownResult:[{nickname, holeCards, handScore, winAmount, chips, folded}], sidePots }
+  // 전체 상태는 직전 holdem_state(쇼다운 페이즈)가 이미 렌더했으므로 여기선 결과 표시만
+  socket.on('holdem_showdown', ({ showdownResult }) => {
     hdClearTimer();
-    holdemState = state;
-    renderHoldemTable(state);
-    renderHandRankPanel(state.myHandName || null);
-    document.getElementById('hd-status-bar').textContent = '🃏 쇼다운!';
+    hdClearRunout();
     document.getElementById('hd-timer-wrap').classList.remove('show');
+    const winners = (showdownResult || []).filter(r => r.winAmount > 0);
+    winners.forEach(r => {
+      const handStr = r.handScore ? ` (${r.handScore.name})` : '';
+      hdAddChat(`🏆 <strong>${escapeHtml(r.nickname)}</strong> +${r.winAmount.toLocaleString()}${handStr}`, true);
+    });
+    document.getElementById('hd-status-bar').textContent = winners.length
+      ? `🃏 쇼다운 — ${winners.map(r => r.nickname).join(', ')} 팟 획득!`
+      : '🃏 쇼다운!';
   });
 
-  socket.on('holdem_hand_end', ({ winnerNickname, reason, pot, handName }) => {
+  // 서버 payload: { roomId, winner, wonAmount, reason, players }
+  socket.on('holdem_hand_end', ({ winner, wonAmount, reason }) => {
     hdClearTimer();
-    const handStr = handName ? ` (${handName})` : '';
-    const reasonStr = reason === 'fold' ? ' — 모두 폴드' : handStr;
-    hdAddChat(`🏆 <strong>${escapeHtml(winnerNickname)}</strong> 팟 획득 +${pot.toLocaleString()}${reasonStr}`, true);
+    hdClearRunout();
+    const reasonStr = reason === 'fold' ? ' — 모두 폴드' : '';
+    hdAddChat(`🏆 <strong>${escapeHtml(winner || '?')}</strong> 팟 획득 +${(wonAmount || 0).toLocaleString()}${reasonStr}`, true);
     document.getElementById('hd-status-bar').textContent =
-      `🏆 ${winnerNickname} 팟 획득 (${pot.toLocaleString()})`;
+      `🏆 ${winner || '?'} 팟 획득 (${(wonAmount || 0).toLocaleString()})`;
   });
 
-  socket.on('holdem_game_over', ({ winnerNickname, coinsAwarded, results }) => {
+  // 서버 payload: { roomId, winner, results:[{nickname, chips, isWinner, coins, holdemRecord}] }
+  socket.on('holdem_game_over', ({ winner, results }) => {
     hdClearTimer();
-    showHoldemGameOver(winnerNickname, coinsAwarded, results);
+    const sorted = (results || []).slice().sort((a, b) => (b.chips || 0) - (a.chips || 0));
+    const winnerRow = sorted.find(r => r.isWinner);
+    showHoldemGameOver(winner, winnerRow ? winnerRow.chips : 0, sorted);
   });
 
   socket.on('holdem_player_disconnect', ({ nickname }) => {
     hdAddChat(`⚠️ ${escapeHtml(nickname)} 연결 끊김 — 자동 폴드`, true);
+  });
+
+  // 올인 런아웃: 홀카드 공개 + 실시간 승률
+  socket.on('holdem_runout', ({ players, equity }) => {
+    (players || []).forEach(p => { hdRunout.cards[p.nickname] = p.holeCards; });
+    hdRunout.equity = equity || {};
+    if (!hdRunout.announced) {
+      hdRunout.announced = true;
+      hdAddChat('🃏 <strong>올인 쇼다운!</strong> 카드 공개 — 런아웃', true);
+      document.getElementById('hd-status-bar').textContent = '🃏 올인 쇼다운 — 런아웃!';
+    }
+    if (holdemState) renderHoldemTable(holdemState);
+  });
+
+  socket.on('holdem_busted', () => {
+    document.getElementById('hd-status-bar').textContent = '💀 칩을 모두 잃었습니다 — 관전 모드';
+    hdAddChat('💀 칩을 모두 잃어 관전 모드로 전환되었습니다.', true);
   });
 
   socket.on('holdem_chat', ({ nickname, message }) => {
@@ -4410,7 +4458,7 @@ function initSocket() {
 }
 
 // ── 방 만들기 모달 ────────────────────────────────────────────
-let selectedBuyIn = 1000;
+let selectedBuyIn = 10000;
 let selectedTtBet = 0;
 function openCreateRoomModal() {
   document.getElementById('modal-room-name').value = `${myNickname}의 방`;
@@ -4420,9 +4468,9 @@ function openCreateRoomModal() {
   // reset game type to gomoku
   document.querySelector('input[name="modal-game-type"][value="gomoku"]').checked = true;
   onModalGameTypeChange();
-  selectedBuyIn = 1000;
+  selectedBuyIn = 10000;
   document.querySelectorAll('#modal-buyin-row .buyin-opt').forEach(el => {
-    el.classList.toggle('selected', parseInt(el.dataset.buyin) === 1000);
+    el.classList.toggle('selected', parseInt(el.dataset.buyin) === 10000);
   });
   selectedTtBet = 0;
   document.querySelectorAll('#ttbet-opts .buyin-opt').forEach(el => {
@@ -4433,11 +4481,11 @@ function openCreateRoomModal() {
 }
 function onModalGameTypeChange() {
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
-  const isHoldem = gt === 'holdem', isBj = gt === 'blackjack';
-  document.getElementById('modal-buyin-row').classList.toggle('show', isHoldem);
-  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldem && !isBj);  // 블랙잭은 라운드별 인게임 베팅
-  // 티카투카/블랙잭은 타이머 없음, 홀덤은 타이머 숨김
-  document.getElementById('modal-timer-row').style.display = (isHoldem || isBj || gt === 'tikatuka') ? 'none' : '';
+  const isHoldemLike = gt === 'holdem' || gt === 'indian';   // 인디언 포커 = 홀덤 인프라(바이인/칩)
+  const isBj = gt === 'blackjack';
+  document.getElementById('modal-buyin-row').classList.toggle('show', isHoldemLike);
+  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldemLike && !isBj);  // 블랙잭은 라운드별 인게임 베팅
+  document.getElementById('modal-timer-row').style.display = (isHoldemLike || isBj || gt === 'tikatuka') ? 'none' : '';
 }
 function selectBuyIn(amount) {
   selectedBuyIn = amount;
@@ -4465,9 +4513,38 @@ function submitCreateRoom() {
     nickname: myNickname, stoneStyle: currentStoneStyle,
     roomName: name, password: password || null, useTimer: timerOn, gameType: gt
   };
-  if (gt === 'holdem') payload.buyIn = selectedBuyIn;
+  if (gt === 'holdem' || gt === 'indian') payload.buyIn = selectedBuyIn;
   else payload.ttBet = selectedTtBet;
   socket.emit('create_room', payload);
+}
+
+// ── 리더보드 ──────────────────────────────────────────────────
+const LB = { data: null, tab: 'rich' };
+function loadLeaderboard() { if (socket) socket.emit('get_leaderboard'); }
+function lbTab(t) {
+  LB.tab = t;
+  document.querySelectorAll('.lb-tab').forEach(b => b.classList.toggle('active', b.dataset.lbtab === t));
+  renderLeaderboard();
+}
+function renderLeaderboard() {
+  const box = document.getElementById('lb-list');
+  if (!box) return;
+  if (!LB.data) { box.innerHTML = '<div class="room-list-empty">불러오는 중…</div>'; return; }
+  const rows = LB.data[LB.tab] || [];
+  if (!rows.length) { box.innerHTML = '<div class="room-list-empty">아직 기록이 없습니다</div>'; return; }
+  const medal = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+  box.innerHTML = rows.map((r, i) => {
+    const nameHtml = `${r.title ? r.title + ' ' : ''}<span style="${r.color ? 'color:' + r.color + ';' : ''}font-weight:700;">${escapeHtml(r.nickname)}</span>`;
+    const value = LB.tab === 'rich' ? `💰 ${(r.coins || 0).toLocaleString()}`
+      : LB.tab === 'omok' ? `${getRank(r.points || 0)} · ${r.points || 0}pts (${r.win}승 ${r.lose}패)`
+      : `${r.win}승 ${r.lose}패`;
+    const mine = r.nickname === myNickname;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:8px;font-size:0.82rem;
+      ${mine ? 'background:rgba(200,136,26,0.12);border:1px solid var(--accent2);' : 'background:var(--card);border:1px solid var(--border);'}">
+      <span style="min-width:26px;">${medal(i)}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nameHtml}</span>
+      <span style="color:var(--text2);font-size:0.78rem;">${value}</span></div>`;
+  }).join('');
 }
 
 // ── 관전자 승부 예측 ───────────────────────────────────────────
@@ -4558,6 +4635,8 @@ function updateRoomList(list) {
       gameBadge = `<span class="room-badge room-badge-othello">♞ 체스</span>`;
     } else if (r.gameType === 'blackjack') {
       gameBadge = `<span class="room-badge room-badge-holdem">🂡 블랙잭</span>`;
+    } else if (r.gameType === 'indian') {
+      gameBadge = `<span class="room-badge room-badge-holdem">🂠 인디언</span>`;
     } else {
       gameBadge = `<span class="room-badge room-badge-gomoku">오목</span>`;
     }
@@ -4596,9 +4675,10 @@ function spectateRoom(roomId) {
 // ── 대기실 렌더링 ─────────────────────────────────────────────
 function renderLobbyScreen(state) {
   document.getElementById('lobby-room-name').textContent = state.name || '대기실';
-  if (state.gameType === 'holdem') {
+  if (state.gameType === 'holdem' || state.gameType === 'indian') {
     document.getElementById('lobby-room-sub').textContent =
-      `🃏 텍사스 홀덤 · 바이인 ${(state.buyIn || 1000).toLocaleString()}`;
+      `${state.gameType === 'indian' ? '🂠 인디언 포커' : '🃏 텍사스 홀덤'} · 바이인 ${(state.buyIn || 10000).toLocaleString()}` +
+      (state.gameType === 'indian' ? ' · 내 카드는 상대만 본다!' : '');
   } else if (state.gameType === 'blackjack') {
     document.getElementById('lobby-room-sub').textContent =
       '🂡 블랙잭 · 딜러(하우스) 상대 · 라운드별 베팅 · 혼자서도 시작 가능';
@@ -4621,7 +4701,7 @@ function renderLobbyScreen(state) {
   const grid = document.getElementById('lobby-players-grid');
   grid.innerHTML = '';
 
-  if (state.gameType === 'holdem' || state.gameType === 'blackjack') {
+  if (state.gameType === 'holdem' || state.gameType === 'blackjack' || state.gameType === 'indian') {
     grid.classList.add('holdem-lobby');
     const maxP = state.gameType === 'blackjack' ? 5 : 6;
     for (let i = 0; i < maxP; i++) {
@@ -4911,6 +4991,7 @@ function goLobby() {
   if (socket) {
     socket.emit('get_room_list');
     socket.emit('get_coins', { nickname: myNickname });
+    socket.emit('get_leaderboard');
   }
 }
 
@@ -5610,6 +5691,8 @@ function renderHandRankPanel(currentHandName) {
 let holdemState = null;
 let hdTimerInterval = null;
 let hdRaisePending = false;
+let hdRunout = { cards: {}, equity: {}, announced: false };   // 올인 런아웃 공개 정보
+function hdClearRunout() { hdRunout = { cards: {}, equity: {}, announced: false }; }
 
 // 시트 위치 (6인 기준, 각도 및 top/left%)
 const HD_SEAT_POS = [
@@ -5654,15 +5737,22 @@ function renderHoldemTable(state) {
   // 팟 & 커뮤니티 카드
   document.getElementById('hd-pot-main').textContent = `팟: ${(state.pot || 0).toLocaleString()}`;
   const phaseNames = { waiting:'대기 중', preflop:'프리플랍', flop:'플랍', turn:'턴', river:'리버', showdown:'쇼다운', ended:'종료' };
-  document.getElementById('hd-phase-badge').textContent = phaseNames[state.phase] || state.phase;
+  const blindStr = state.smallBlindAmount ? ` · ${state.smallBlindAmount.toLocaleString()}/${state.bigBlindAmount.toLocaleString()}` : '';
+  document.getElementById('hd-phase-badge').textContent = (phaseNames[state.phase] || state.phase) + blindStr;
 
-  // 커뮤니티 카드 (5장, 빈 슬롯 포함)
-  const cc = state.communityCards || [];
-  let ccHtml = '';
-  for (let i = 0; i < 5; i++) {
-    ccHtml += renderHdCard(cc[i] || null, false, i * 90);
+  // 커뮤니티 카드 (5장, 빈 슬롯 포함) — 인디언 포커는 보드 없음
+  document.getElementById('hd-hand-rank-panel').style.display = state.indian ? 'none' : '';
+  if (state.indian) {
+    document.getElementById('hd-community-cards').innerHTML =
+      '<div style="color:rgba(255,255,255,0.75);font-size:0.85rem;font-weight:700;padding:14px 6px;text-align:center;">🂠 인디언 포커<br><span style="font-size:0.7rem;font-weight:400;">내 카드는 나만 못 봅니다 — 높은 카드가 승리!</span></div>';
+  } else {
+    const cc = state.communityCards || [];
+    let ccHtml = '';
+    for (let i = 0; i < 5; i++) {
+      ccHtml += renderHdCard(cc[i] || null, false, i * 90);
+    }
+    document.getElementById('hd-community-cards').innerHTML = ccHtml;
   }
-  document.getElementById('hd-community-cards').innerHTML = ccHtml;
 
   // 사이드팟
   const spWrap = document.getElementById('hd-side-pots-wrap');
@@ -5700,15 +5790,20 @@ function renderHoldemTable(state) {
     if (isSB && !isDealer) tagsHtml += `<span class="hd-seat-tag sb">SB</span>`;
     if (isBB) tagsHtml += `<span class="hd-seat-tag bb">BB</span>`;
 
-    // 홀 카드
+    // 홀 카드 (런아웃 중이면 공개된 카드 사용)
+    const runoutCards = !folded && hdRunout.cards[p.nickname];
     let cardsHtml = '';
-    if (!folded && p.holeCards) {
-      cardsHtml = p.holeCards.map((c, ci) => renderHdCard(c, false, serverIdx * 80 + ci * 130)).join('');
+    if (!folded && (p.holeCards || runoutCards)) {
+      cardsHtml = (p.holeCards || runoutCards).map((c, ci) => renderHdCard(c, false, serverIdx * 80 + ci * 130)).join('');
     } else if (folded) {
       cardsHtml = '';
+    } else if (state.indian) {
+      cardsHtml = renderHdCard('back', false, serverIdx * 80);   // 인디언: 내 카드 = 뒷면 1장
     } else {
       cardsHtml = renderHdCard('back', false, serverIdx * 80) + renderHdCard('back', false, serverIdx * 80 + 130);
     }
+    // 런아웃 승률 배지
+    const eqPct = !folded && hdRunout.equity[p.nickname] != null ? hdRunout.equity[p.nickname] : null;
 
     // 베팅 버블
     const betStr = p.bet > 0 ? p.bet.toLocaleString() : '';
@@ -5729,6 +5824,7 @@ function renderHoldemTable(state) {
       <div class="${infoClass}">
         <div class="hd-seat-name">${escapeHtml(p.nickname)}${tagsHtml}${p.allIn ? ' <span style="font-size:0.6rem;background:#5b21b6;color:#fff;padding:0 3px;border-radius:3px;">올인</span>' : ''}</div>
         <div class="hd-seat-chips">${p.chips.toLocaleString()} 칩</div>
+        ${eqPct != null ? `<div style="font-size:0.78rem;font-weight:800;color:${eqPct >= 50 ? '#7df59a' : '#ffb0a0'};">승률 ${eqPct}%</div>` : ''}
       </div>
       <div class="hd-seat-bet-bubble ${betStr ? 'show' : ''}">${betStr ? '베팅 ' + betStr : ''}</div>`;
     table.appendChild(seat);
@@ -5740,11 +5836,13 @@ function renderHoldemTable(state) {
     let myCardsHtml = '';
     if (me.holeCards && me.holeCards.length) {
       myCardsHtml = me.holeCards.map((c, ci) => renderHdCard(c, true, ci * 180)).join('');
+    } else if (state.indian && !me.folded) {
+      myCardsHtml = renderHdCard('back', true);
     } else {
       myCardsHtml = renderHdCard(null) + renderHdCard(null);
     }
     document.getElementById('hd-my-hole-cards').innerHTML = myCardsHtml;
-    document.getElementById('hd-my-hand-name').textContent = state.myHandName || '—';
+    document.getElementById('hd-my-hand-name').textContent = state.indian ? '🙈 내 카드: ???' : (state.myHandName || '—');
     document.getElementById('hd-my-chips').textContent = `칩: ${me.chips.toLocaleString()}`;
   }
 

@@ -252,6 +252,49 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
 - 검증: 6백만회 카이제곱 9.43(df=5, 임계 11.07) 균등 ✔, ttRollExcept 제외값별 100만회 — 중복 0회·나머지 5개 각 20% ✔.
 
+## 2026-07-09 업데이트 4: 재접속 지원 + 인디언 포커
+
+**재접속 (오목/오델로/체스/티카투카)**:
+- 연결 끊김(disconnect) 시 즉시 몰수 대신 **60초 유예**: `p.isDisconnected`+`p.graceTimer`, 게임 일시정지(`game_paused` — 기존 오버레이 재활용), 턴 타이머 정지, 채팅 공지. 명시적 나가기(leave_room)는 기존대로 즉시 몰수.
+- 몰수 로직은 `forfeitBoardGame(room, roomId, loser)`로 추출 (즉시/유예만료 공용, grace 타이머 일괄 정리, 콜백에 status 가드).
+- 복귀: 클라가 connect 시 `rejoin_check {nickname}` → 서버가 playing 방에서 `isDisconnected` 동일 닉 탐색 → socketId 갱신+join+타이머 해제+`game_resumed`+`sendRejoinState`(game_start 개인 재전송 + chess:state/tt:state). 양쪽 다 접속일 때만 isPaused 해제. `resume_game`은 재접속 대기 중 수동 재개 차단.
+- 홀덤/블랙잭은 기존 방식 유지 (자동폴드/라운드 제거+환급).
+
+**인디언 포커 (gameType 'indian')** — 홀덤 상태머신 재사용(`room.holdem.indian` 플래그):
+- 카드 1장 딜, **베팅 1라운드 후 즉시 쇼다운**(advanceHoldemPhase 인터셉트, runItOut은 1.2초 후 쇼다운), 높은 카드 승리(동점 스플릿), 쇼다운명 "9 카드"/"A 카드".
+- **시점 반전**: emitHoldemState 개인화 — 내 카드 null, 상대 카드 공개(폴드 제외). myHandName null. 관전자는 쇼다운 전 전부 비공개(귓속말 치팅 방지). stateBase에 `indian` 플래그.
+- 바이인/블라인드/에스컬레이션/올인/사이드팟/버스트 관전 전환/이탈 처리 전부 홀덤 공유. maxPlayers 6. 예측 제외, resign 가드.
+- 클라: 홀덤 화면 재사용 — 커뮤니티 영역에 게임 안내 문구, 내 카드 뒷면 1장+"🙈 내 카드: ???", 족보 패널 숨김, 좌석 내 카드 뒷면 1장. 모달 라디오 🂠(바이인 픽커 공유), 배지/대기실(홀덤 그리드 공유).
+- 검증: 유예/재접속/만료몰수/즉시몰수 9케이스 + 인디언 딜/시점반전/쇼다운/배당 9케이스 통과. ※python으로 파일 수정 시 CRLF 변환 주의 — `open(newline)` 이슈로 전체 diff 오염됐던 것 LF 복원함.
+
+## 2026-07-09 업데이트 3: 리더보드 + 올인 런아웃 연출
+
+**리더보드**: 로비 `#leaderboard-card` (💰 부자 / ⚫ 오목 pts / 🃏 홀덤 승수, 각 top10). 서버 `get_leaderboard`→`leaderboard` (Record 쿼리 3종, 칭호/닉색 deco 포함). `.lb-tab`(shop-tab CSS 공유, 별도 클래스로 상점 탭과 간섭 없음), 내 행 하이라이트, 메달 🥇🥈🥉. 접속/로비 복귀 시 갱신.
+
+**올인 런아웃 연출**: `runItOut`이 생존 2인 이상이면 — 홀카드 즉시 공개 + `holdemEquity`(몬테카를로 1200회, 리버 1장은 전수) 승률과 함께 `holdem_runout` emit → 스트리트별 1.8초 딜레이로 한 장씩 오픈, 매 스트리트 승률 갱신 → 쇼다운. 클라 `hdRunout`(cards/equity) — 좌석에 공개 카드 + 색상 승률 배지, 새 핸드/쇼다운 시 정리. 에퀴티 검증: AA vs KK 83:17, 리버 확정 100:0, 턴 FD 20%.
+
+**추가 발견·수정한 payload 불일치 버그들** (레이즈 버그와 같은 패밀리):
+- `holdem_hand_end`: 서버 `winner/wonAmount` vs 클라 `winnerNickname/pot` → **pot undefined로 핸들러 크래시**, 팟 획득 공지가 아예 안 나오고 있었음
+- `holdem_showdown`: 부분 payload({showdownResult,sidePots})를 full state로 renderHoldemTable에 넘겨 **쇼다운 때 좌석이 전멸**하던 버그 → 결과 채팅/상태바 표시로 교체 (전체 상태는 직전 holdem_state가 렌더)
+- `holdem_game_over`: `winner` vs `winnerNickname` → 우승자가 undefined로 표시되던 버그 → 수정 + 결과 칩순 정렬
+
+## 2026-07-09 업데이트 2: 홀덤 버그 수정 + 토너먼트화
+
+**버그 수정 (서버 권한 강화)**:
+- **레이즈 금액 무시 버그**: 클라 `raiseAmount` vs 서버 `amount` 필드명 불일치로 모든 레이즈가 최소 레이즈였음 → 핸들러가 `raiseAmount || amount || 0` 수신
+- **체크 서버 검증**: `p.bet < h.currentBet`이면 check 무시(shift 전 검증, 타이머 유지) — 조작 클라 무료 체크 차단
+- **관전자 홀카드 은닉**: 쇼다운 전 관전자에게 null (basePlayers 그대로 전송) — 훔쳐보기 차단
+- **프리플랍 족보 오표기**: 홀카드 2장에 5장용 평가 → 수딧이 '플러시' 표시되던 것 → 페어/하이카드만 판정
+- **숏 올인 minRaise**: diff >= minRaise일 때만 갱신
+- **버스트 관전 전환**: startHoldemHand에서 칩 0 플레이어 제거→spectators 이동 + `holdem_busted` 이벤트 + addHoldemLose (생존 2인 이상일 때만; 최종 패자는 endHoldemGame 처리)
+
+**재미 개선 (판돈이 재산 대비 너무 작던 문제)**:
+- 바이인 1천/5천/1만 → **1만/5만/10만/50만** (블라인드 100/200 ~ 5천/1만, HOLDEM_BLINDS 교체, 기본값 전부 10000으로)
+- **블라인드 에스컬레이션**: 4핸드마다 2배 (`h.handNumber`, SB 상한 = 바이인/10), 상승 시 📢 채팅 공지. 모달에 "토너먼트 방식" 안내
+- 올인 시 📢 채팅 공지, 페이즈 배지에 현재 블라인드 표시
+
+검증: 추출 시뮬 15케이스(레이즈 금액/체크 거부/관전 은닉/프리플랍 족보/에스컬레이션/버스트 전환/올인 공지) 전부 통과.
+
 ## 2026-07-09 업데이트: 판돈 50만 + 올인빵
 
 - 판돈 픽커에 **500,000**과 **🔥 올인빵** 추가 (모달 8옵션, 올인빵 선택 시 경고문 표시). `selectedTtBet`은 숫자 또는 'allin' 문자열, dataset 비교는 String으로.

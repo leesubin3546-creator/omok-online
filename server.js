@@ -70,11 +70,12 @@ async function getNickStyle(nickname) {
   return none;
 }
 
-// 홀덤 블라인드 (바이인 → SB/BB)
+// 홀덤 블라인드 (바이인 → 시작 SB/BB) — 코인 경제(초기 100만)에 맞게 상향
 const HOLDEM_BLINDS = {
-  1000:  { sb: 10,  bb: 20  },
-  5000:  { sb: 50,  bb: 100 },
-  10000: { sb: 100, bb: 200 },
+  10000:  { sb: 100,  bb: 200 },
+  50000:  { sb: 500,  bb: 1000 },
+  100000: { sb: 1000, bb: 2000 },
+  500000: { sb: 5000, bb: 10000 },
 };
 
 // 출석 상자 등급 (균등 분포)
@@ -591,8 +592,9 @@ function emitHoldemState(room) {
     minRaise: h.minRaise,
     smallBlindAmount: h.smallBlindAmount,
     bigBlindAmount: h.bigBlindAmount,
-    buyIn: room.buyIn || 1000,
+    buyIn: room.buyIn || 10000,
     playersToActCount: h.playersToAct ? h.playersToAct.length : 0,
+    indian: !!h.indian,
   };
   const basePlayers = room.players.map((p, idx) => ({
     idx,
@@ -608,23 +610,26 @@ function emitHoldemState(room) {
   room.players.forEach((p, myIdx) => {
     const personalPlayers = basePlayers.map((bp, i) => ({
       ...bp,
-      holeCards: showAll ? bp.holeCards : (i === myIdx ? (p.holeCards || []) : null),
+      // 인디언 포커: 내 카드는 안 보이고 남의 카드는 보인다 (쇼다운 전)
+      holeCards: showAll ? bp.holeCards
+        : h.indian ? (i === myIdx ? null : (!room.players[i].folded ? (room.players[i].holeCards || []) : null))
+        : (i === myIdx ? (p.holeCards || []) : null),
     }));
     // 내 현재 족보
     let myHandName = null;
-    if (p.holeCards && p.holeCards.length === 2 && h.communityCards.length > 0) {
+    if (h.indian) {
+      myHandName = null;   // 인디언: 내 카드를 알 수 없음
+    } else if (p.holeCards && p.holeCards.length === 2 && h.communityCards.length > 0) {
       myHandName = evaluateHand([...p.holeCards, ...h.communityCards]).name;
     } else if (p.holeCards && p.holeCards.length === 2) {
-      myHandName = evaluateHand([...p.holeCards]).name;
+      // 프리플랍은 페어/하이카드만 (2장에 5장용 평가를 쓰면 수딧이 '플러시'로 오표기됨)
+      myHandName = p.holeCards[0].rank === p.holeCards[1].rank ? '원페어' : '하이카드';
     }
     io.to(p.socketId).emit('holdem_state', { ...stateBase, yourIndex: myIdx, myHandName, players: personalPlayers });
   });
   room.spectators.forEach(spec => {
-    const fullPlayers = basePlayers.map((bp, i) => ({
-      ...bp,
-      holeCards: room.players[i].holeCards || [],
-    }));
-    io.to(spec.socketId).emit('holdem_state', { ...stateBase, yourIndex: -1, isSpectator: true, players: fullPlayers });
+    // 관전자도 쇼다운 전에는 홀카드 비공개 (관전 훔쳐보기 방지)
+    io.to(spec.socketId).emit('holdem_state', { ...stateBase, yourIndex: -1, isSpectator: true, players: basePlayers });
   });
 }
 
@@ -673,11 +678,18 @@ function startHoldemHand(room) {
   const h = room.holdem;
   if (!h || room.status !== 'playing') return;
   // 나간(연결 끊긴) 플레이어 정리: 남은 칩은 코인으로 환급 후 테이블에서 제거
+  // 버스트(칩 0) 플레이어는 관전으로 전환 (유령으로 자리 차지 방지)
   for (let i = room.players.length - 1; i >= 0; i--) {
     const p = room.players[i];
     if (p.isDisconnected) {
       if (p.chips > 0) addCoins(p.nickname, p.chips);
       room.players.splice(i, 1);
+    } else if (p.chips === 0 && room.players.filter(q => q.chips > 0).length >= 2) {
+      addHoldemLose(p.nickname);
+      room.players.splice(i, 1);
+      room.spectators.push({ socketId: p.socketId, nickname: p.nickname });
+      io.to(p.socketId).emit('holdem_busted', {});
+      io.to(room.id).emit('chat', { nickname: '📢', message: `${p.nickname}님이 칩을 모두 잃어 관전으로 전환됩니다.` });
     }
   }
   if (room.players.length > 0 && !room.players.find(p => p.socketId === room.hostSocketId)) {
@@ -685,6 +697,21 @@ function startHoldemHand(room) {
   }
   const activeIdxs = room.players.map((p, i) => ({ p, i })).filter(({ p }) => p.chips > 0).map(({ i }) => i);
   if (activeIdxs.length < 2) { endHoldemGame(room); return; }
+
+  // 블라인드 에스컬레이션: 4핸드마다 2배 (SB 상한 = 바이인의 1/10)
+  h.handNumber = (h.handNumber || 0) + 1;
+  if (h.handNumber > 1 && (h.handNumber - 1) % 4 === 0) {
+    const sbCap = Math.max(h.smallBlindAmount, Math.floor((room.buyIn || 10000) / 10));
+    const newSb = Math.min(h.smallBlindAmount * 2, sbCap);
+    if (newSb > h.smallBlindAmount) {
+      h.smallBlindAmount = newSb;
+      h.bigBlindAmount = newSb * 2;
+      io.to(room.id).emit('chat', {
+        nickname: '📢',
+        message: `블라인드 상승! ${h.smallBlindAmount.toLocaleString()} / ${h.bigBlindAmount.toLocaleString()}`,
+      });
+    }
+  }
 
   for (const p of room.players) {
     p.holeCards = [];
@@ -728,7 +755,7 @@ function startHoldemHand(room) {
   postBlind(room, bbIdx, h.bigBlindAmount);
 
   for (const pi of activeIdxs) {
-    room.players[pi].holeCards = [h.deck.pop(), h.deck.pop()];
+    room.players[pi].holeCards = h.indian ? [h.deck.pop()] : [h.deck.pop(), h.deck.pop()];
   }
 
   // playersToAct for preflop: UTG → ... → BB
@@ -752,6 +779,8 @@ function processHoldemAction(room, playerIdx, action, raiseAmount) {
   const p = room.players[playerIdx];
   if (!p || p.folded || p.allIn) return;
   if (!h.playersToAct.length || h.playersToAct[0] !== playerIdx) return;
+  // 서버 검증: 베팅을 마주한 상태에서는 체크 불가 (무시 — 타이머 유지)
+  if (action === 'check' && p.bet < h.currentBet) return;
 
   clearHoldemTimer(room);
   h.playersToAct.shift();
@@ -763,7 +792,7 @@ function processHoldemAction(room, playerIdx, action, raiseAmount) {
     if (remaining.length === 1) { endHandEarly(room, remaining[0]); return; }
 
   } else if (action === 'check') {
-    // valid only if p.bet >= h.currentBet (client enforces)
+    // 위에서 검증됨 (p.bet >= h.currentBet)
 
   } else if (action === 'call') {
     const toCall = Math.min(h.currentBet - p.bet, p.chips);
@@ -781,7 +810,8 @@ function processHoldemAction(room, playerIdx, action, raiseAmount) {
     p.chips -= toAdd; p.bet += toAdd; p.totalBetThisHand += toAdd; h.pot += toAdd;
 
     if (p.bet > h.currentBet) {
-      h.minRaise = Math.max(h.bigBlindAmount, p.bet - h.currentBet);
+      const diff = p.bet - h.currentBet;
+      if (diff >= h.minRaise) h.minRaise = diff;   // 풀 레이즈만 minRaise 갱신 (숏 올인은 유지)
       h.currentBet = p.bet;
       // Reopen action
       const nPlayers = room.players.length;
@@ -795,6 +825,9 @@ function processHoldemAction(room, playerIdx, action, raiseAmount) {
     if (p.chips === 0) { p.allIn = true; h.playersToAct = h.playersToAct.filter(i => i !== playerIdx); }
   }
 
+  if (p.allIn && action !== 'fold') {
+    io.to(room.id).emit('chat', { nickname: '📢', message: `🔥 ${p.nickname} 올인! (${p.totalBetThisHand.toLocaleString()})` });
+  }
   io.to(room.id).emit('holdem_action_done', {
     playerIdx, nickname: p.nickname, action,
     betAmount: p.bet, pot: h.pot, chips: p.chips,
@@ -812,6 +845,7 @@ function processHoldemAction(room, playerIdx, action, raiseAmount) {
 function advanceHoldemPhase(room) {
   const h = room.holdem;
   clearHoldemTimer(room);
+  if (h.indian) { startHoldemShowdown(room); return; }   // 인디언: 베팅 1라운드 후 즉시 쇼다운
   for (const p of room.players) p.bet = 0;
   h.currentBet = 0;
   h.minRaise = h.bigBlindAmount;
@@ -857,9 +891,86 @@ function advanceHoldemPhase(room) {
   startHoldemTimer(room);
 }
 
+// 승률 계산 — 남은 보드를 몬테카를로(리버 1장 남으면 전수)로 시뮬
+function holdemEquity(players, community) {
+  const known = [...community];
+  players.forEach(p => known.push(...p.holeCards));
+  const remaining = createDeck().filter(c => !known.some(k => k.suit === c.suit && k.rank === c.rank));
+  const need = 5 - community.length;
+  const N = need === 0 ? 1 : (need === 1 ? remaining.length : 1200);
+  const wins = {};
+  players.forEach(p => { wins[p.nickname] = 0; });
+  for (let t = 0; t < N; t++) {
+    let board;
+    if (need === 0) board = community;
+    else if (need === 1) board = [...community, remaining[t]];      // 전수 조사
+    else {
+      const used = new Set();
+      const picked = [];
+      while (picked.length < need) {
+        const i = Math.floor(Math.random() * remaining.length);
+        if (!used.has(i)) { used.add(i); picked.push(remaining[i]); }
+      }
+      board = [...community, ...picked];
+    }
+    let best = null, winners = [];
+    for (const p of players) {
+      const sc = evaluateHand([...p.holeCards, ...board]);
+      const cmp = best ? compareHands(sc, best) : 1;
+      if (cmp > 0) { best = sc; winners = [p.nickname]; }
+      else if (cmp === 0) winners.push(p.nickname);
+    }
+    const share = 1 / winners.length;
+    winners.forEach(nick => { wins[nick] += share; });
+  }
+  const eq = {};
+  players.forEach(p => { eq[p.nickname] = Math.round((wins[p.nickname] / N) * 100); });
+  return eq;
+}
+
 function runItOut(room) {
   const h = room.holdem;
   clearHoldemTimer(room);
+  if (h.indian) {
+    emitHoldemState(room);
+    setTimeout(() => { if (room.status === 'playing' && h.phase !== 'showdown') startHoldemShowdown(room); }, 1200);
+    return;
+  }
+  const live = room.players.filter(p => !p.folded && p.holeCards && p.holeCards.length === 2);
+
+  // 올인 런아웃 연출: 홀카드 공개 → 스트리트별 1.8초 딜레이 + 실시간 승률
+  if (live.length >= 2) {
+    const emitRunout = () => {
+      io.to(room.id).emit('holdem_runout', {
+        roomId: room.id,
+        players: live.map(p => ({ nickname: p.nickname, holeCards: p.holeCards })),
+        equity: holdemEquity(live, h.communityCards),
+      });
+    };
+    const step = () => {
+      if (room.status !== 'playing' || h.phase === 'showdown') return;
+      if (h.communityCards.length >= 5) { startHoldemShowdown(room); return; }
+      if (h.communityCards.length === 0) {
+        h.communityCards.push(h.deck.pop(), h.deck.pop(), h.deck.pop());
+        h.phase = 'flop';
+      } else if (h.communityCards.length === 3) {
+        h.communityCards.push(h.deck.pop());
+        h.phase = 'turn';
+      } else {
+        h.communityCards.push(h.deck.pop());
+        h.phase = 'river';
+      }
+      emitHoldemState(room);
+      emitRunout();
+      setTimeout(step, 1800);
+    };
+    emitHoldemState(room);
+    emitRunout();               // 즉시 카드 공개 + 현재 승률
+    setTimeout(step, 1800);
+    return;
+  }
+
+  // 폴백: 기존 즉시 진행
   while (h.communityCards.length < 5) {
     if (h.communityCards.length === 0) {
       h.communityCards.push(h.deck.pop(), h.deck.pop(), h.deck.pop());
@@ -883,9 +994,12 @@ function startHoldemShowdown(room) {
   h.sidePots = computeSidePots(room.players);
 
   const evals = {};
+  const indianRankName = r => r === 14 ? 'A' : r === 13 ? 'K' : r === 12 ? 'Q' : r === 11 ? 'J' : String(r);
   for (const p of room.players) {
     if (!p.folded && p.holeCards && p.holeCards.length > 0) {
-      evals[p.nickname] = evaluateHand([...p.holeCards, ...h.communityCards]);
+      evals[p.nickname] = h.indian
+        ? { rank: 1, tb: [p.holeCards[0].rank], name: `${indianRankName(p.holeCards[0].rank)} 카드` }
+        : evaluateHand([...p.holeCards, ...h.communityCards]);
     }
   }
 
@@ -1213,7 +1327,7 @@ function broadcastRoomList() {
         hasPassword: !!room.password,
         status: room.status,
         playerCount: room.players.length,
-        maxPlayers: room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2,
+        maxPlayers: (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2,
         players: room.players.map(p => p.nickname),
         spectatorCount: room.spectators.length,
         useTimer: room.useTimer !== false,
@@ -1249,21 +1363,21 @@ async function broadcastLobbyState(room) {
     buyIn: room.buyIn,
     ttBet: room.ttBet,
     ttAllin: !!room.ttAllin,
-    maxPlayers: room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2,
+    maxPlayers: (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2,
   });
 }
 
 function createRoom(roomId, options = {}) {
   const gameType = options.gameType || 'gomoku';
-  const buyIn = options.buyIn || 1000;
-  const blinds = HOLDEM_BLINDS[buyIn] || HOLDEM_BLINDS[1000];
+  const buyIn = options.buyIn || 10000;
+  const blinds = HOLDEM_BLINDS[buyIn] || HOLDEM_BLINDS[10000];
   const room = {
     id: roomId,
     name: options.name || `방 ${roomId}`,
     password: options.password || null,
     hostSocketId: options.hostSocketId || null,
     gameType,
-    buyIn: gameType === 'holdem' ? buyIn : undefined,
+    buyIn: (gameType === 'holdem' || gameType === 'indian') ? buyIn : undefined,
     ttBet: gameType !== 'holdem' ? (options.ttBet || 0) : undefined,  // 오목/오델로/체스/티카투카 공용 판돈
     ttAllin: gameType !== 'holdem' ? !!options.ttAllin : false,       // 올인빵: 각자 전 재산
     ttEscrowAmounts: null,   // 올인빵 개인별 에스크로 금액 { nickname: amount }
@@ -1272,7 +1386,7 @@ function createRoom(roomId, options = {}) {
     predictions: [],   // 관전자 승부 예측 [{socketId, nickname, pick, amount}]
     players: [],
     readySet: new Set(),
-    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' || gameType === 'chess' || gameType === 'blackjack' ? null : createBoard()),
+    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' || gameType === 'indian' || gameType === 'chess' || gameType === 'blackjack' ? null : createBoard()),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
@@ -1285,7 +1399,8 @@ function createRoom(roomId, options = {}) {
     pendingSurrender: null,
     turnTimer: null,
     rematchRequests: null,
-    holdem: gameType === 'holdem' ? {
+    holdem: (gameType === 'holdem' || gameType === 'indian') ? {
+      indian: gameType === 'indian',   // 인디언 포커: 카드 1장, 베팅 1라운드, 내 카드만 안 보임
       phase: 'waiting',
       deck: [],
       communityCards: [],
@@ -1649,6 +1764,29 @@ io.on('connection', (socket) => {
     socket.emit('coins_info', info);
   });
 
+  // ── 리더보드 ─────────────────────────────────────────────────
+  socket.on('get_leaderboard', async () => {
+    try {
+      const [rich, omok, holdem] = await Promise.all([
+        Record.find({}).sort({ coins: -1 }).limit(10).select('nickname coins equippedTitle nickColor').lean(),
+        Record.find({ $or: [{ win: { $gt: 0 } }, { lose: { $gt: 0 } }] })
+          .sort({ points: -1 }).limit(10).select('nickname points win lose equippedTitle nickColor').lean(),
+        Record.find({ $or: [{ holdemWin: { $gt: 0 } }, { holdemLose: { $gt: 0 } }] })
+          .sort({ holdemWin: -1 }).limit(10).select('nickname holdemWin holdemLose equippedTitle nickColor').lean(),
+      ]);
+      const deco = r => ({
+        nickname: r.nickname,
+        title: r.equippedTitle && SHOP_TITLES[r.equippedTitle] ? SHOP_TITLES[r.equippedTitle].label : '',
+        color: r.nickColor && SHOP_COLORS[r.nickColor] ? SHOP_COLORS[r.nickColor].hex : '',
+      });
+      socket.emit('leaderboard', {
+        rich: rich.map(r => ({ ...deco(r), coins: r.coins || 0 })),
+        omok: omok.map(r => ({ ...deco(r), points: r.points || 0, win: r.win || 0, lose: r.lose || 0 })),
+        holdem: holdem.map(r => ({ ...deco(r), win: r.holdemWin || 0, lose: r.holdemLose || 0 })),
+      });
+    } catch (e) { console.error('leaderboard error:', e.message); }
+  });
+
   // ── 상점 ─────────────────────────────────────────────────────
   socket.on('shop_info', async ({ nickname }) => {
     if (!nickname) return;
@@ -1775,7 +1913,7 @@ io.on('connection', (socket) => {
       useTimer: (gameType === 'tikatuka' || gameType === 'blackjack') ? false : (useTimer !== false),
       hostSocketId: socket.id,
       gameType: gameType || 'gomoku',
-      buyIn: buyIn || 1000,
+      buyIn: buyIn || 10000,
       ttBet: isAllin ? 0 : Math.max(0, Math.min(1000000, parseInt(ttBet, 10) || 0)),
       ttAllin: isAllin,
     });
@@ -1808,7 +1946,7 @@ io.on('connection', (socket) => {
       if (room.spectators.find(s => s.socketId === socket.id)) return;
       room.spectators.push({ socketId: socket.id, nickname });
       socket.join(roomId);
-      if (room.gameType === 'holdem') {
+      if (room.gameType === 'holdem' || room.gameType === 'indian') {
         emitHoldemState(room);
       } else {
         const players = await Promise.all(room.players.map(async p => ({
@@ -1847,7 +1985,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const maxPlayers = room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2;
+      const maxPlayers = (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2;
       if (room.players.length < maxPlayers) {
         // 플레이어 슬롯 입장
         room.players.push({
@@ -1902,7 +2040,7 @@ io.on('connection', (socket) => {
   socket.on('move_to_player', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'waiting') return;
-    const maxP = room.gameType === 'holdem' ? 6 : room.gameType === 'blackjack' ? 5 : 2;
+    const maxP = (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2;
     if (room.players.length >= maxP) { socket.emit('join_error', { msg: '플레이어 슬롯이 꽉 찼습니다.' }); return; }
 
     const specIdx = room.spectators.findIndex(s => s.socketId === socket.id);
@@ -1948,8 +2086,8 @@ io.on('connection', (socket) => {
     if (!allReady) { socket.emit('join_error', { msg: '모든 플레이어가 준비되어야 합니다.' }); return; }
 
     // ── 홀덤 시작 처리 ──────────────────────────────────────────
-    if (room.gameType === 'holdem') {
-      const buyIn = room.buyIn || 1000;
+    if (room.gameType === 'holdem' || room.gameType === 'indian') {
+      const buyIn = room.buyIn || 10000;
       // 잔액 확인
       for (const p of room.players) {
         const info = await getCoinsInfo(p.nickname);
@@ -2060,10 +2198,37 @@ io.on('connection', (socket) => {
     handleLeaveRoom(socket.id, room, roomId);
   });
 
+  // ── 재접속: 끊긴 게임으로 복귀 (연결 직후 클라가 호출) ────────
+  socket.on('rejoin_check', async ({ nickname }) => {
+    if (!nickname) return;
+    for (const [roomId, room] of rooms.entries()) {
+      if (room.status !== 'playing') continue;
+      const gt = room.gameType || 'gomoku';
+      if (!['gomoku', 'othello', 'chess', 'tikatuka'].includes(gt)) continue;
+      const p = room.players.find(pp => pp.nickname === nickname && pp.isDisconnected);
+      if (!p) continue;
+      // 복구
+      p.socketId = socket.id;
+      p.isDisconnected = false;
+      if (p.graceTimer) { clearTimeout(p.graceTimer); p.graceTimer = null; }
+      socket.join(roomId);
+      if (!room.players.find(pp => pp.socketId === room.hostSocketId)) room.hostSocketId = p.socketId;
+      // 양쪽 모두 접속 상태면 재개
+      if (!room.players.some(pp => pp.isDisconnected)) {
+        room.isPaused = false;
+        io.to(roomId).emit('game_resumed', { by: nickname });
+      }
+      io.to(roomId).emit('chat', { nickname: '📢', message: `${nickname}님이 재접속했습니다. 게임을 계속합니다!` });
+      await sendRejoinState(socket, room, p);
+      if (!room.isPaused && gt !== 'tikatuka') startTurnTimer(room);
+      return;
+    }
+  });
+
   // ── 관전자 승부 예측 베팅 ────────────────────────────────────
   socket.on('predict_bet', async ({ roomId, pick, amount }) => {
     const room = rooms.get(roomId);
-    if (!room || room.status !== 'playing' || room.gameType === 'holdem' || room.gameType === 'blackjack') {
+    if (!room || room.status !== 'playing' || room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'blackjack') {
       socket.emit('predict_error', { msg: '지금은 예측할 수 없습니다.' }); return;
     }
     const spec = room.spectators.find(s => s.socketId === socket.id);
@@ -2563,6 +2728,7 @@ io.on('connection', (socket) => {
   socket.on('resume_game', ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing' || !room.isPaused) return;
+    if (room.players.some(p => p.isDisconnected)) return;   // 재접속 대기 중엔 수동 재개 불가
     const player = room.players.find(p => p.socketId === socket.id);
     if (!player) return;
     room.isPaused = false;
@@ -2574,7 +2740,7 @@ io.on('connection', (socket) => {
   socket.on('resign', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
-    if (room.gameType === 'holdem' || room.gameType === 'blackjack') return;   // 라운드제 게임은 기권 없음
+    if (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'blackjack') return;   // 라운드제 게임은 기권 없음
     const loser = room.players.find(p => p.socketId === socket.id);
     const winner = room.players.find(p => p.socketId !== socket.id);
     if (!loser) return;
@@ -2591,12 +2757,13 @@ io.on('connection', (socket) => {
   });
 
   // ── 홀덤 액션 ────────────────────────────────────────────────
-  socket.on('holdem_action', ({ roomId, action, amount }) => {
+  socket.on('holdem_action', ({ roomId, action, amount, raiseAmount }) => {
     const room = rooms.get(roomId);
-    if (!room || room.status !== 'playing' || room.gameType !== 'holdem') return;
+    if (!room || room.status !== 'playing' || (room.gameType !== 'holdem' && room.gameType !== 'indian')) return;
     const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
     if (playerIdx === -1) return;
-    processHoldemAction(room, playerIdx, action, amount || 0);
+    // 클라는 raiseAmount로 보냄 (기존 amount도 호환)
+    processHoldemAction(room, playerIdx, action, raiseAmount || amount || 0);
   });
 
   // ── 홀덤 전적 요청 ───────────────────────────────────────────
@@ -2669,7 +2836,7 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
 
   if (room.status === 'playing') {
     // ── 홀덤: 연결 끊김 → 자동 폴드 ──────────────────────────
-    if (room.gameType === 'holdem') {
+    if (room.gameType === 'holdem' || room.gameType === 'indian') {
       const p = room.players[playerIdx];
       p.isDisconnected = true;
       io.to(roomId).emit('holdem_player_disconnect', { nickname: p.nickname, playerIdx });
@@ -2710,26 +2877,64 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
       return;
     }
 
-    // ── 오목/오델로: 기존 처리 ───────────────────────────────
+    // ── 오목/오델로/체스/티카투카 ────────────────────────────
     const loser = room.players[playerIdx];
-    const winner = room.players.find(p => p.socketId !== socketId);
-    clearTurnTimer(room);
-    room.status = 'finished';
-    (async () => {
-      await settleGameBets(room, winner ? winner.nickname : null, !winner);
-      await addLose(loser.nickname);
-      if (winner) await addWin(winner.nickname);
-      const records = await Promise.all(room.players.map(async p => ({
-        nickname: p.nickname, record: await getRecord(p.nickname)
-      })));
-      io.to(roomId).emit('game_over', {
-        result: 'disconnect', winner: winner ? winner.nickname : null,
-        loser: loser.nickname, records, ttBet: room.ttBet || 0, ttAllin: !!room.ttAllin, ttPot: room.ttLastPot || 0,
-      });
-      broadcastRoomList();
-    })();
-    setTimeout(() => { if (rooms.has(roomId)) rooms.delete(roomId); }, 30000);
+    if (isDisconnect) {
+      // 연결 끊김 → 60초 재접속 유예 (명시적 나가기는 아래 즉시 몰수)
+      if (loser.isDisconnected) return;
+      loser.isDisconnected = true;
+      clearTurnTimer(room);
+      room.isPaused = true;
+      io.to(roomId).emit('game_paused', { by: `${loser.nickname} — 연결 끊김, 60초 내 재접속 대기` });
+      io.to(roomId).emit('chat', { nickname: '📢', message: `${loser.nickname}님의 연결이 끊겼습니다. 60초 내 재접속하면 게임이 이어집니다.` });
+      loser.graceTimer = setTimeout(() => {
+        loser.graceTimer = null;
+        if (room.status !== 'playing' || !loser.isDisconnected) return;
+        forfeitBoardGame(room, roomId, loser);
+      }, 60000);
+      return;
+    }
+    forfeitBoardGame(room, roomId, loser);
   }
+}
+
+// 보드게임 몰수 패배 처리 (즉시 나가기 / 유예 만료 공용)
+function forfeitBoardGame(room, roomId, loser) {
+  const winner = room.players.find(p => p.nickname !== loser.nickname);
+  clearTurnTimer(room);
+  room.players.forEach(p => { if (p.graceTimer) { clearTimeout(p.graceTimer); p.graceTimer = null; } });
+  room.status = 'finished';
+  room.isPaused = false;
+  (async () => {
+    await settleGameBets(room, winner ? winner.nickname : null, !winner);
+    await addLose(loser.nickname);
+    if (winner) await addWin(winner.nickname);
+    const records = await Promise.all(room.players.map(async p => ({
+      nickname: p.nickname, record: await getRecord(p.nickname)
+    })));
+    io.to(roomId).emit('game_over', {
+      result: 'disconnect', winner: winner ? winner.nickname : null,
+      loser: loser.nickname, records, ttBet: room.ttBet || 0, ttAllin: !!room.ttAllin, ttPot: room.ttLastPot || 0,
+    });
+    broadcastRoomList();
+  })();
+  setTimeout(() => { if (rooms.has(roomId)) rooms.delete(roomId); }, 30000);
+}
+
+// 진행 중이던 게임 상태를 재접속 소켓에 재전송
+async function sendRejoinState(socket, room, p) {
+  const playerData = await Promise.all(room.players.map(async q => ({
+    nickname: q.nickname, color: q.color,
+    record: await getRecord(q.nickname), stoneStyle: q.stoneStyle || 'classic',
+    nickStyle: await getNickStyle(q.nickname),
+  })));
+  socket.emit('game_start', {
+    roomId: room.id, board: room.board, players: playerData,
+    turn: room.turn, yourColor: p.color,
+    useTimer: room.useTimer !== false, gameType: room.gameType || 'gomoku',
+  });
+  if (room.gameType === 'chess' && room.chess) socket.emit('chess:state', buildChessState(room));
+  if (room.gameType === 'tikatuka' && room.tt) ttEmitState(room);
 }
 
 const PORT = process.env.PORT || 3000;
