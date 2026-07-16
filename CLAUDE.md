@@ -252,6 +252,15 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - `ttRoll`을 `Math.ceil(random()*6)` → `Math.floor(random()*6)+1`로 교체 (ceil은 random()===0일 때 0 반환 → 빈 주사위 취급 버그, 확률 2^-53).
 - 검증: 6백만회 카이제곱 9.43(df=5, 임계 11.07) 균등 ✔, ttRollExcept 제외값별 100만회 — 중복 0회·나머지 5개 각 20% ✔.
 
+## 2026-07-15 업데이트: 카드 플립 공개 + 렌더 애니메이션 최적화 (index.html만)
+
+**① 내 홀카드 클릭 공개 (홀덤)**: 딜 시 뒷면(👆 펄스 글로우) → 클릭해야 한 장씩 3D 플립 공개. 다 열기 전엔 족보(`hd-my-hand-name`·족보 패널) '🂠 카드를 클릭해 공개'로 숨김(스포일러 방지). 좌석 미니 카드도 큰 카드와 공개 상태 동기화. 쇼다운/런아웃 시 미공개 카드는 자동 플립(`myFlipNow`).
+- 상태: `hdMyReveal[2]`/`hdMyHandKey`(홀카드 키 변경=새 핸드 → `hdNewHandReset`)/`hdMyCardsSig`(동일 내용 innerHTML 재구축 생략 — 클릭 플립 트랜지션 보호). 클릭은 `hdRevealMyCard(i)` — 재렌더 없이 클래스 토글.
+**② 공개 연출**: 쇼다운·런아웃·인디언 상대 카드 첫 공개 시 뒷면→플립(스태거, `hdShownCards` 닉네임→카드키로 1회만 재생). 인디언 쇼다운 내 카드도 플립(`hdShownCards.__meBig`). 블랙잭 딜러 홀카드 공개 시 플립(`BJ.prev.hidden` 1→0 감지).
+**③ 최적화 — 애니메이션 중복 재생 제거**: 기존엔 매 state 수신마다 모든 카드가 `deal-anim` 재생(액션마다 전체 깜빡임). `renderHdCard(card, big, delay, noAnim)` 4번째 인자 추가, 신규 카드만 애니: 커뮤니티(`hdPrevCCCount`), 좌석 뒷면(`hdHandAnimDone` 핸드당 1회), 블랙잭(`BJ.prev` 라운드 스냅샷 — 딜러/플레이어 장수 diff).
+- 공용: `renderHdFlip(card, revealed, {click,ci,mini,autoFlip})`, `hdRunAutoFlips(rootSel)`, `hdCardKey(c)`. CSS `.hd-flip*`(perspective 3D, `.clickable` 펄스+호버 리프트).
+- 검증: jsdom 스모크 34케이스(클릭 공개/족보 게이팅/미니 동기화/새 핸드 리셋/쇼다운 1회 플립/인디언/블랙잭 딜러 플립/애니 중복 재생 방지) 전부 통과. 테스트: 스크래치패드 `smoke_cardflip.js`.
+
 ## 2026-07-09 업데이트 5: 올인빵 매칭 + 티카투카 모션 + 관전/팝업 UX
 
 **올인빵 min 매칭** (기존 '각자 전 재산'의 비대칭 문제 수정): `ttEscrowBets` 올인 분기가 양쪽 잔액 중 **적은 금액(minBal)에 맞춰 동일 차감** (포커 올인 방식). `room.ttAllinMatched` 기록, 성립 시 📢 채팅 공지("매칭 금액 X — 승자가 총 2X 획득"), tt:state `allinAmount`로 PvP 태그에 금액 표시. 정산은 기존 `ttEscrowAmounts` 경로 그대로 (합계=2×min). 부자 쪽 초과 잔액 보존 → 재대결도 가능해짐. 모달 경고문 갱신.

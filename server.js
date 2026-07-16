@@ -1033,14 +1033,18 @@ function startHoldemShowdown(room) {
     folded: p.folded,
   }));
 
-  emitHoldemState(room);
-  io.to(room.id).emit('holdem_showdown', { roomId: room.id, showdownResult, sidePots: h.sidePots });
-
   const stillActive = room.players.filter(p => p.chips > 0);
-  if (stillActive.length <= 1) {
+  const gameOver = stillActive.length <= 1;
+  emitHoldemState(room);
+  io.to(room.id).emit('holdem_showdown', {
+    roomId: room.id, showdownResult, sidePots: h.sidePots,
+    nextIn: gameOver ? 0 : 7,
+  });
+
+  if (gameOver) {
     setTimeout(() => endHoldemGame(room), 3000);
   } else {
-    setTimeout(() => startHoldemHand(room), 4000);
+    setTimeout(() => startHoldemHand(room), 7000);   // 결과를 읽을 시간
   }
 }
 
@@ -1051,16 +1055,18 @@ function endHandEarly(room, winnerPlayer) {
   const wonAmount = h.pot;
   h.pot = 0;
   h.sidePots = [];
+  const stillActive = room.players.filter(p => p.chips > 0);
+  const gameOver = stillActive.length <= 1;
   io.to(room.id).emit('holdem_hand_end', {
     roomId: room.id, winner: winnerPlayer.nickname, wonAmount, reason: 'fold',
     players: room.players.map(p => ({ nickname: p.nickname, chips: p.chips, folded: p.folded })),
+    nextIn: gameOver ? 0 : 5,
   });
   emitHoldemState(room);
-  const stillActive = room.players.filter(p => p.chips > 0);
-  if (stillActive.length <= 1) {
+  if (gameOver) {
     setTimeout(() => endHoldemGame(room), 2000);
   } else {
-    setTimeout(() => startHoldemHand(room), 3000);
+    setTimeout(() => startHoldemHand(room), 5000);
   }
 }
 

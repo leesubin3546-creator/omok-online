@@ -577,13 +577,46 @@
     flex-direction: row; align-items: flex-start;
     justify-content: center; flex-wrap: wrap; gap: 20px; padding-bottom: 40px;
   }
-  #holdem-wrap { display:flex; flex-direction:column; align-items:center; gap:18px; max-width:920px; width:100%; }
+  #holdem-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; max-width:700px; width:100%; }
   #poker-table {
-    position:relative; width:820px; height:480px;
+    position:relative; width:680px; height:400px; max-width:100%;
     background: radial-gradient(ellipse at center, #2d8a4e 0%, #1a6b34 65%, #0f4a24 100%);
-    border-radius:50%; border:10px solid #8B6914;
+    border-radius:50%; border:9px solid #8B6914;
     box-shadow: 0 0 0 4px #6B4F10, inset 0 0 60px rgba(0,0,0,0.25), 0 12px 50px rgba(0,0,0,0.55);
     overflow:visible; flex-shrink:0;
+  }
+  /* 중앙 이벤트 배너 (페이즈/승자/새 핸드) */
+  #hd-event-banner {
+    position:absolute; left:50%; top:16%; transform:translate(-50%,-50%) scale(0.8);
+    background:rgba(0,0,0,0.8); color:#ffe28a; font-weight:800; font-size:1.05rem;
+    padding:10px 24px; border-radius:14px; border:1px solid rgba(255,220,120,0.45);
+    z-index:20; pointer-events:none; opacity:0; transition:opacity 0.25s, transform 0.25s;
+    text-align:center; white-space:nowrap; max-width:92%;
+  }
+  #hd-event-banner.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  /* 칩 (CSS 렌더 — 에셋 불필요) */
+  .hd-chip {
+    width:16px; height:16px; border-radius:50%;
+    border:2.5px dashed rgba(255,255,255,0.75);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.45);
+    box-sizing:border-box; flex-shrink:0;
+  }
+  .hd-chip-fly { position:fixed; z-index:900; pointer-events:none; transition:transform 0.55s cubic-bezier(0.3,0.8,0.4,1), opacity 0.55s; }
+  #hd-pot-chips { display:flex; justify-content:center; align-items:flex-end; height:18px; margin-top:2px; }
+  #hd-pot-chips .hd-chip { margin:0 -5px; }
+  /* 좌석 액션 플래시 (콜/레이즈/폴드...) */
+  @keyframes hdActionFlash {
+    0% { opacity:0; transform:translate(-50%, 6px) scale(0.7); }
+    18% { opacity:1; transform:translate(-50%, 0) scale(1.06); }
+    75% { opacity:1; transform:translate(-50%, 0) scale(1); }
+    100% { opacity:0; transform:translate(-50%, -8px); }
+  }
+  .hd-action-flash {
+    position:absolute; left:50%; top:-24px; transform:translate(-50%, 0);
+    background:#ffe28a; color:#4a2c05; font-size:0.72rem; font-weight:800;
+    padding:3px 10px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.4);
+    pointer-events:none; z-index:15; white-space:nowrap;
+    animation:hdActionFlash 1.6s ease forwards;
   }
   @keyframes hdDealCard {
     0%   { transform: scale(0.15) translateY(-30px) rotate(-20deg); opacity:0; }
@@ -637,6 +670,17 @@
   #hd-my-hole-cards .hd-card .card-rank { font-size:1.35rem; }
   #hd-my-hole-cards .hd-card .card-suit { font-size:1.1rem; }
   .hd-card.winner-card { box-shadow:0 0 12px 3px rgba(240,184,48,0.85); }
+  /* ── 카드 플립 (클릭 공개 / 쇼다운 연출) ── */
+  .hd-flip { display:inline-block; perspective:700px; flex-shrink:0; }
+  .hd-flip-inner { position:relative; transform-style:preserve-3d; transition:transform 0.55s cubic-bezier(0.3,0.7,0.25,1); transform:rotateY(180deg); }
+  .hd-flip.revealed .hd-flip-inner { transform:rotateY(0deg); }
+  .hd-flip .hd-card { backface-visibility:hidden; -webkit-backface-visibility:hidden; }
+  .hd-flip-inner > .hd-card.back { position:absolute; inset:0; width:100%; height:100%; transform:rotateY(180deg); }
+  .hd-flip.clickable { cursor:pointer; }
+  .hd-flip.clickable .hd-card.back { animation:hdCardPulse 1.6s ease-in-out infinite; }
+  .hd-flip.clickable .hd-card.back::after { content:'👆'; font-size:1.3rem; color:rgba(255,255,255,0.85); position:absolute; }
+  .hd-flip.clickable:hover .hd-flip-inner { transform:rotateY(180deg) translateY(-5px); }
+  @keyframes hdCardPulse { 0%,100% { box-shadow:0 0 8px 2px rgba(240,184,48,0.45); } 50% { box-shadow:0 0 16px 5px rgba(240,184,48,0.8); } }
   /* Action panel */
   #hd-action-panel { width:100%; background:var(--surface); border-radius:var(--radius); padding:14px 18px; border:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
   #hd-my-cards-row { display:flex; align-items:center; gap:14px; }
@@ -1456,9 +1500,11 @@
 <div id="holdem-screen" class="screen">
   <div id="holdem-wrap">
     <div id="poker-table">
+      <div id="hd-event-banner"></div>
       <div id="hd-center">
         <div id="hd-community-cards"></div>
         <div id="hd-pot-main">팟: 0</div>
+        <div id="hd-pot-chips"></div>
         <div id="hd-phase-badge">대기 중</div>
         <div id="hd-side-pots-wrap"></div>
       </div>
@@ -3646,6 +3692,7 @@ function bjLeave() {
   if (currentRoom) socket.emit('leave_room', { roomId: currentRoom });
   currentRoom = null;
   BJ.s = null;
+  BJ.prev = null;
   showScreen('lobby-screen');
   if (socket) {
     socket.emit('get_room_list');
@@ -3657,10 +3704,18 @@ function bjRender() {
   const s = BJ.s; if (!s) return;
   document.getElementById('bj-round-tag').textContent = s.round ? `라운드 ${s.round}` : '';
 
+  // 직전 렌더 스냅샷 (같은 라운드에서만 유효) — 신규 카드만 딜 애니, 딜러 홀카드는 플립 공개
+  const prev = (BJ.prev && BJ.prev.round === s.round) ? BJ.prev : { round: s.round, dealerLen: 0, hidden: -1, plens: {} };
+  const hiddenNow = s.dealerHidden || 0;
+  const dealerFlip = prev.hidden > 0 && hiddenNow === 0;
+
   // 딜러
   document.getElementById('bj-dealer-cards').innerHTML =
-    s.dealer.map(c => renderHdCard(c)).join('') +
-    Array(s.dealerHidden || 0).fill(renderHdCard('back')).join('');
+    s.dealer.map((c, i) => {
+      if (dealerFlip && i === 1) return renderHdFlip(c, false, { autoFlip: 80 });   // 숨겨졌던 홀카드
+      return renderHdCard(c, false, (i - prev.dealerLen) * 220, i < prev.dealerLen);
+    }).join('') +
+    Array(hiddenNow).fill(renderHdCard('back', false, null, prev.hidden >= hiddenNow)).join('');
   document.getElementById('bj-dealer-value').textContent = s.dealerValue != null ? s.dealerValue : '?';
 
   // 플레이어
@@ -3675,7 +3730,7 @@ function bjRender() {
       p.natural           ? `<span class="bj-badge bj-gold">🂡 블랙잭!</span>` : '';
     return `<div class="bj-player ${s.phase === 'acting' && s.actionIdx === i ? 'turn' : ''} ${p.isDisconnected ? 'gone' : ''}">
       <div class="bj-pname">${escapeHtml(p.nickname)}${i === myIdx ? ' (나)' : ''}${p.value != null ? `<span class="bj-value">${p.value}</span>` : ''}</div>
-      <div class="bj-cards" style="justify-content:flex-start;">${p.cards.map(c => renderHdCard(c)).join('')}</div>
+      <div class="bj-cards" style="justify-content:flex-start;">${p.cards.map((c, ci) => renderHdCard(c, false, (ci - (prev.plens[p.nickname] || 0)) * 90, ci < (prev.plens[p.nickname] || 0))).join('')}</div>
       <div class="bj-sub">${p.bet ? `베팅 ${p.bet.toLocaleString()}${p.doubled ? ' (더블)' : ''}` : (s.phase === 'betting' ? '베팅 대기…' : '관망')} ${badge}</div>
     </div>`;
   }).join('');
@@ -3695,6 +3750,10 @@ function bjRender() {
   } else {
     st.textContent = '🎩 딜러 카드 공개 — 정산 후 다음 라운드가 시작됩니다';
   }
+
+  BJ.prev = { round: s.round, dealerLen: s.dealer.length, hidden: hiddenNow,
+    plens: Object.fromEntries(s.players.map(p => [p.nickname, p.cards.length])) };
+  hdRunAutoFlips('#bj-screen');
 }
 const TTP = { s: null, roomId: null, meName: '나', oppName: '상대',
   snap: null, rollKey: null, prevPhase: null, prevBonus: false, rollTimers: [] };
@@ -4423,12 +4482,33 @@ function initSocket() {
 
   // ── 홀덤 소켓 핸들러 ──────────────────────────────────────────
   socket.on('holdem_state', (state) => {
-    if (state.phase === 'preflop' && (state.communityCards || []).length === 0) hdClearRunout();   // 새 핸드
+    const prevPhase = hdPrevPhase;
+    hdPrevPhase = state.phase;
+    if (state.phase === 'preflop' && (state.communityCards || []).length === 0) {
+      hdClearRunout();   // 새 핸드
+      if (prevPhase !== 'preflop') {
+        hdNewHandReset();
+        clearInterval(hdCountdownIv);
+        hdBanner(`🃏 새 핸드 · 블라인드 ${(state.smallBlindAmount || 0).toLocaleString()}/${(state.bigBlindAmount || 0).toLocaleString()}`, 2000);
+      }
+    } else if (prevPhase && state.phase !== prevPhase) {
+      if (state.phase === 'flop') hdBanner('플랍 오픈', 1400);
+      else if (state.phase === 'turn') hdBanner('턴', 1200);
+      else if (state.phase === 'river') hdBanner('리버', 1200);
+    }
     holdemState = state;
     closeCreateRoomModal();
     showScreen('holdem-screen');
     renderHoldemTable(state);
-    renderHandRankPanel(state.myHandName || null);
+    // 내 카드를 다 열기 전엔 족보도 스포일러 방지
+    renderHandRankPanel(hdMyRevealed() ? (state.myHandName || null) : null);
+    // 새 핸드: 블라인드 칩이 팟으로 이동하는 연출
+    if (state.phase === 'preflop' && (state.communityCards || []).length === 0 && prevPhase !== 'preflop') {
+      setTimeout(() => {
+        hdFlyChips(document.querySelector(`.hd-seat[data-idx="${state.smallBlindIndex}"]`), document.getElementById('hd-center'), state.smallBlindAmount || 0);
+        hdFlyChips(document.querySelector(`.hd-seat[data-idx="${state.bigBlindIndex}"]`), document.getElementById('hd-center'), state.bigBlindAmount || 0);
+      }, 150);
+    }
   });
 
   socket.on('holdem_timer', ({ seconds, nickname, playerIndex }) => {
@@ -4440,7 +4520,7 @@ function initSocket() {
     hdStartTimer(seconds);
   });
 
-  socket.on('holdem_action_done', ({ nickname, action, betAmount, amount, pot }) => {
+  socket.on('holdem_action_done', ({ playerIdx, nickname, action, betAmount, amount, pot }) => {
     if (!nickname || !action) return;
     const actMap = { fold:'폴드', check:'체크', call:'콜', raise:'레이즈', allin:'올인' };
     const label = actMap[action] || action;
@@ -4450,12 +4530,28 @@ function initSocket() {
     hdAddChat(`<span style="color:var(--accent2);">${escapeHtml(nickname)}</span>: ${label}${amtStr}`);
     if (holdemState && pot !== undefined) {
       document.getElementById('hd-pot-main').textContent = `팟: ${pot.toLocaleString()}`;
+      hdRenderPotChips(pot);
+    }
+    // 좌석 액션 플래시 + 칩 플라이
+    const flashMap = { fold:'🙅 폴드', check:'체크 ✔', call:`콜${amt ? ' ' + amt.toLocaleString() : ''}`, raise:`레이즈 ${amt ? amt.toLocaleString() : ''}`, allin:'🔥 올인!' };
+    hdLastAction = { idx: playerIdx, text: flashMap[action] || label, ts: Date.now() };
+    const seatEl = document.querySelector(`.hd-seat[data-idx="${playerIdx}"]`);
+    if (seatEl) {
+      const old = seatEl.querySelector('.hd-action-flash');
+      if (old) old.remove();
+      const f = document.createElement('div');
+      f.className = 'hd-action-flash';
+      f.textContent = hdLastAction.text;
+      seatEl.appendChild(f);
+      if (['call', 'raise', 'allin'].includes(action)) {
+        hdFlyChips(seatEl, document.getElementById('hd-center'), Math.max(amt || 0, 100));
+      }
     }
   });
 
   // 서버 payload: { roomId, showdownResult:[{nickname, holeCards, handScore, winAmount, chips, folded}], sidePots }
   // 전체 상태는 직전 holdem_state(쇼다운 페이즈)가 이미 렌더했으므로 여기선 결과 표시만
-  socket.on('holdem_showdown', ({ showdownResult }) => {
+  socket.on('holdem_showdown', ({ showdownResult, nextIn }) => {
     hdClearTimer();
     hdClearRunout();
     document.getElementById('hd-timer-wrap').classList.remove('show');
@@ -4463,20 +4559,33 @@ function initSocket() {
     winners.forEach(r => {
       const handStr = r.handScore ? ` (${r.handScore.name})` : '';
       hdAddChat(`🏆 <strong>${escapeHtml(r.nickname)}</strong> +${r.winAmount.toLocaleString()}${handStr}`, true);
+      // 팟 → 승자 좌석으로 칩 플라이
+      const seat = document.querySelector(`.hd-seat[data-nick="${CSS.escape(r.nickname)}"]`);
+      hdFlyChips(document.getElementById('hd-center'), seat, r.winAmount);
     });
+    if (winners.length) {
+      const w = winners[0];
+      const handStr = w.handScore ? `<br><span style="font-size:0.85rem;color:#9ef0b8;">${w.handScore.name}</span>` : '';
+      hdBanner(`🏆 ${escapeHtml(winners.map(r => r.nickname).join(', '))} 승리! +${winners.reduce((a, r) => a + r.winAmount, 0).toLocaleString()}${handStr}`, 2600);
+    }
     document.getElementById('hd-status-bar').textContent = winners.length
       ? `🃏 쇼다운 — ${winners.map(r => r.nickname).join(', ')} 팟 획득!`
       : '🃏 쇼다운!';
+    hdNextCountdown(nextIn);
   });
 
-  // 서버 payload: { roomId, winner, wonAmount, reason, players }
-  socket.on('holdem_hand_end', ({ winner, wonAmount, reason }) => {
+  // 서버 payload: { roomId, winner, wonAmount, reason, players, nextIn }
+  socket.on('holdem_hand_end', ({ winner, wonAmount, reason, nextIn }) => {
     hdClearTimer();
     hdClearRunout();
     const reasonStr = reason === 'fold' ? ' — 모두 폴드' : '';
     hdAddChat(`🏆 <strong>${escapeHtml(winner || '?')}</strong> 팟 획득 +${(wonAmount || 0).toLocaleString()}${reasonStr}`, true);
+    hdBanner(`🏆 ${escapeHtml(winner || '?')} 팟 획득 +${(wonAmount || 0).toLocaleString()}${reasonStr}`, 2400);
+    const seat = winner ? document.querySelector(`.hd-seat[data-nick="${CSS.escape(winner)}"]`) : null;
+    hdFlyChips(document.getElementById('hd-center'), seat, wonAmount || 0);
     document.getElementById('hd-status-bar').textContent =
       `🏆 ${winner || '?'} 팟 획득 (${(wonAmount || 0).toLocaleString()})`;
+    hdNextCountdown(nextIn);
   });
 
   // 서버 payload: { roomId, winner, results:[{nickname, chips, isWinner, coins, holdemRecord}] }
@@ -5770,6 +5879,124 @@ let hdRaisePending = false;
 let hdRunout = { cards: {}, equity: {}, announced: false };   // 올인 런아웃 공개 정보
 function hdClearRunout() { hdRunout = { cards: {}, equity: {}, announced: false }; }
 
+// ── 카드 공개 상태 (플립 연출) ──
+let hdMyReveal = [false, false];   // 내 홀카드 클릭 공개 여부
+let hdMyHandKey = '';              // 내 홀카드 키 — 바뀌면 새 핸드로 간주하고 리셋
+let hdShownCards = {};             // nickname → 공개 플립을 이미 재생한 카드 키
+let hdPrevCCCount = 0;             // 직전 렌더의 커뮤니티 카드 장수 (신규만 딜 애니)
+let hdHandAnimDone = false;        // 이번 핸드 좌석 뒷면 딜 애니 1회 재생 여부
+let hdMyCardsSig = '';             // 내 홀카드 영역 마지막 렌더 시그니처
+
+function hdNewHandReset() {
+  hdMyReveal = [false, false];
+  hdMyHandKey = '';
+  hdShownCards = {};
+  hdPrevCCCount = 0;
+  hdHandAnimDone = false;
+  hdMyCardsSig = '';
+}
+
+function hdMyRevealed() {
+  if (!holdemState) return false;
+  if (holdemState.indian) return true;
+  return hdMyReveal[0] && hdMyReveal[1];
+}
+
+// 내 홀카드 클릭 공개 — 재렌더 없이 클래스만 토글해 플립 트랜지션 유지
+function hdRevealMyCard(i) {
+  if (hdMyReveal[i]) return;
+  hdMyReveal[i] = true;
+  document.querySelectorAll(`#hd-my-hole-cards .hd-flip[data-ci="${i}"], .hd-seat .hd-flip[data-mini="1"][data-ci="${i}"]`).forEach(el => {
+    el.classList.add('revealed');
+    el.classList.remove('clickable');
+    el.removeAttribute('onclick');
+  });
+  if (hdMyRevealed() && holdemState) {
+    document.getElementById('hd-my-hand-name').textContent = holdemState.myHandName || '—';
+    renderHandRankPanel(holdemState.myHandName || null);
+  }
+}
+let hdPrevPhase = null;
+let hdLastAction = null;          // { idx, text, ts } — 좌석 액션 플래시
+let hdBannerTimer = null;
+let hdCountdownIv = null;
+
+// 테이블 중앙 이벤트 배너
+function hdBanner(html, ms = 1800) {
+  const b = document.getElementById('hd-event-banner');
+  if (!b) return;
+  b.innerHTML = html;
+  b.classList.add('show');
+  clearTimeout(hdBannerTimer);
+  hdBannerTimer = setTimeout(() => b.classList.remove('show'), ms);
+}
+// ── 칩 연출 ───────────────────────────────────────────────────
+const HD_CHIP_DENOMS = [
+  [100000, '#7c3aed'], [50000, '#111827'], [10000, '#d97706'],
+  [5000, '#16a34a'], [1000, '#2563eb'], [500, '#dc2626'], [100, '#e5e7eb'],
+];
+function hdChipsForAmount(amount, maxChips = 6) {
+  const chips = [];
+  let rest = amount;
+  for (const [d, color] of HD_CHIP_DENOMS) {
+    while (rest >= d && chips.length < maxChips) { chips.push(color); rest -= d; }
+    if (chips.length >= maxChips) break;
+  }
+  if (!chips.length && amount > 0) chips.push('#e5e7eb');
+  return chips;
+}
+function hdChipDiv(color) {
+  const c = document.createElement('div');
+  c.className = 'hd-chip';
+  c.style.background = color;
+  return c;
+}
+// 좌석 ↔ 팟 칩 플라이
+function hdFlyChips(fromEl, toEl, amount) {
+  if (!fromEl || !toEl) return;
+  const fr = fromEl.getBoundingClientRect(), tr = toEl.getBoundingClientRect();
+  const fx = fr.left + fr.width / 2, fy = fr.top + fr.height / 2;
+  const tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+  hdChipsForAmount(amount).forEach((color, i) => {
+    const c = hdChipDiv(color);
+    c.classList.add('hd-chip-fly');
+    const jx = (Math.random() - 0.5) * 26, jy = (Math.random() - 0.5) * 14;
+    c.style.left = (fx - 8 + jx) + 'px';
+    c.style.top = (fy - 8 + jy) + 'px';
+    document.body.appendChild(c);
+    setTimeout(() => {
+      c.style.transform = `translate(${tx - fx - jx + (Math.random() - 0.5) * 18}px, ${ty - fy - jy}px)`;
+    }, 30 + i * 55);
+    setTimeout(() => { c.style.opacity = '0'; }, 480 + i * 55);
+    setTimeout(() => c.remove(), 720 + i * 55);
+  });
+}
+// 팟 칩 더미 (금액 규모 반영)
+function hdRenderPotChips(pot) {
+  const box = document.getElementById('hd-pot-chips');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!pot || pot <= 0) return;
+  hdChipsForAmount(pot, 8).forEach(color => box.appendChild(hdChipDiv(color)));
+}
+
+// 다음 핸드 카운트다운
+function hdNextCountdown(sec) {
+  clearInterval(hdCountdownIv);
+  if (!sec || sec <= 0) return;
+  let s = sec;
+  const upd = () => {
+    const bar = document.getElementById('hd-status-bar');
+    if (bar) bar.textContent = `⏳ 다음 핸드까지 ${s}초…`;
+  };
+  hdCountdownIv = setInterval(() => {
+    s--;
+    if (s <= 0) clearInterval(hdCountdownIv);
+    else upd();
+  }, 1000);
+  setTimeout(upd, 2200);   // 결과 문구를 2초 보여준 뒤 카운트다운 표시
+}
+
 // 시트 위치 (6인 기준, 각도 및 top/left%)
 const HD_SEAT_POS = [
   { top: '88%', left: '50%' },  // 0 — 하단 중앙 (본인 기준)
@@ -5783,13 +6010,15 @@ const HD_SEAT_POS = [
 const SUIT_SYMBOL = { s:'♠', h:'♥', d:'♦', c:'♣' };
 const SUIT_COLOR  = { s:'black', h:'red', d:'red', c:'black' };
 
-function renderHdCard(card, big, delay) {
-  const delayStyle = (delay != null && delay > 0) ? ` style="animation-delay:${delay}ms"` : '';
+function renderHdCard(card, big, delay, noAnim) {
+  // noAnim: 재렌더 시 딜 애니메이션 재생 방지 (신규 카드만 애니메이션)
+  const anim = noAnim ? '' : ' deal-anim';
+  const delayStyle = (!noAnim && delay != null && delay > 0) ? ` style="animation-delay:${delay}ms"` : '';
   if (!card) {
     return `<div class="hd-card empty"></div>`;
   }
   if (card === 'back') {
-    return `<div class="hd-card back deal-anim"${delayStyle}></div>`;
+    return `<div class="hd-card back${anim}"${delayStyle}></div>`;
   }
   let rank, suit;
   if (typeof card === 'object') {
@@ -5801,10 +6030,36 @@ function renderHdCard(card, big, delay) {
     suit = card.slice(-1);
   }
   const cls = SUIT_COLOR[suit] || 'black';
-  return `<div class="hd-card ${cls} deal-anim"${delayStyle}>
+  return `<div class="hd-card ${cls}${anim}"${delayStyle}>
     <div class="card-rank">${rank}</div>
     <div class="card-suit">${SUIT_SYMBOL[suit] || suit}</div>
   </div>`;
+}
+
+function hdCardKey(c) { return !c ? '' : (typeof c === 'object' ? String(c.rank) + c.suit : String(c)); }
+
+// 플립 카드: 뒷면 → 앞면 3D 회전. revealed=true면 앞면 고정 렌더.
+// opts: { click: 클릭으로 공개(내 홀카드), ci: 카드 인덱스, autoFlip: 렌더 후 자동 플립 딜레이(ms), mini: 좌석용 소형 }
+function renderHdFlip(card, revealed, opts = {}) {
+  const cls = ['hd-flip', revealed ? 'revealed' : '', opts.click ? 'clickable' : ''].filter(Boolean).join(' ');
+  const attrs =
+    (opts.ci != null ? ` data-ci="${opts.ci}"` : '') +
+    (opts.mini ? ' data-mini="1"' : '') +
+    (!revealed && opts.autoFlip != null ? ` data-autoflip="${opts.autoFlip}"` : '') +
+    (opts.click ? ` onclick="hdRevealMyCard(${opts.ci})"` : '');
+  return `<div class="${cls}"${attrs}><div class="hd-flip-inner">` +
+    `<div class="hd-card back"></div>` +
+    renderHdCard(card, false, null, true) +
+    `</div></div>`;
+}
+
+// data-autoflip 표시된 플립 카드들을 지연 후 공개 (쇼다운/딜러 오픈 연출)
+function hdRunAutoFlips(rootSel) {
+  document.querySelectorAll(`${rootSel} [data-autoflip]`).forEach(el => {
+    const d = parseInt(el.dataset.autoflip) || 0;
+    el.removeAttribute('data-autoflip');
+    setTimeout(() => el.classList.add('revealed'), 40 + d);
+  });
 }
 
 function renderHoldemTable(state) {
@@ -5812,6 +6067,7 @@ function renderHoldemTable(state) {
 
   // 팟 & 커뮤니티 카드
   document.getElementById('hd-pot-main').textContent = `팟: ${(state.pot || 0).toLocaleString()}`;
+  hdRenderPotChips(state.pot || 0);
   const phaseNames = { waiting:'대기 중', preflop:'프리플랍', flop:'플랍', turn:'턴', river:'리버', showdown:'쇼다운', ended:'종료' };
   const blindStr = state.smallBlindAmount ? ` · ${state.smallBlindAmount.toLocaleString()}/${state.bigBlindAmount.toLocaleString()}` : '';
   document.getElementById('hd-phase-badge').textContent = (phaseNames[state.phase] || state.phase) + blindStr;
@@ -5823,11 +6079,14 @@ function renderHoldemTable(state) {
       '<div style="color:rgba(255,255,255,0.75);font-size:0.85rem;font-weight:700;padding:14px 6px;text-align:center;">🂠 인디언 포커<br><span style="font-size:0.7rem;font-weight:400;">내 카드는 나만 못 봅니다 — 높은 카드가 승리!</span></div>';
   } else {
     const cc = state.communityCards || [];
+    if (cc.length < hdPrevCCCount) hdPrevCCCount = 0;   // 새 핸드
     let ccHtml = '';
     for (let i = 0; i < 5; i++) {
-      ccHtml += renderHdCard(cc[i] || null, false, i * 90);
+      // 이미 렌더된 카드는 딜 애니메이션 재생 안 함 (신규 스트리트만)
+      ccHtml += renderHdCard(cc[i] || null, false, (i - hdPrevCCCount) * 90, i < hdPrevCCCount);
     }
     document.getElementById('hd-community-cards').innerHTML = ccHtml;
+    hdPrevCCCount = cc.length;
   }
 
   // 사이드팟
@@ -5849,6 +6108,20 @@ function renderHoldemTable(state) {
   const myIdx = (state.yourIndex !== undefined && state.yourIndex >= 0) ? state.yourIndex : players.findIndex(p => p.nickname === myNickname);
   const n = players.length;
 
+  // 내 홀카드 키가 바뀌면 새 핸드 → 공개 상태 리셋
+  const meP = myIdx >= 0 ? players[myIdx] : null;
+  const myKey = meP && meP.holeCards && meP.holeCards.length ? meP.holeCards.map(hdCardKey).join(',') : '';
+  if (!state.indian && myKey && myKey !== hdMyHandKey) {
+    hdNewHandReset();
+    hdMyHandKey = myKey;
+  }
+  // 쇼다운/런아웃: 아직 안 연 내 카드는 자동 플립 (한 번만)
+  const myAutoReveal = !state.indian && (state.phase === 'showdown' || !!hdRunout.cards[myNickname]);
+  const myFlipNow = [false, false];
+  if (myAutoReveal && meP && meP.holeCards) {
+    meP.holeCards.forEach((c, ci) => { if (!hdMyReveal[ci]) { myFlipNow[ci] = true; hdMyReveal[ci] = true; } });
+  }
+
   players.forEach((p, serverIdx) => {
     // 로컬 시트 인덱스: 내가 0번
     const localIdx = myIdx >= 0 ? (serverIdx - myIdx + n) % n : serverIdx;
@@ -5868,15 +6141,28 @@ function renderHoldemTable(state) {
 
     // 홀 카드 (런아웃 중이면 공개된 카드 사용)
     const runoutCards = !folded && hdRunout.cards[p.nickname];
+    const showCards = !folded ? (p.holeCards || runoutCards) : null;
     let cardsHtml = '';
-    if (!folded && (p.holeCards || runoutCards)) {
-      cardsHtml = (p.holeCards || runoutCards).map((c, ci) => renderHdCard(c, false, serverIdx * 80 + ci * 130)).join('');
+    if (showCards && showCards.length) {
+      if (serverIdx === myIdx && !state.indian) {
+        // 내 좌석 미니 카드 — 큰 카드와 공개 상태 동기화
+        cardsHtml = showCards.map((c, ci) => renderHdFlip(c, hdMyReveal[ci] && !myFlipNow[ci],
+          { mini: true, ci, autoFlip: myFlipNow[ci] ? 200 + ci * 250 : null })).join('');
+      } else {
+        const key = showCards.map(hdCardKey).join(',');
+        if (hdShownCards[p.nickname] !== key) {
+          hdShownCards[p.nickname] = key;   // 첫 공개: 뒷면 → 플립 연출
+          cardsHtml = showCards.map((c, ci) => renderHdFlip(c, false, { autoFlip: 150 + localIdx * 160 + ci * 180 })).join('');
+        } else {
+          cardsHtml = showCards.map(c => renderHdFlip(c, true)).join('');
+        }
+      }
     } else if (folded) {
       cardsHtml = '';
     } else if (state.indian) {
-      cardsHtml = renderHdCard('back', false, serverIdx * 80);   // 인디언: 내 카드 = 뒷면 1장
+      cardsHtml = renderHdCard('back', false, serverIdx * 80, hdHandAnimDone);   // 인디언: 내 카드 = 뒷면 1장
     } else {
-      cardsHtml = renderHdCard('back', false, serverIdx * 80) + renderHdCard('back', false, serverIdx * 80 + 130);
+      cardsHtml = renderHdCard('back', false, serverIdx * 80, hdHandAnimDone) + renderHdCard('back', false, serverIdx * 80 + 130, hdHandAnimDone);
     }
     // 런아웃 승률 배지
     const eqPct = !folded && hdRunout.equity[p.nickname] != null ? hdRunout.equity[p.nickname] : null;
@@ -5895,6 +6181,11 @@ function renderHoldemTable(state) {
     seat.className = 'hd-seat';
     seat.style.top = pos.top;
     seat.style.left = pos.left;
+    seat.dataset.idx = serverIdx;
+    seat.dataset.nick = p.nickname;
+    // 최근 액션 플래시 (재렌더에도 유지)
+    const flashHtml = (hdLastAction && hdLastAction.idx === serverIdx && (Date.now() - hdLastAction.ts) < 1500)
+      ? `<div class="hd-action-flash">${hdLastAction.text}</div>` : '';
     seat.innerHTML = `
       <div class="hd-seat-cards">${cardsHtml}</div>
       <div class="${infoClass}">
@@ -5902,25 +6193,47 @@ function renderHoldemTable(state) {
         <div class="hd-seat-chips">${p.chips.toLocaleString()} 칩</div>
         ${eqPct != null ? `<div style="font-size:0.78rem;font-weight:800;color:${eqPct >= 50 ? '#7df59a' : '#ffb0a0'};">승률 ${eqPct}%</div>` : ''}
       </div>
-      <div class="hd-seat-bet-bubble ${betStr ? 'show' : ''}">${betStr ? '베팅 ' + betStr : ''}</div>`;
+      <div class="hd-seat-bet-bubble ${betStr ? 'show' : ''}">${betStr ? '베팅 ' + betStr : ''}</div>
+      ${flashHtml}`;
     table.appendChild(seat);
   });
 
   // 내 카드 & 상태 업데이트
-  const me = myIdx >= 0 ? players[myIdx] : null;
+  const me = meP;
   if (me) {
     let myCardsHtml = '';
-    if (me.holeCards && me.holeCards.length) {
-      myCardsHtml = me.holeCards.map((c, ci) => renderHdCard(c, true, ci * 180)).join('');
+    if (me.holeCards && me.holeCards.length && !state.indian) {
+      // 뒷면으로 딜 → 클릭해서 한 장씩 공개 (쇼다운/런아웃은 자동 플립)
+      myCardsHtml = me.holeCards.map((c, ci) => renderHdFlip(c, hdMyReveal[ci] && !myFlipNow[ci], {
+        ci,
+        click: !hdMyReveal[ci],
+        autoFlip: myFlipNow[ci] ? 200 + ci * 250 : null,
+      })).join('');
+    } else if (state.indian && me.holeCards && me.holeCards.length) {
+      // 인디언: 쇼다운에서 내 카드 첫 공개 → 플립 연출 (한 번만)
+      const key = me.holeCards.map(hdCardKey).join(',');
+      const first = hdShownCards.__meBig !== key;
+      if (first) hdShownCards.__meBig = key;
+      myCardsHtml = me.holeCards.map((c, ci) => renderHdFlip(c, !first, { autoFlip: first ? 300 + ci * 250 : null })).join('');
     } else if (state.indian && !me.folded) {
-      myCardsHtml = renderHdCard('back', true);
+      myCardsHtml = renderHdCard('back', true, null, hdHandAnimDone);
     } else {
       myCardsHtml = renderHdCard(null) + renderHdCard(null);
     }
-    document.getElementById('hd-my-hole-cards').innerHTML = myCardsHtml;
-    document.getElementById('hd-my-hand-name').textContent = state.indian ? '🙈 내 카드: ???' : (state.myHandName || '—');
+    // 동일 내용이면 innerHTML 재구축 생략 (플립 트랜지션 끊김 방지)
+    if (myCardsHtml !== hdMyCardsSig) {
+      hdMyCardsSig = myCardsHtml;
+      document.getElementById('hd-my-hole-cards').innerHTML = myCardsHtml;
+    }
+    const revealPending = !state.indian && me.holeCards && me.holeCards.length && !(hdMyReveal[0] && hdMyReveal[1]);
+    document.getElementById('hd-my-hand-name').textContent = state.indian ? '🙈 내 카드: ???'
+      : revealPending ? '🂠 카드를 클릭해 공개'
+      : (state.myHandName || '—');
     document.getElementById('hd-my-chips').textContent = `칩: ${me.chips.toLocaleString()}`;
   }
+
+  hdRunAutoFlips('#holdem-screen');
+  hdHandAnimDone = true;
 
   hdUpdateActionBtns(state);
 
@@ -6108,6 +6421,14 @@ function hdGoLobby() {
   hdClearTimer();
   holdemState = null;
   hdRaisePending = false;
+  hdPrevPhase = null;
+  hdLastAction = null;
+  hdClearRunout();
+  hdNewHandReset();
+  clearInterval(hdCountdownIv);
+  clearTimeout(hdBannerTimer);
+  const banner = document.getElementById('hd-event-banner');
+  if (banner) banner.classList.remove('show');
   document.getElementById('hd-gameover-overlay').classList.remove('show');
   document.getElementById('hd-chat-messages').innerHTML = '';
   document.getElementById('hd-raise-row').style.display = 'none';
