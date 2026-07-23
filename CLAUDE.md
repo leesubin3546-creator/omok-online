@@ -261,6 +261,20 @@ ttIsRedPip(r,g,b)   // 상대 눈금: r>130 && r>g*1.7 && r>b*1.8 && g<110 && b<
 - 공용: `renderHdFlip(card, revealed, {click,ci,mini,autoFlip})`, `hdRunAutoFlips(rootSel)`, `hdCardKey(c)`. CSS `.hd-flip*`(perspective 3D, `.clickable` 펄스+호버 리프트).
 - 검증: jsdom 스모크 34케이스(클릭 공개/족보 게이팅/미니 동기화/새 핸드 리셋/쇼다운 1회 플립/인디언/블랙잭 딜러 플립/애니 중복 재생 방지) 전부 통과. 테스트: 스크래치패드 `smoke_cardflip.js`.
 
+## 2026-07-16 업데이트: 섯다 추가 (gameType 'seotda')
+
+**하우스 룰 (실제 지역별 섯다 변형이 다양해 우리 게임만의 규칙으로 확정, 이 문서가 유일한 기준)**:
+- 덱 20장: 1~10월 각 2장. **1,3,8월은 두 장 모두 "광" 취급** (실물 화투처럼 광 1장만 있는 게 아님 — 광땡 성립을 위한 하우스 심플화).
+- 족보(높은순): **38광땡**(3월광+8월광, 서로 다른 월) > **광땡**(1,3,8월 페어, 우선순위 3>8>1) > **땡**(그 외 월 페어, 월↑) > **알리**(1,2)>**독사**(1,4)>**구삥**(1,9)>**장삥**(1,10)>**세륙**(4,6) > **갑오**(합9)~**한끗**(합1) > **망통**(합0). 동률은 팟 스플릿(반환 아님, 나머지는 첫 승자가 가짐).
+- 진행: 2~6인, 라운드제(블랙잭처럼 지속 딜 — 대기실 "시작" 후 자동으로 계속 다음 핸드 진행, 재대결 개념 없음). 선(첫 액션자)이 **반드시 베팅으로 열어야 함**(체크로 그냥 넘기기 불가, currentBet=0일 때 클라가 콜/체크 버튼 자체를 숨김). 이후 다이/콜/레이즈/따당(더블), 20초 타임아웃=자동 다이. 딜러 버튼 매 라운드 회전.
+- 경제: 블랙잭처럼 **라운드별 실코인 직접 차감/지급**(지속 칩스택 없음) — 액션마다 `deductCoins`, 정산 시 승자에게 `addCoins`. 콜/레이즈 시 잔액 부족하면 **자동 부분 올인**(가진 만큼만 배팅, 사이드팟 없음 — 전액 단일 팟, 캐주얼 게임 특성상 허용한 단순화).
+- 기본 베팅 단위(`room.buyIn` 재사용, 모달 프리셋 1만/5만/10만/50만) = 오픈 최소 베팅("삥") = `buyIn/20`.
+
+**구현 위치**:
+- server.js: `sdCreateDeck/sdShuffle/sdEvalHand/sdCompareHands`(순수 함수), `createSeotdaState/sdEmitState/sdStartRound/sdAction/sdShowdown/sdEndHandEarly/sdStartTimer`. 핸들러 `sd:action`(die/call/raise/ddadang). start_game·disconnect(블랙잭과 동일하게 즉시 isDisconnected+leave, 전원 이탈시 방 삭제, 자기 차례면 자동 다이)·join_room 관전 진입에 분기 추가. maxPlayers 6(홀덤/인디언과 동일), predict_bet·resign 제외 목록에 추가(라운드제라 승부예측/기권 개념 없음). useTimer 항상 false.
+- index.html: 방만들기 모달 라디오 '🎴 섯다' + 전용 베팅 단위 픽커(`#modal-sdbet-row`), 전용 화면 `#seotda-screen`(`#sd-table`/`.sd-player`/`#sd-action-bar`). **화투 카드는 리소스 없이 벡터 SVG로 직접 제작**(`SD_MONTH_SVG` 1~10월, 소나무·매화·벚꽃·흑싸리·난초·모란·홍싸리·공산명월·국화·단풍 모티프). 카드 공개는 홀덤과 동일한 `.hd-flip` 3D 플립 셸 재사용(`renderSdFlip`이 `.sd-card` 앞면 + 공용 `.hd-card back` 뒷면 조합) — 내 카드는 클릭해서 한 장씩 공개, 상대 카드는 쇼다운 때 자동 플립.
+- **검증**: 순수 로직 38케이스(덱 구성/38광땡/광땡 우선순위/땡/특수조합 5종/갑오·끗수·망통/동률 스플릿/전체 55조합 rank 일관성) + 서버 상태머신 추출 시뮬 26케이스(딜/턴순서/딜러 로테이션/다이 즉시종료/베팅→콜→쇼다운/스플릿/레이즈 재오픈/잔액부족 자동올인/인원부족 대기/연결끊김 제거/38광땡 실전 승리) + 클라 jsdom 스모크 23케이스(카드 아이콘/클릭 플립/쇼다운 자동공개/새 핸드 리셋/다이 표시) 전부 통과. 테스트: 스크래치패드 `test_seotda_logic.js`, `test_seotda_sim.js`, `smoke_seotda_client.js`.
+
 ## 2026-07-09 업데이트 5: 올인빵 매칭 + 티카투카 모션 + 관전/팝업 UX
 
 **올인빵 min 매칭** (기존 '각자 전 재산'의 비대칭 문제 수정): `ttEscrowBets` 올인 분기가 양쪽 잔액 중 **적은 금액(minBal)에 맞춰 동일 차감** (포커 올인 방식). `room.ttAllinMatched` 기록, 성립 시 📢 채팅 공지("매칭 금액 X — 승자가 총 2X 획득"), tt:state `allinAmount`로 PvP 태그에 금액 표시. 정산은 기존 `ttEscrowAmounts` 경로 그대로 (합계=2×min). 부자 쪽 초과 잔액 보존 → 재대결도 가능해짐. 모달 경고문 갱신.

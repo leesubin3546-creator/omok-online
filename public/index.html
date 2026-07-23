@@ -674,7 +674,7 @@
   .hd-flip { display:inline-block; perspective:700px; flex-shrink:0; }
   .hd-flip-inner { position:relative; transform-style:preserve-3d; transition:transform 0.55s cubic-bezier(0.3,0.7,0.25,1); transform:rotateY(180deg); }
   .hd-flip.revealed .hd-flip-inner { transform:rotateY(0deg); }
-  .hd-flip .hd-card { backface-visibility:hidden; -webkit-backface-visibility:hidden; }
+  .hd-flip .hd-card, .hd-flip .sd-card { backface-visibility:hidden; -webkit-backface-visibility:hidden; }
   .hd-flip-inner > .hd-card.back { position:absolute; inset:0; width:100%; height:100%; transform:rotateY(180deg); }
   .hd-flip.clickable { cursor:pointer; }
   .hd-flip.clickable .hd-card.back { animation:hdCardPulse 1.6s ease-in-out infinite; }
@@ -725,6 +725,8 @@
   #modal-buyin-row.show { display:flex; flex-direction:column; gap:5px; }
   #modal-ttbet-row { display:none; }
   #modal-ttbet-row.show { display:flex; flex-direction:column; gap:5px; }
+  #modal-sdbet-row { display:none; }
+  #modal-sdbet-row.show { display:flex; flex-direction:column; gap:5px; }
   #ttbet-opts { flex-wrap:wrap; }
   #ttbet-opts .buyin-opt { flex:1 1 28%; }
 
@@ -1040,6 +1042,66 @@
   #bj-chat-messages::-webkit-scrollbar { width:4px; }
   #bj-chat-messages::-webkit-scrollbar-thumb { background:#c4a070; border-radius:4px; }
 
+  /* ── 섯다 ───────────────────────────────────────────── */
+  #sd-wrap { width:100%; max-width:780px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  #sd-status {
+    padding:10px 14px; border-radius:10px; background:var(--surface); border:1px solid var(--border);
+    font-size:0.9rem; font-weight:600; text-align:center; color:var(--accent);
+  }
+  #sd-table {
+    background:#1a5c34; border:2px solid #0d4020; border-radius:14px; padding:16px 18px;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+  }
+  #sd-pot-box { color:#ffe9a8; font-weight:800; font-size:1.05rem; text-shadow:0 1px 3px rgba(0,0,0,0.4); }
+  #sd-pot-box .sd-round-tag { font-size:0.7rem; font-weight:600; color:#d8f0dc; margin-left:8px; }
+  #sd-players-row { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; width:100%; }
+  .sd-player {
+    flex:1 1 30%; min-width:180px; background:var(--card); border:2px solid var(--border);
+    border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:6px;
+    transition:border-color 0.2s, box-shadow 0.2s;
+  }
+  .sd-player.turn { border-color:#f0b830; box-shadow:0 0 14px rgba(240,184,48,0.45); }
+  .sd-player.folded { opacity:0.4; }
+  .sd-player.gone { opacity:0.4; }
+  .sd-player .sd-pname { font-size:0.85rem; font-weight:700; display:flex; align-items:center; gap:5px; }
+  .sd-player .sd-sub { font-size:0.74rem; color:var(--text2); min-height:16px; }
+  .sd-cards-row { display:flex; gap:6px; align-items:center; min-height:70px; }
+  .sd-badge { font-weight:800; padding:1px 7px; border-radius:8px; font-size:0.72rem; }
+  .sd-badge.sd-win  { color:#2a6e2a; background:rgba(42,110,42,0.12); }
+  .sd-badge.sd-lose { color:#c0392b; background:rgba(192,57,43,0.12); }
+  .sd-badge.sd-split{ color:var(--text2); background:rgba(0,0,0,0.07); }
+  #sd-my-row { display:flex; align-items:center; justify-content:center; gap:14px;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
+  #sd-my-hand-name { font-size:0.92rem; font-weight:700; color:var(--accent2); }
+  #sd-action-bar {
+    display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px;
+  }
+  #sd-raise-row { display:none; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 14px; }
+  #sd-chat-box { background:var(--surface); border-radius:11px; border:1px solid var(--border);
+    display:flex; flex-direction:column; height:160px; overflow:hidden; }
+  #sd-chat-messages { flex:1; overflow-y:auto; padding:10px 12px; font-size:0.83rem;
+    display:flex; flex-direction:column; gap:3px; }
+  #sd-chat-messages::-webkit-scrollbar { width:4px; }
+  #sd-chat-messages::-webkit-scrollbar-thumb { background:#c4a070; border-radius:4px; }
+
+  /* 화투 카드 (섯다 전용) */
+  .sd-card {
+    width:42px; height:64px; border-radius:6px; position:relative; flex-shrink:0;
+    background:linear-gradient(160deg,#fbf3df 0%,#f0e2bd 100%); border:1px solid rgba(90,60,20,0.35);
+    box-shadow:0 3px 7px rgba(0,0,0,0.28); display:flex; align-items:center; justify-content:center;
+    overflow:hidden; user-select:none;
+  }
+  .sd-card.sd-gwang { border-color:#c8881a; box-shadow:0 0 9px 1px rgba(240,184,48,0.55), 0 3px 7px rgba(0,0,0,0.28); }
+  .sd-card.sd-empty { background:rgba(255,255,255,0.07); border:1.5px dashed rgba(255,255,255,0.28); box-shadow:none; }
+  .sd-card .sd-month-num {
+    position:absolute; top:2px; left:3px; font-size:0.56rem; font-weight:800; color:rgba(60,35,10,0.55);
+  }
+  .sd-card .sd-icon-wrap { width:100%; height:100%; }
+  #sd-community-cards .sd-card, #sd-my-cards .sd-card { width:54px; height:82px; border-radius:8px; }
+  #sd-my-cards .sd-card { width:64px; height:96px; border-radius:9px; box-shadow:0 5px 14px rgba(0,0,0,0.35); }
+
   /* PvP 레이아웃 확대 + 채팅 */
   #ttp-wrap { width:100%; max-width:920px; margin:0 auto; display:flex; flex-direction:column; }
   #tt-pvp-screen .tt-die-slot { width:68px; height:68px; }
@@ -1315,7 +1377,18 @@
         <label><input type="radio" name="modal-game-type" value="holdem" onchange="onModalGameTypeChange()"> 🃏 텍사스 홀덤</label>
         <label><input type="radio" name="modal-game-type" value="blackjack" onchange="onModalGameTypeChange()"> 🂡 블랙잭</label>
         <label><input type="radio" name="modal-game-type" value="indian" onchange="onModalGameTypeChange()"> 🂠 인디언 포커</label>
+        <label><input type="radio" name="modal-game-type" value="seotda" onchange="onModalGameTypeChange()"> 🎴 섯다</label>
       </div>
+    </div>
+    <div id="modal-sdbet-row">
+      <div class="modal-label">기본 베팅 단위</div>
+      <div class="buyin-opts" style="flex-wrap:wrap;">
+        <div class="buyin-opt selected" data-sdbet="10000" onclick="selectSdBet(10000)">1만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">삥 500</span></div>
+        <div class="buyin-opt" data-sdbet="50000" onclick="selectSdBet(50000)">5만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">삥 2,500</span></div>
+        <div class="buyin-opt" data-sdbet="100000" onclick="selectSdBet(100000)">10만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">삥 5,000</span></div>
+        <div class="buyin-opt" data-sdbet="500000" onclick="selectSdBet(500000)">50만<br><span style="font-size:0.6rem;font-weight:400;color:var(--text2);">삥 25,000</span></div>
+      </div>
+      <div style="font-size:0.68rem;color:var(--text2);">🎴 20장 화투 하우스룰 · 38광땡 최고 · 2~6인 다이/콜/레이즈</div>
     </div>
     <div id="modal-buyin-row">
       <div class="modal-label">바이인 (참가비)</div>
@@ -1587,6 +1660,44 @@
       <div style="display:flex;gap:6px;padding:7px 10px;border-top:1px solid var(--border);">
         <input id="bj-chat-input" type="text" placeholder="메시지 입력..." maxlength="200">
         <button class="btn-secondary btn-sm" onclick="bjSendChat()">전송</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 섯다 -->
+<div id="seotda-screen" class="screen" style="padding:20px 16px;">
+  <div id="sd-wrap">
+    <div class="tt-toolbar">
+      <button class="tt-back-btn" onclick="sdLeave()">← 나가기</button>
+      <span class="tt-toolbar-title">🎴 섯다</span>
+      <span id="sd-timer-text" style="font-size:0.72rem;color:var(--text2);"></span>
+    </div>
+    <div id="sd-status">대기 중…</div>
+    <div id="sd-table">
+      <div id="sd-pot-box">💰 팟 <span id="sd-pot-amount">0</span><span class="sd-round-tag" id="sd-round-tag"></span></div>
+      <div id="sd-players-row"></div>
+    </div>
+    <div id="sd-my-row">
+      <div id="sd-my-cards" class="sd-cards-row"></div>
+      <div id="sd-my-hand-name">🂠 카드를 클릭해 공개</div>
+    </div>
+    <div id="sd-action-bar">
+      <button class="hd-btn hd-btn-fold" id="sd-btn-die" onclick="sdDie()" disabled>다이</button>
+      <button class="hd-btn hd-btn-call" id="sd-btn-call" onclick="sdCall()" disabled>콜</button>
+      <button class="hd-btn hd-btn-raise" id="sd-btn-ddadang" onclick="sdDdadang()" disabled>따당</button>
+      <button class="hd-btn hd-btn-raise" id="sd-btn-raise" onclick="sdRaiseOpen()" disabled>베팅/레이즈</button>
+    </div>
+    <div id="sd-raise-row">
+      <input type="range" id="sd-raise-slider" oninput="sdUpdateRaiseDisplay()" min="0" max="1000" value="0">
+      <div id="sd-raise-amount">0</div>
+      <button class="hd-btn hd-btn-raise" style="font-size:0.78rem;padding:6px 10px;" onclick="sdRaiseConfirm()">확정</button>
+    </div>
+    <div id="sd-chat-box">
+      <div id="sd-chat-messages"></div>
+      <div style="display:flex;gap:6px;padding:7px 10px;border-top:1px solid var(--border);">
+        <input id="sd-chat-input" type="text" placeholder="메시지 입력..." maxlength="200">
+        <button class="btn-secondary btn-sm" onclick="sdSendChat()">전송</button>
       </div>
     </div>
   </div>
@@ -3755,6 +3866,241 @@ function bjRender() {
     plens: Object.fromEntries(s.players.map(p => [p.nickname, p.cards.length])) };
   hdRunAutoFlips('#bj-screen');
 }
+
+// ══ 섯다 클라이언트 ══════════════════════════════════════════
+// 화투 월별 아이콘 (1,3,8월은 광札 — 소나무/벚꽃/공산명월)
+const SD_MONTH_SVG = {
+  1: `<svg viewBox="0 0 40 60"><circle cx="27" cy="14" r="9" fill="#e2632f"/>
+    <path d="M4 50 Q10 30 16 50 Q13 28 22 48 Q18 26 27 46 Q24 24 32 44" stroke="#2f6b3a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <ellipse cx="13" cy="37" rx="4.2" ry="2.6" fill="#fff" opacity="0.92"/></svg>`,
+  2: `<svg viewBox="0 0 40 60"><path d="M6 52 Q14 38 20 30" stroke="#6b4a2a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <g transform="translate(22,22)"><circle cx="0" cy="-7" r="5" fill="#f2a6c2"/><circle cx="6.6" cy="-2" r="5" fill="#f2a6c2"/>
+    <circle cx="4" cy="6.6" r="5" fill="#f2a6c2"/><circle cx="-4" cy="6.6" r="5" fill="#f2a6c2"/><circle cx="-6.6" cy="-2" r="5" fill="#f2a6c2"/>
+    <circle cx="0" cy="0" r="3" fill="#d1487a"/></g></svg>`,
+  3: `<svg viewBox="0 0 40 60"><path d="M2 58 Q20 42 38 58" stroke="#b3273f" stroke-width="9" fill="none" opacity="0.85"/>
+    <g fill="#f7c6d9"><circle cx="14" cy="18" r="5"/><circle cx="24" cy="14" r="5"/><circle cx="20" cy="26" r="5"/><circle cx="30" cy="24" r="4.2"/></g></svg>`,
+  4: `<svg viewBox="0 0 40 60"><path d="M6 54 L18 30 L14 40 L22 20 L18 28 L28 8" stroke="#2b2233" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <ellipse cx="18" cy="30" rx="4" ry="7" fill="#3c2f4a" transform="rotate(-30 18 30)"/>
+    <ellipse cx="22" cy="20" rx="3.4" ry="6" fill="#3c2f4a" transform="rotate(-25 22 20)"/></svg>`,
+  5: `<svg viewBox="0 0 40 60"><path d="M8 54 Q6 30 20 10" stroke="#3a7a45" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <path d="M14 54 Q16 28 30 12" stroke="#4d8f57" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <path d="M20 54 Q24 34 34 20" stroke="#3a7a45" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <circle cx="24" cy="14" r="3.4" fill="#9a63c9"/></svg>`,
+  6: `<svg viewBox="0 0 40 60"><circle cx="20" cy="24" r="13" fill="#d94f8c"/><circle cx="20" cy="24" r="8.4" fill="#ef7fae"/>
+    <circle cx="20" cy="24" r="4" fill="#fff0f5"/><path d="M10 46 Q20 36 30 46" stroke="#3a7a45" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>`,
+  7: `<svg viewBox="0 0 40 60"><path d="M8 54 L18 32 L14 40 L24 22 L20 30 L30 10" stroke="#8a4a1e" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <circle cx="18" cy="32" r="3.6" fill="#c0392b"/><circle cx="24" cy="22" r="3.2" fill="#d9603f"/><circle cx="30" cy="10" r="3" fill="#c0392b"/></svg>`,
+  8: `<svg viewBox="0 0 40 60"><circle cx="22" cy="16" r="11" fill="#f5edc6"/>
+    <path d="M2 56 Q8 30 12 56 M12 56 Q18 26 22 56 M22 56 Q28 32 32 56 M32 56 Q36 38 38 56" stroke="#3a3226" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>`,
+  9: `<svg viewBox="0 0 40 60"><g fill="#e8b93a"><circle cx="20" cy="24" r="4.5"/><ellipse cx="20" cy="14" rx="3.2" ry="7"/>
+    <ellipse cx="20" cy="34" rx="3.2" ry="7"/><ellipse cx="10" cy="24" rx="7" ry="3.2"/><ellipse cx="30" cy="24" rx="7" ry="3.2"/>
+    <ellipse cx="13" cy="17" rx="3" ry="6.4" transform="rotate(-45 13 17)"/><ellipse cx="27" cy="17" rx="3" ry="6.4" transform="rotate(45 27 17)"/>
+    <ellipse cx="13" cy="31" rx="3" ry="6.4" transform="rotate(45 13 31)"/><ellipse cx="27" cy="31" rx="3" ry="6.4" transform="rotate(-45 27 31)"/></g>
+    <circle cx="20" cy="24" r="3.2" fill="#a06a00"/></svg>`,
+  10: `<svg viewBox="0 0 40 60"><path d="M20 8 L24 20 L34 16 L27 26 L36 32 L24 32 L26 44 L20 36 L14 44 L16 32 L4 32 L13 26 L6 16 L16 20 Z" fill="#d9601f"/>
+    <line x1="20" y1="36" x2="20" y2="52" stroke="#7a3d10" stroke-width="2"/></svg>`,
+};
+function sdCardKey(c) { return !c ? '' : `${c.month}${c.gwang ? 'g' : ''}`; }
+function renderSdCard(card) {
+  if (!card) return `<div class="sd-card sd-empty"></div>`;
+  const cls = ['sd-card', card.gwang ? 'sd-gwang' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}"><div class="sd-month-num">${card.month}</div>
+    <div class="sd-icon-wrap">${SD_MONTH_SVG[card.month] || ''}</div></div>`;
+}
+function renderSdFlip(card, revealed, opts = {}) {
+  const cls = ['hd-flip', revealed ? 'revealed' : '', opts.click ? 'clickable' : ''].filter(Boolean).join(' ');
+  const attrs =
+    (opts.ci != null ? ` data-ci="${opts.ci}"` : '') +
+    (opts.mini ? ' data-mini="1"' : '') +
+    (!revealed && opts.autoFlip != null ? ` data-autoflip="${opts.autoFlip}"` : '') +
+    (opts.click ? ` onclick="sdRevealMyCard(${opts.ci})"` : '');
+  return `<div class="${cls}"${attrs}><div class="hd-flip-inner"><div class="hd-card back"></div>${renderSdCard(card)}</div></div>`;
+}
+
+const SD = { s: null, myReveal: [false, false], myHandKey: '', shownCards: {}, timerIv: null, countdownIv: null };
+function sdNewHandReset() { SD.myReveal = [false, false]; SD.myHandKey = ''; SD.shownCards = {}; }
+function sdMyRevealed() { return SD.myReveal[0] && SD.myReveal[1]; }
+
+function sdStart(roomId) {
+  currentRoom = roomId;
+  gameType = 'seotda';
+  SD.s = null;
+  sdNewHandReset();
+  document.getElementById('sd-chat-messages').innerHTML = '';
+  showScreen('seotda-screen');
+}
+function sdLeave() {
+  if (currentRoom) socket.emit('leave_room', { roomId: currentRoom });
+  currentRoom = null;
+  SD.s = null;
+  clearInterval(SD.timerIv); clearInterval(SD.countdownIv);
+  showScreen('lobby-screen');
+  if (socket) {
+    socket.emit('get_room_list');
+    socket.emit('get_coins', { nickname: myNickname });
+  }
+}
+function sdRevealMyCard(i) {
+  if (SD.myReveal[i]) return;
+  SD.myReveal[i] = true;
+  document.querySelectorAll(`#sd-my-cards .hd-flip[data-ci="${i}"]`).forEach(el => {
+    el.classList.add('revealed'); el.classList.remove('clickable'); el.removeAttribute('onclick');
+  });
+  if (sdMyRevealed() && SD.s) {
+    const me = SD.s.players[SD.s.yourIndex];
+    document.getElementById('sd-my-hand-name').textContent = me && me.handName ? me.handName : '족보 판정 중…';
+  }
+}
+function sdRender() {
+  const s = SD.s; if (!s) return;
+  document.getElementById('sd-round-tag').textContent = s.round ? ` · 라운드 ${s.round}` : '';
+  document.getElementById('sd-pot-amount').textContent = (s.pot || 0).toLocaleString();
+
+  const me = s.yourIndex >= 0 ? s.players[s.yourIndex] : null;
+  const myKey = me && me.holeCards && me.holeCards.length ? me.holeCards.map(sdCardKey).join(',') : '';
+  if (myKey && myKey !== SD.myHandKey) { sdNewHandReset(); SD.myHandKey = myKey; }
+  const myAutoReveal = s.phase === 'showdown';
+  const myFlipNow = [false, false];
+  if (myAutoReveal && me && me.holeCards) {
+    me.holeCards.forEach((c, ci) => { if (!SD.myReveal[ci]) { myFlipNow[ci] = true; SD.myReveal[ci] = true; } });
+  }
+
+  document.getElementById('sd-players-row').innerHTML = s.players.map((p, i) => {
+    const isMe = i === s.yourIndex;
+    const isTurn = s.actionIndex === i && s.phase === 'betting';
+    let cardsHtml;
+    if (p.folded) {
+      cardsHtml = '<span style="font-size:0.76rem;color:var(--text2);">다이</span>';
+    } else if (p.holeCards && p.holeCards.length) {
+      if (isMe) {
+        cardsHtml = p.holeCards.map((c, ci) => renderSdFlip(c, SD.myReveal[ci] && !myFlipNow[ci],
+          { mini: true, ci, autoFlip: myFlipNow[ci] ? 150 + ci * 220 : null })).join('');
+      } else {
+        const key = p.holeCards.map(sdCardKey).join(',');
+        if (SD.shownCards[p.nickname] !== key) {
+          SD.shownCards[p.nickname] = key;
+          cardsHtml = p.holeCards.map((c, ci) => renderSdFlip(c, false, { autoFlip: 150 + i * 160 + ci * 180 })).join('');
+        } else {
+          cardsHtml = p.holeCards.map(c => renderSdFlip(c, true)).join('');
+        }
+      }
+    } else {
+      cardsHtml = renderSdFlip(null, false) + renderSdFlip(null, false);
+    }
+    const resultBadge = p.result === 'win' ? `<span class="sd-badge sd-win">승리 +${(p.payout||0).toLocaleString()}</span>`
+      : p.result === 'split' ? `<span class="sd-badge sd-split">스플릿 +${(p.payout||0).toLocaleString()}</span>`
+      : p.result === 'lose' ? `<span class="sd-badge sd-lose">패배</span>` : '';
+    return `<div class="sd-player ${isTurn ? 'turn' : ''} ${p.folded ? 'folded' : ''} ${p.isDisconnected ? 'gone' : ''}">
+      <div class="sd-pname">${escapeHtml(p.nickname)}${isMe ? ' (나)' : ''}${p.allIn ? ' <span style="font-size:0.6rem;background:#5b21b6;color:#fff;padding:0 3px;border-radius:3px;">올인</span>' : ''}</div>
+      <div class="sd-cards-row">${cardsHtml}</div>
+      <div class="sd-sub">${p.bet ? `베팅 ${p.bet.toLocaleString()}` : ''} ${p.handName && s.phase === 'showdown' ? p.handName : ''} ${resultBadge}</div>
+    </div>`;
+  }).join('');
+
+  if (me) {
+    let myCardsHtml;
+    if (me.holeCards && me.holeCards.length) {
+      myCardsHtml = me.holeCards.map((c, ci) => renderSdFlip(c, SD.myReveal[ci] && !myFlipNow[ci], {
+        ci, click: !SD.myReveal[ci], autoFlip: myFlipNow[ci] ? 200 + ci * 250 : null,
+      })).join('');
+    } else {
+      myCardsHtml = renderSdCard(null) + renderSdCard(null);
+    }
+    document.getElementById('sd-my-cards').innerHTML = myCardsHtml;
+    document.getElementById('sd-my-hand-name').textContent = !sdMyRevealed() ? '🂠 카드를 클릭해 공개'
+      : (me.handName || '족보 판정 중…');
+  }
+  hdRunAutoFlips('#seotda-screen');
+
+  // 액션 버튼 — 첫 배팅 전(currentBet=0)엔 "체크로 그냥 넘기기" 불가, 다이/베팅만 가능 (선이 반드시 열어야 하는 섯다 룰)
+  const isMyTurn = s.actionIndex === s.yourIndex && s.yourIndex >= 0 && s.phase === 'betting';
+  const canAct = isMyTurn && me && !me.folded && !me.allIn;
+  const isOpen = (s.currentBet || 0) === 0;
+  ['sd-btn-die', 'sd-btn-ddadang', 'sd-btn-raise'].forEach(id => {
+    document.getElementById(id).disabled = !canAct;
+  });
+  const callBtn = document.getElementById('sd-btn-call');
+  callBtn.disabled = !canAct || isOpen;
+  callBtn.style.display = isOpen ? 'none' : '';
+  if (canAct) {
+    const toCall = (s.currentBet || 0) - (me.bet || 0);
+    callBtn.textContent = `콜 (${toCall.toLocaleString()})`;
+    document.getElementById('sd-btn-raise').textContent = isOpen ? '베팅' : '레이즈';
+  }
+  if (!canAct) document.getElementById('sd-raise-row').style.display = 'none';
+
+  // 상태바
+  if (s.phase === 'betting' && s.players[s.actionIndex]) {
+    const actor = s.players[s.actionIndex];
+    document.getElementById('sd-status').textContent = actor.nickname === myNickname
+      ? '⚡ 내 차례입니다' : `⏳ ${escapeHtml(actor.nickname)} 의 차례`;
+  } else if (s.phase === 'showdown') {
+    document.getElementById('sd-status').textContent = '🎴 쇼다운!';
+  } else if (s.phase === 'waiting') {
+    document.getElementById('sd-status').textContent = '참가자를 기다리는 중…';
+  }
+}
+function sdDie() { if (socket && currentRoom) socket.emit('sd:action', { roomId: currentRoom, action: 'die' }); }
+function sdCall() { if (socket && currentRoom) socket.emit('sd:action', { roomId: currentRoom, action: 'call' }); }
+function sdDdadang() { if (socket && currentRoom) socket.emit('sd:action', { roomId: currentRoom, action: 'ddadang' }); }
+function sdRaiseOpen() {
+  const s = SD.s; if (!s) return;
+  const row = document.getElementById('sd-raise-row');
+  const slider = document.getElementById('sd-raise-slider');
+  const min = (s.currentBet || 0) + (s.minRaise || s.baseBet || 100);
+  const me = s.players[s.yourIndex];
+  // 서버가 최종적으로 잔액 이상은 캡하지만(sdAction), 슬라이더도 대략 내 코인 잔액에 맞춰 표시
+  const maxAfford = (me && me.bet || 0) + (typeof SHOP !== 'undefined' && SHOP.coins != null ? SHOP.coins : 1000000);
+  const max = Math.max(min, maxAfford);
+  slider.min = min; slider.max = max; slider.value = min;
+  sdUpdateRaiseDisplay();
+  row.style.display = 'flex';
+}
+function sdUpdateRaiseDisplay() {
+  document.getElementById('sd-raise-amount').textContent = parseInt(document.getElementById('sd-raise-slider').value || 0).toLocaleString();
+}
+function sdRaiseConfirm() {
+  const amt = parseInt(document.getElementById('sd-raise-slider').value) || 0;
+  if (socket && currentRoom) socket.emit('sd:action', { roomId: currentRoom, action: 'raise', amount: amt });
+  document.getElementById('sd-raise-row').style.display = 'none';
+}
+function sdSendChat() {
+  const input = document.getElementById('sd-chat-input');
+  const msg = input.value.trim();
+  if (!msg || !currentRoom) return;
+  socket.emit('chat', { roomId: currentRoom, nickname: myNickname, message: msg });
+  input.value = '';
+}
+document.getElementById('sd-chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sdSendChat(); });
+function sdAddChat(html, isSystem) {
+  const msgs = document.getElementById('sd-chat-messages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  if (isSystem) div.style.color = 'var(--text2)';
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function sdStartTimer(seconds) {
+  clearInterval(SD.timerIv);
+  let remaining = seconds;
+  const text = document.getElementById('sd-timer-text');
+  text.textContent = `⏳ ${remaining}초`;
+  SD.timerIv = setInterval(() => {
+    remaining--;
+    text.textContent = remaining > 0 ? `⏳ ${remaining}초` : '';
+    if (remaining <= 0) clearInterval(SD.timerIv);
+  }, 1000);
+}
+function sdNextCountdown(sec) {
+  clearInterval(SD.countdownIv);
+  if (!sec || sec <= 0) return;
+  let s = sec;
+  const upd = () => { document.getElementById('sd-status').textContent = `⏳ 다음 핸드까지 ${s}초…`; };
+  SD.countdownIv = setInterval(() => { s--; if (s <= 0) clearInterval(SD.countdownIv); else upd(); }, 1000);
+  setTimeout(upd, 1800);
+}
+
 const TTP = { s: null, roomId: null, meName: '나', oppName: '상대',
   snap: null, rollKey: null, prevPhase: null, prevBonus: false, rollTimers: [] };
 const TTP_LANE_NM = ['상단', '중단', '하단'];
@@ -4083,7 +4429,8 @@ function updateRecordUI(rec) {
 function addChat(text, isSystem = false) {
   const onTtPvp = document.getElementById('tt-pvp-screen').classList.contains('active');
   const onBj = document.getElementById('bj-screen').classList.contains('active');
-  const msgs = document.getElementById(onTtPvp ? 'ttp-chat-messages' : onBj ? 'bj-chat-messages' : 'chat-messages');
+  const onSd = document.getElementById('seotda-screen').classList.contains('active');
+  const msgs = document.getElementById(onTtPvp ? 'ttp-chat-messages' : onBj ? 'bj-chat-messages' : onSd ? 'sd-chat-messages' : 'chat-messages');
   const div = document.createElement('div');
   div.className = 'chat-msg';
   div.innerHTML = isSystem ? `<span class="sys">${text}</span>` : text;
@@ -4211,6 +4558,7 @@ function initSocket() {
   socket.on('game_start', ({ roomId, board, players, turn, yourColor, useTimer: ut, gameType: gt }) => {
     if (gt === 'tikatuka') { gameType = 'tikatuka'; ttPvpStart(roomId, players, yourColor); return; }
     if (gt === 'blackjack') { isSpectating = false; bjStart(roomId); return; }
+    if (gt === 'seotda') { isSpectating = false; sdStart(roomId); return; }
     currentRoom = roomId;
     gameBoard = board ? board.map(r => [...r]) : [];
     currentTurn = turn; gameActive = true; isSpectating = false;
@@ -4251,6 +4599,7 @@ function initSocket() {
       showPredictPanel(roomId, players.map(p => p.nickname));
       return; }
     if (gt === 'blackjack') { isSpectating = true; bjStart(roomId); return; }
+    if (gt === 'seotda') { isSpectating = true; sdStart(roomId); return; }
     currentRoom = roomId;
     gameBoard = board ? board.map(r => [...r]) : [];
     gameType = gt || 'gomoku';
@@ -4293,6 +4642,36 @@ function initSocket() {
     gameType = 'blackjack';
     if (!document.getElementById('bj-screen').classList.contains('active')) showScreen('bj-screen');
     bjRender();
+  });
+
+  // ── 섯다 상태 동기화 ─────────────────────────────────────────
+  socket.on('sd:state', s => {
+    if (s.roomId && currentRoom && s.roomId !== currentRoom) return;
+    SD.s = s;
+    if (s.roomId) currentRoom = s.roomId;
+    gameType = 'seotda';
+    if (!document.getElementById('seotda-screen').classList.contains('active')) showScreen('seotda-screen');
+    sdRender();
+  });
+  socket.on('sd:timer', ({ seconds }) => { sdStartTimer(seconds); });
+  socket.on('sd:action_done', ({ nickname, action, bet }) => {
+    const actMap = { die: '다이', call: '콜', raise: '레이즈', ddadang: '따당' };
+    const amtStr = (action === 'raise' || action === 'ddadang' || action === 'call') && bet ? ` (${bet.toLocaleString()})` : '';
+    sdAddChat(`<span style="color:var(--accent2);">${escapeHtml(nickname)}</span>: ${actMap[action] || action}${amtStr}`);
+  });
+  socket.on('sd:hand_end', ({ winner, wonAmount, reason, nextIn }) => {
+    clearInterval(SD.timerIv);
+    const reasonStr = reason === 'die' ? ' — 상대 다이' : '';
+    sdAddChat(`🏆 <strong>${escapeHtml(winner || '?')}</strong> 팟 획득 +${(wonAmount || 0).toLocaleString()}${reasonStr}`, true);
+    document.getElementById('sd-status').textContent = `🏆 ${winner || '?'} 승리! (+${(wonAmount || 0).toLocaleString()})`;
+    sdNextCountdown(nextIn);
+  });
+  socket.on('sd:showdown', ({ results, nextIn }) => {
+    clearInterval(SD.timerIv);
+    (results || []).forEach(r => {
+      if (r.payout > 0) sdAddChat(`🏆 <strong>${escapeHtml(r.nickname)}</strong> +${r.payout.toLocaleString()} (${escapeHtml(r.handName || '')})`, true);
+    });
+    sdNextCountdown(nextIn);
   });
 
   // ── 체스 상태 동기화 ─────────────────────────────────────────
@@ -4635,6 +5014,7 @@ function initSocket() {
 // ── 방 만들기 모달 ────────────────────────────────────────────
 let selectedBuyIn = 10000;
 let selectedTtBet = 0;
+let selectedSdBet = 10000;
 function openCreateRoomModal() {
   document.getElementById('modal-room-name').value = `${myNickname}의 방`;
   document.getElementById('modal-room-pw').value = '';
@@ -4652,20 +5032,32 @@ function openCreateRoomModal() {
     el.classList.toggle('selected', el.dataset.ttbet === '0');
   });
   document.getElementById('ttbet-allin-hint').style.display = 'none';
+  selectedSdBet = 10000;
+  document.querySelectorAll('#modal-sdbet-row .buyin-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.sdbet) === 10000);
+  });
   document.getElementById('create-room-modal').classList.add('show');
 }
 function onModalGameTypeChange() {
   const gt = document.querySelector('input[name="modal-game-type"]:checked')?.value;
   const isHoldemLike = gt === 'holdem' || gt === 'indian';   // 인디언 포커 = 홀덤 인프라(바이인/칩)
   const isBj = gt === 'blackjack';
+  const isSd = gt === 'seotda';
   document.getElementById('modal-buyin-row').classList.toggle('show', isHoldemLike);
-  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldemLike && !isBj);  // 블랙잭은 라운드별 인게임 베팅
-  document.getElementById('modal-timer-row').style.display = (isHoldemLike || isBj || gt === 'tikatuka') ? 'none' : '';
+  document.getElementById('modal-sdbet-row').classList.toggle('show', isSd);
+  document.getElementById('modal-ttbet-row').classList.toggle('show', !isHoldemLike && !isBj && !isSd);  // 블랙잭/섯다는 인게임 베팅
+  document.getElementById('modal-timer-row').style.display = (isHoldemLike || isBj || isSd || gt === 'tikatuka') ? 'none' : '';
 }
 function selectBuyIn(amount) {
   selectedBuyIn = amount;
   document.querySelectorAll('#modal-buyin-row .buyin-opt').forEach(el => {
     el.classList.toggle('selected', parseInt(el.dataset.buyin) === amount);
+  });
+}
+function selectSdBet(amount) {
+  selectedSdBet = amount;
+  document.querySelectorAll('#modal-sdbet-row .buyin-opt').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.sdbet) === amount);
   });
 }
 function selectTtBet(amount) {
@@ -4689,6 +5081,7 @@ function submitCreateRoom() {
     roomName: name, password: password || null, useTimer: timerOn, gameType: gt
   };
   if (gt === 'holdem' || gt === 'indian') payload.buyIn = selectedBuyIn;
+  else if (gt === 'seotda') payload.buyIn = selectedSdBet;
   else payload.ttBet = selectedTtBet;
   socket.emit('create_room', payload);
 }
@@ -4812,6 +5205,8 @@ function updateRoomList(list) {
       gameBadge = `<span class="room-badge room-badge-holdem">🂡 블랙잭</span>`;
     } else if (r.gameType === 'indian') {
       gameBadge = `<span class="room-badge room-badge-holdem">🂠 인디언</span>`;
+    } else if (r.gameType === 'seotda') {
+      gameBadge = `<span class="room-badge room-badge-holdem">🎴 섯다</span>`;
     } else {
       gameBadge = `<span class="room-badge room-badge-gomoku">오목</span>`;
     }
@@ -4819,7 +5214,7 @@ function updateRoomList(list) {
     <div class="room-item" onclick="${onclick}">
       <div class="room-item-info">
         <div class="room-item-name">${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.name)}</div>
-        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · 바이인 ${r.buyIn.toLocaleString()}` : ''}${r.ttBet ? ` · 💰 판돈 ${r.ttBet.toLocaleString()}` : ''}${r.ttAllin ? ' · 🔥 올인빵' : ''}</div>
+        <div class="room-item-players">${isWaiting ? `${r.playerCount}/${maxP}명` : ''} ${playerStr}${r.buyIn ? ` · ${r.gameType === 'seotda' ? '기본 베팅' : '바이인'} ${r.buyIn.toLocaleString()}` : ''}${r.ttBet ? ` · 💰 판돈 ${r.ttBet.toLocaleString()}` : ''}${r.ttAllin ? ' · 🔥 올인빵' : ''}</div>
       </div>
       <div class="room-item-badges">
         ${gameBadge}
@@ -4857,6 +5252,9 @@ function renderLobbyScreen(state) {
   } else if (state.gameType === 'blackjack') {
     document.getElementById('lobby-room-sub').textContent =
       '🂡 블랙잭 · 딜러(하우스) 상대 · 라운드별 베팅 · 혼자서도 시작 가능';
+  } else if (state.gameType === 'seotda') {
+    document.getElementById('lobby-room-sub').textContent =
+      `🎴 섯다 · 기본 베팅 ${(state.buyIn || 10000).toLocaleString()} · 20장 화투 · 38광땡 최고 · 2~6인`;
   } else if (state.gameType === 'tikatuka') {
     document.getElementById('lobby-room-sub').textContent =
       '🎲 티카투카 대전' + (state.ttAllin ? ' · 🔥 올인빵 (전 재산!)' : state.ttBet ? ` · 💰 판돈 ${state.ttBet.toLocaleString()} (승자 독식)` : ' · 무료');
@@ -4876,7 +5274,7 @@ function renderLobbyScreen(state) {
   const grid = document.getElementById('lobby-players-grid');
   grid.innerHTML = '';
 
-  if (state.gameType === 'holdem' || state.gameType === 'blackjack' || state.gameType === 'indian') {
+  if (state.gameType === 'holdem' || state.gameType === 'blackjack' || state.gameType === 'indian' || state.gameType === 'seotda') {
     grid.classList.add('holdem-lobby');
     const maxP = state.gameType === 'blackjack' ? 5 : 6;
     for (let i = 0; i < maxP; i++) {
@@ -4888,7 +5286,7 @@ function renderLobbyScreen(state) {
           <div class="lobby-player-slot">
             ${canKick ? `<button class="lobby-kick-btn" onclick="kickPlayer('${escapeHtml(p.nickname)}')">강퇴</button>` : ''}
             <div class="lobby-slot-header">
-              <span style="font-size:1rem;">🃏</span>
+              <span style="font-size:1rem;">${state.gameType === 'seotda' ? '🎴' : '🃏'}</span>
               <span class="lobby-slot-name">${escapeHtml(p.nickname)}${isMe ? ' (나)' : ''}</span>
               ${p.isHost ? '<span class="lobby-slot-role host">방장</span>' : ''}
             </div>

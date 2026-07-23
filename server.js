@@ -1263,6 +1263,288 @@ async function bjAction(roomId, socketId, act) {
   bjAdvance(room);
 }
 
+// ══ 섯다 (2~6인, 20장 하우스룰 덱, 다이/콜/레이즈, 라운드제) ══
+// 하우스 룰: 1,3,8월은 두 장 모두 "광" 취급.
+// 38광땡(3광+8광) > 광땡(3>8>1) > 땡(월↑) > 알리>독사>구삥>장삥>세륙 > 갑오(합9)~한끗(합1) > 망통(합0)
+const SD_ACT_TIME = 20000;
+const SD_GWANG_PRIORITY = { 3: 3, 8: 2, 1: 1 };
+const SD_SPECIAL_PAIRS = [
+  { pair: [1, 2], name: '알리', rank: 705 },
+  { pair: [1, 4], name: '독사', rank: 704 },
+  { pair: [1, 9], name: '구삥', rank: 703 },
+  { pair: [1, 10], name: '장삥', rank: 702 },
+  { pair: [4, 6], name: '세륙', rank: 701 },
+];
+const SD_NUM_NAMES = ['망통', '한끗', '두끗', '세끗', '넉끗', '다섯끗', '여섯끗', '일곱끗', '여덟끗', '갑오'];
+
+function sdCreateDeck() {
+  const deck = [];
+  for (let m = 1; m <= 10; m++) {
+    const gwang = [1, 3, 8].includes(m);
+    deck.push({ month: m, gwang });
+    deck.push({ month: m, gwang });
+  }
+  return deck;
+}
+function sdShuffle(deck) {
+  const d = [...deck];
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+// cards: [{month,gwang}, {month,gwang}] 순서 무관
+function sdEvalHand(cards) {
+  const [a, b] = cards;
+  const [lo, hi] = [a.month, b.month].sort((x, y) => x - y);
+  if (lo === 3 && hi === 8 && a.gwang && b.gwang) return { rank: 1000, name: '38광땡' };
+  if (a.month === b.month) {
+    if (a.gwang && b.gwang) return { rank: 900 + SD_GWANG_PRIORITY[a.month], name: `${a.month}월광땡` };
+    return { rank: 800 + a.month, name: `${a.month}땡` };
+  }
+  const special = SD_SPECIAL_PAIRS.find(s => s.pair[0] === lo && s.pair[1] === hi);
+  if (special) return { rank: special.rank, name: special.name };
+  const sum = (a.month + b.month) % 10;
+  return { rank: 600 + sum, name: SD_NUM_NAMES[sum] };
+}
+// evals: [{nickname, hand}] → 최고 rank 전원 반환 (동률 스플릿)
+function sdCompareHands(evals) {
+  const maxRank = Math.max(...evals.map(e => e.hand.rank));
+  return evals.filter(e => e.hand.rank === maxRank);
+}
+
+function createSeotdaState() {
+  return { phase: 'waiting', round: 0, deck: [], pot: 0, currentBet: 0, minRaise: 0,
+    baseBet: 0, actionIndex: -1, playersToAct: [], dealerIndex: -1, timer: null };
+}
+function sdClearTimer(room) {
+  if (room.seotda && room.seotda.timer) { clearTimeout(room.seotda.timer); room.seotda.timer = null; }
+}
+function sdStartTimer(room) {
+  sdClearTimer(room);
+  const sd = room.seotda;
+  const idx = sd.actionIndex;
+  io.to(room.id).emit('sd:timer', { seconds: SD_ACT_TIME / 1000, playerIdx: idx });
+  sd.timer = setTimeout(() => {
+    if (sd.phase === 'betting' && sd.actionIndex === idx && room.status === 'playing') {
+      sdAction(room, idx, 'die', 0);   // 시간초과 = 다이 (콜 강제는 코인 위험이라 안전한 쪽으로)
+    }
+  }, SD_ACT_TIME);
+}
+function sdEmitState(room) {
+  const sd = room.seotda;
+  const showAll = sd.phase === 'showdown';
+  const base = {
+    roomId: room.id, phase: sd.phase, round: sd.round, pot: sd.pot,
+    currentBet: sd.currentBet, minRaise: sd.minRaise, baseBet: sd.baseBet,
+    actionIndex: sd.actionIndex, dealerIndex: sd.dealerIndex,
+  };
+  const mapPlayer = (q, i, viewerIdx) => ({
+    idx: i, nickname: q.nickname, bet: q.sdBet || 0, folded: !!q.folded,
+    allIn: !!q.sdAllIn, isDisconnected: !!q.isDisconnected,
+    result: q.sdResult || null, payout: q.sdPayout || 0, handName: q.sdHandName || null,
+    holeCards: showAll ? (q.sdCards || null) : (i === viewerIdx ? (q.sdCards || null) : null),
+  });
+  room.players.forEach((p, myIdx) => {
+    io.to(p.socketId).emit('sd:state', {
+      ...base, yourIndex: myIdx,
+      players: room.players.map((q, i) => mapPlayer(q, i, myIdx)),
+    });
+  });
+  room.spectators.forEach(s => {
+    io.to(s.socketId).emit('sd:state', {
+      ...base, yourIndex: -1, isSpectator: true,
+      players: room.players.map((q, i) => mapPlayer(q, i, -1)),
+    });
+  });
+}
+
+function sdStartRound(room) {
+  const sd = room.seotda;
+  if (!sd || room.status !== 'playing') return;
+  sdClearTimer(room);
+  for (let i = room.players.length - 1; i >= 0; i--) {
+    if (room.players[i].isDisconnected) room.players.splice(i, 1);
+  }
+  if (room.players.length === 0) { rooms.delete(room.id); broadcastRoomList(); return; }
+  if (room.players.length < 2) {
+    sd.phase = 'waiting';
+    io.to(room.id).emit('chat', { nickname: '📢', message: '참가자가 부족해 대기 중입니다.' });
+    sdEmitState(room);
+    return;
+  }
+  if (!room.players.find(p => p.socketId === room.hostSocketId)) room.hostSocketId = room.players[0].socketId;
+
+  sd.round++;
+  sd.phase = 'betting';
+  sd.pot = 0;
+  sd.currentBet = 0;
+  sd.baseBet = Math.max(100, Math.floor((room.buyIn || 10000) / 20));
+  sd.minRaise = sd.baseBet;
+  sd.deck = sdShuffle(sdCreateDeck());
+  const n = room.players.length;
+  sd.dealerIndex = (sd.dealerIndex + 1) % n;
+
+  for (const p of room.players) {
+    p.sdCards = [sd.deck.pop(), sd.deck.pop()];
+    p.sdBet = 0; p.folded = false; p.sdAllIn = false;
+    p.sdResult = null; p.sdPayout = 0; p.sdHandName = null;
+  }
+
+  const order = [];
+  for (let i = 1; i <= n; i++) order.push((sd.dealerIndex + i) % n);
+  sd.playersToAct = order;
+  sd.actionIndex = order[0];
+
+  sdEmitState(room);
+  sdStartTimer(room);
+}
+
+async function sdEndHandEarly(room, winner) {
+  const sd = room.seotda;
+  sdClearTimer(room);
+  const wonAmount = sd.pot;
+  sd.pot = 0;
+  sd.phase = 'showdown';
+  winner.sdResult = 'win'; winner.sdPayout = wonAmount;
+  if (wonAmount > 0) await addCoins(winner.nickname, wonAmount);
+  io.to(room.id).emit('sd:hand_end', { roomId: room.id, winner: winner.nickname, wonAmount, reason: 'die', nextIn: 4 });
+  sdEmitState(room);
+  for (const p of room.players) {
+    if (p.isDisconnected) continue;
+    const info = await getCoinsInfo(p.nickname);
+    io.to(p.socketId).emit('coins_info', info);
+  }
+  sd.timer = setTimeout(() => sdStartRound(room), 4000);
+}
+
+async function sdShowdown(room) {
+  const sd = room.seotda;
+  sdClearTimer(room);
+  sd.phase = 'showdown';
+  const active = room.players.filter(p => !p.folded);
+  const evals = active.map(p => ({ nickname: p.nickname, hand: sdEvalHand(p.sdCards) }));
+  evals.forEach(e => {
+    const p = active.find(q => q.nickname === e.nickname);
+    p.sdHandName = e.hand.name;
+  });
+  const winners = sdCompareHands(evals);
+  const winnerNicks = new Set(winners.map(w => w.nickname));
+  const potShare = winners.length ? Math.floor(sd.pot / winners.length) : 0;
+  const remainder = sd.pot - potShare * winners.length;
+  let first = true;
+  for (const p of active) {
+    if (winnerNicks.has(p.nickname)) {
+      const amt = potShare + (first ? remainder : 0);
+      first = false;
+      p.sdResult = winners.length > 1 ? 'split' : 'win';
+      p.sdPayout = amt;
+      if (amt > 0) await addCoins(p.nickname, amt);
+    } else {
+      p.sdResult = 'lose'; p.sdPayout = 0;
+    }
+  }
+  sd.pot = 0;
+  io.to(room.id).emit('sd:showdown', {
+    roomId: room.id,
+    results: active.map(p => ({ nickname: p.nickname, handName: p.sdHandName, result: p.sdResult, payout: p.sdPayout })),
+    nextIn: 6,
+  });
+  sdEmitState(room);
+  for (const p of room.players) {
+    if (p.isDisconnected) continue;
+    const info = await getCoinsInfo(p.nickname);
+    io.to(p.socketId).emit('coins_info', info);
+  }
+  sd.timer = setTimeout(() => sdStartRound(room), 6000);
+}
+
+async function sdAction(room, playerIdx, action, raiseAmount) {
+  const sd = room.seotda;
+  if (!sd || room.status !== 'playing' || sd.phase !== 'betting') return;
+  const p = room.players[playerIdx];
+  if (!p || p.folded || p.sdAllIn) return;
+  if (!sd.playersToAct.length || sd.playersToAct[0] !== playerIdx) return;
+
+  sdClearTimer(room);
+  sd.playersToAct.shift();
+
+  if (action === 'die') {
+    p.folded = true;
+    sd.playersToAct = sd.playersToAct.filter(i => !room.players[i].folded);
+    const remaining = room.players.filter(q => !q.folded);
+    if (remaining.length === 1) { await sdEndHandEarly(room, remaining[0]); return; }
+
+  } else if (action === 'call') {
+    const toCall = sd.currentBet - (p.sdBet || 0);
+    if (toCall > 0) {
+      const info = await getCoinsInfo(p.nickname);
+      const actual = Math.min(toCall, info.coins);
+      if (actual > 0) {
+        const ok = await deductCoins(p.nickname, actual);
+        if (ok) { p.sdBet = (p.sdBet || 0) + actual; sd.pot += actual; }
+      }
+      if (actual < toCall) {
+        p.sdAllIn = true;
+        sd.playersToAct = sd.playersToAct.filter(i => i !== playerIdx);
+      }
+    }
+
+  } else if (action === 'raise' || action === 'ddadang') {
+    const info = await getCoinsInfo(p.nickname);
+    const maxAfford = (p.sdBet || 0) + info.coins;
+    const wantTo = action === 'ddadang'
+      ? Math.max(sd.currentBet * 2, sd.baseBet)
+      : Math.max(raiseAmount || 0, sd.currentBet + sd.minRaise);
+    const finalTo = Math.min(wantTo, maxAfford);
+    const toAdd = finalTo - (p.sdBet || 0);
+    if (toAdd > 0) {
+      const ok = await deductCoins(p.nickname, toAdd);
+      if (!ok) {
+        // 잔액 부족 — 액션 재요청 (자기 차례 유지)
+        sd.playersToAct.unshift(playerIdx);
+        sd.actionIndex = playerIdx;
+        sdEmitState(room);
+        sdStartTimer(room);
+        return;
+      }
+      p.sdBet = finalTo; sd.pot += toAdd;
+    }
+    if (finalTo > sd.currentBet) {
+      const diff = finalTo - sd.currentBet;
+      if (diff >= sd.minRaise) sd.minRaise = diff;
+      sd.currentBet = finalTo;
+      const n = room.players.length;
+      const newToAct = [];
+      for (let i = 1; i < n; i++) {
+        const idx = (playerIdx + i) % n;
+        if (!room.players[idx].folded && !room.players[idx].sdAllIn) newToAct.push(idx);
+      }
+      sd.playersToAct = newToAct;
+    }
+    if (finalTo >= maxAfford) { p.sdAllIn = true; sd.playersToAct = sd.playersToAct.filter(i => i !== playerIdx); }
+  } else {
+    // 알 수 없는 액션 — 순서 원복
+    sd.playersToAct.unshift(playerIdx);
+    sd.actionIndex = playerIdx;
+    return;
+  }
+
+  if (p.sdAllIn) {
+    io.to(room.id).emit('chat', { nickname: '📢', message: `🔥 ${p.nickname} 올인! (${(p.sdBet || 0).toLocaleString()})` });
+  }
+  io.to(room.id).emit('sd:action_done', { playerIdx, nickname: p.nickname, action, bet: p.sdBet || 0, pot: sd.pot });
+
+  if (sd.playersToAct.length === 0) {
+    await sdShowdown(room);
+  } else {
+    sd.actionIndex = sd.playersToAct[0];
+    sdEmitState(room);
+    sdStartTimer(room);
+  }
+}
+
 // ── 타이머 ────────────────────────────────────────────────────
 function startTurnTimer(room) {
   if (!room.useTimer) return;
@@ -1333,7 +1615,7 @@ function broadcastRoomList() {
         hasPassword: !!room.password,
         status: room.status,
         playerCount: room.players.length,
-        maxPlayers: (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2,
+        maxPlayers: (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'seotda') ? 6 : room.gameType === 'blackjack' ? 5 : 2,
         players: room.players.map(p => p.nickname),
         spectatorCount: room.spectators.length,
         useTimer: room.useTimer !== false,
@@ -1369,7 +1651,7 @@ async function broadcastLobbyState(room) {
     buyIn: room.buyIn,
     ttBet: room.ttBet,
     ttAllin: !!room.ttAllin,
-    maxPlayers: (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2,
+    maxPlayers: (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'seotda') ? 6 : room.gameType === 'blackjack' ? 5 : 2,
   });
 }
 
@@ -1383,16 +1665,16 @@ function createRoom(roomId, options = {}) {
     password: options.password || null,
     hostSocketId: options.hostSocketId || null,
     gameType,
-    buyIn: (gameType === 'holdem' || gameType === 'indian') ? buyIn : undefined,
-    ttBet: gameType !== 'holdem' ? (options.ttBet || 0) : undefined,  // 오목/오델로/체스/티카투카 공용 판돈
-    ttAllin: gameType !== 'holdem' ? !!options.ttAllin : false,       // 올인빵: 각자 전 재산
+    buyIn: (gameType === 'holdem' || gameType === 'indian' || gameType === 'seotda') ? buyIn : undefined,
+    ttBet: (gameType !== 'holdem' && gameType !== 'seotda') ? (options.ttBet || 0) : undefined,  // 오목/오델로/체스/티카투카 공용 판돈
+    ttAllin: (gameType !== 'holdem' && gameType !== 'seotda') ? !!options.ttAllin : false,       // 올인빵: 각자 전 재산
     ttEscrowAmounts: null,   // 올인빵 개인별 에스크로 금액 { nickname: amount }
     ttLastPot: 0,
     ttEscrow: false,
     predictions: [],   // 관전자 승부 예측 [{socketId, nickname, pick, amount}]
     players: [],
     readySet: new Set(),
-    board: gameType === 'othello' ? createOthelloBoard() : (gameType === 'holdem' || gameType === 'indian' || gameType === 'chess' || gameType === 'blackjack' ? null : createBoard()),
+    board: gameType === 'othello' ? createOthelloBoard() : (['holdem', 'indian', 'chess', 'blackjack', 'seotda'].includes(gameType) ? null : createBoard()),
     turn: 1,
     status: 'waiting',
     moveCount: 0,
@@ -1427,6 +1709,7 @@ function createRoom(roomId, options = {}) {
     chess: gameType === 'chess' ? new Chess() : null,
     chessLastMove: null,
     bj: gameType === 'blackjack' ? createBjState() : null,
+    seotda: gameType === 'seotda' ? createSeotdaState() : null,
   };
   rooms.set(roomId, room);
   return room;
@@ -1924,7 +2207,7 @@ io.on('connection', (socket) => {
     const room = createRoom(roomId, {
       name: (roomName || `${nickname}의 방`).substring(0, 20),
       password: password || null,
-      useTimer: (gameType === 'tikatuka' || gameType === 'blackjack') ? false : (useTimer !== false),
+      useTimer: (gameType === 'tikatuka' || gameType === 'blackjack' || gameType === 'seotda') ? false : (useTimer !== false),
       hostSocketId: socket.id,
       gameType: gameType || 'gomoku',
       buyIn: buyIn || 10000,
@@ -1978,6 +2261,7 @@ io.on('connection', (socket) => {
         if (room.gameType === 'chess' && room.chess) socket.emit('chess:state', buildChessState(room));
         if (room.gameType === 'tikatuka' && room.tt) ttEmitState(room);
         if (room.gameType === 'blackjack' && room.bj) bjEmitState(room);
+        if (room.gameType === 'seotda' && room.seotda) sdEmitState(room);
       }
       io.to(roomId).emit('spectator_update', { count: room.spectators.length });
       broadcastRoomList();
@@ -1999,7 +2283,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const maxPlayers = (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2;
+      const maxPlayers = (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'seotda') ? 6 : room.gameType === 'blackjack' ? 5 : 2;
       if (room.players.length < maxPlayers) {
         // 플레이어 슬롯 입장
         room.players.push({
@@ -2054,7 +2338,7 @@ io.on('connection', (socket) => {
   socket.on('move_to_player', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'waiting') return;
-    const maxP = (room.gameType === 'holdem' || room.gameType === 'indian') ? 6 : room.gameType === 'blackjack' ? 5 : 2;
+    const maxP = (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'seotda') ? 6 : room.gameType === 'blackjack' ? 5 : 2;
     if (room.players.length >= maxP) { socket.emit('join_error', { msg: '플레이어 슬롯이 꽉 찼습니다.' }); return; }
 
     const specIdx = room.spectators.findIndex(s => s.socketId === socket.id);
@@ -2134,6 +2418,17 @@ io.on('connection', (socket) => {
       room.bj = createBjState();
       await emitGameStart(room);   // 클라 화면 전환 (board=null, useTimer=false)
       startBjRound(room);
+      broadcastRoomList();
+      return;
+    }
+
+    // ── 섯다 시작 ─────────────────────────────────────────────
+    if (room.gameType === 'seotda') {
+      room.status = 'playing';
+      room.readySet.clear();
+      room.seotda = createSeotdaState();
+      await emitGameStart(room);   // 클라 화면 전환 (board=null, useTimer=false)
+      sdStartRound(room);
       broadcastRoomList();
       return;
     }
@@ -2242,7 +2537,7 @@ io.on('connection', (socket) => {
   // ── 관전자 승부 예측 베팅 ────────────────────────────────────
   socket.on('predict_bet', async ({ roomId, pick, amount }) => {
     const room = rooms.get(roomId);
-    if (!room || room.status !== 'playing' || room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'blackjack') {
+    if (!room || room.status !== 'playing' || room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'blackjack' || room.gameType === 'seotda') {
       socket.emit('predict_error', { msg: '지금은 예측할 수 없습니다.' }); return;
     }
     const spec = room.spectators.find(s => s.socketId === socket.id);
@@ -2492,6 +2787,15 @@ io.on('connection', (socket) => {
   socket.on('bj:hit',    ({ roomId }) => { bjAction(roomId, socket.id, 'hit'); });
   socket.on('bj:stand',  ({ roomId }) => { bjAction(roomId, socket.id, 'stand'); });
   socket.on('bj:double', ({ roomId }) => { bjAction(roomId, socket.id, 'double'); });
+
+  // ── 섯다 액션 ────────────────────────────────────────────────
+  socket.on('sd:action', ({ roomId, action, amount }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.gameType !== 'seotda' || room.status !== 'playing') return;
+    const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
+    if (playerIdx === -1) return;
+    sdAction(room, playerIdx, action, amount || 0);
+  });
 
   // ══ 티카투카 PvP 핸들러 ══════════════════════════════════════
   function ttGuard(roomId) {
@@ -2754,7 +3058,7 @@ io.on('connection', (socket) => {
   socket.on('resign', async ({ roomId }) => {
     const room = rooms.get(roomId);
     if (!room || room.status !== 'playing') return;
-    if (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'blackjack') return;   // 라운드제 게임은 기권 없음
+    if (room.gameType === 'holdem' || room.gameType === 'indian' || room.gameType === 'blackjack' || room.gameType === 'seotda') return;   // 라운드제 게임은 기권 없음
     const loser = room.players.find(p => p.socketId === socket.id);
     const winner = room.players.find(p => p.socketId !== socket.id);
     if (!loser) return;
@@ -2886,6 +3190,28 @@ async function handleLeaveRoom(socketId, room, roomId, isDisconnect = false) {
         bjDeal(room);   // 남은 전원이 베팅 완료 상태면 바로 진행
       } else {
         bjEmitState(room);
+      }
+      broadcastRoomList();
+      return;
+    }
+
+    // ── 섯다: 표시만 하고 다음 라운드 시작 시 제거 ────────────
+    if (room.gameType === 'seotda') {
+      const p = room.players[playerIdx];
+      p.isDisconnected = true;
+      const ls = io.sockets.sockets.get(socketId);
+      if (ls) ls.leave(roomId);
+      if (room.players.every(pp => pp.isDisconnected)) {
+        sdClearTimer(room);
+        rooms.delete(roomId);
+        broadcastRoomList();
+        return;
+      }
+      const sd = room.seotda;
+      if (sd && sd.phase === 'betting' && sd.actionIndex === playerIdx) {
+        sdAction(room, playerIdx, 'die', 0);
+      } else {
+        sdEmitState(room);
       }
       broadcastRoomList();
       return;
